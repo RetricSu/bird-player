@@ -255,7 +255,7 @@ fn main() {
 
             fonts.font_data.insert(
                 "NotoSansSC".to_owned(),
-                egui::FontData::from_static(FONT_DATA),
+                egui::FontData::from_static(FONT_DATA).into(),
             );
 
             fonts

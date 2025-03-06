@@ -22,7 +22,7 @@ impl AppComponent for PlayerComponent {
                 eframe::egui::Slider::new(&mut volume, 0.0_f32..=1.0_f32)
                     .logarithmic(false)
                     .show_value(true)
-                    .clamp_to_range(true)
+                    .clamping(eframe::egui::SliderClamping::Always)
                     .step_by(0.01)
                     .custom_formatter(|num, _| {
                         let db = 20.0 * num.log10();
@@ -73,7 +73,7 @@ impl AppComponent for PlayerComponent {
                 eframe::egui::Slider::new(&mut seek_to_timestamp, 0..=duration)
                     .logarithmic(false)
                     .show_value(false)
-                    .clamp_to_range(true)
+                    .clamping(eframe::egui::SliderClamping::Always)
                     .trailing_fill(true)
                     .handle_shape(HandleShape::Rect { aspect_ratio: 0.5 }),
             );
