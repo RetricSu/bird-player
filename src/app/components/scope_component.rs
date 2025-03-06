@@ -11,8 +11,9 @@ impl AppComponent for ScopeComponent {
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         Frame::canvas(ui.style()).show(ui, |ui| {
             ui.ctx().request_repaint();
-            let _time = ui.input(|i| i.time);
-            let color = Color32::from_additive_luminance(196);
+            let time = ui.input(|i| i.time);
+            let base_color = Color32::from_rgb(0, 150, 255);
+            let highlight_color = Color32::from_rgb(0, 255, 255);
 
             let desired_size = ui.available_width() * vec2(1.0, 0.25);
             let (_id, rect) = ui.allocate_space(desired_size);
@@ -37,13 +38,30 @@ impl AppComponent for ScopeComponent {
                 let points: Vec<Pos2> = scope
                     .into_iter()
                     .enumerate()
-                    .map(|(i, sample)| to_screen * pos2(i as f32 / (48000.0 * 1.0), sample))
+                    .map(|(i, sample)| {
+                        let wave = (time as f32 * 2.0 + i as f32 * 0.01).sin() * 0.05;
+                        let modified_sample = sample + wave;
+                        to_screen * pos2(i as f32 / (48000.0 * 1.0), modified_sample)
+                    })
                     .collect();
 
-                shapes.push(crate::egui::epaint::Shape::line(
-                    points,
-                    crate::egui::epaint::Stroke::new(1.0, color),
-                ));
+                for (i, offset) in [0.0, 0.5, 1.0, 1.5].iter().enumerate() {
+                    let alpha = 255 - (i as u8 * 40);
+                    let thickness = 1.0 + offset;
+
+                    let color = if i == 0 {
+                        highlight_color
+                    } else {
+                        Color32::from_rgba_premultiplied(
+                            base_color.r(),
+                            base_color.g(),
+                            base_color.b(),
+                            alpha,
+                        )
+                    };
+
+                    shapes.push(Shape::line(points.clone(), Stroke::new(thickness, color)));
+                }
             }
 
             ui.painter().extend(shapes);
