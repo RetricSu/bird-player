@@ -18,7 +18,7 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
-        ctx.request_repaint();
+        // ctx.request_repaint();
 
         if let Some(lib_cmd_rx) = &self.library_cmd_rx {
             if let Ok(lib_cmd) = lib_cmd_rx.try_recv() {

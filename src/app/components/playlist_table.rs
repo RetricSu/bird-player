@@ -48,6 +48,9 @@ impl AppComponent for PlaylistTable {
                             egui::Label::new(track.title().unwrap_or("unknown title".to_string()))
                                 .sense(egui::Sense::click()),
                         );
+                        if title_label.hovered() {
+                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+                        }
 
                         ui.label(track.artist().unwrap_or("unknown artist".to_string()));
                         ui.label(track.album().unwrap_or("unknown album".to_string()));
@@ -55,17 +58,18 @@ impl AppComponent for PlaylistTable {
 
                         // Temporary hack because I don't yet know how to treat an entire Row
                         // as a response
-                        if title_label.double_clicked() {
-                            //ctx.player.as_mut().unwrap().selected_track = Some(track.clone());
-                            ctx.player
-                                .as_mut()
-                                .unwrap()
-                                .select_track(Some(track.clone()));
-                            ctx.player.as_mut().unwrap().play();
-                        }
-
                         if title_label.clicked() {
-                            ctx.player.as_mut().unwrap().selected_track = Some(track.clone());
+                            if ctx.player.as_ref().unwrap().selected_track != Some(track.clone()) {
+                                ctx.player.as_mut().unwrap().selected_track = Some(track.clone());
+                                ctx.player
+                                    .as_mut()
+                                    .unwrap()
+                                    .select_track(Some(track.clone()));
+                                ctx.player.as_mut().unwrap().play();
+                            } else {
+                                ctx.player.as_mut().unwrap().stop();
+                                ctx.player.as_mut().unwrap().selected_track = None;
+                            }
                         }
 
                         ui.end_row();
