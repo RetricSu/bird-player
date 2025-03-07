@@ -4,7 +4,7 @@ use super::{App, LibraryCommand};
 use crate::app::components::{
     footer::Footer, library_component::LibraryComponent, menu_bar::MenuBar,
     player_component::PlayerComponent, playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs,
-    scope_component::ScopeComponent, AppComponent,
+    AppComponent,
 };
 
 impl eframe::App for App {
@@ -17,8 +17,6 @@ impl eframe::App for App {
         if self.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-
-        // ctx.request_repaint();
 
         if let Some(lib_cmd_rx) = &self.library_cmd_rx {
             if let Ok(lib_cmd) = lib_cmd_rx.try_recv() {
@@ -52,7 +50,6 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::top("Player").show(ctx, |ui| {
             PlayerComponent::add(self, ui);
-            ScopeComponent::add(self, ui);
         });
 
         egui::TopBottomPanel::bottom("Footer").show(ctx, |ui| {

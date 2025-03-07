@@ -9,13 +9,18 @@ pub struct ScopeComponent;
 impl AppComponent for ScopeComponent {
     type Context = App;
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
+        // TODO - add picture
+        // if let Some(ref mut track) = &mut ctx.player.as_mut().unwrap().selected_track {
+        //     //track.
+        // };
+
         Frame::canvas(ui.style()).show(ui, |ui| {
             ui.ctx().request_repaint();
             let time = ui.input(|i| i.time);
             let base_color = Color32::from_rgb(0, 150, 255);
             let highlight_color = Color32::from_rgb(0, 255, 255);
 
-            let desired_size = ui.available_width() * vec2(1.0, 0.25);
+            let desired_size = vec2(ui.available_width() * 0.25, 120.0);
             let (_id, rect) = ui.allocate_space(desired_size);
 
             let to_screen =
