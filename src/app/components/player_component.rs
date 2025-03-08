@@ -92,8 +92,8 @@ impl AppComponent for PlayerComponent {
                     });
                     ui.add_space(20.0); // Add margin at the bottom
                     ui.horizontal(|ui| {
-                        let stop_btn = ui.add(
-                            egui::Button::new("■")
+                        let prev_btn = ui.add(
+                            egui::Button::new("|◀")
                                 .min_size(vec2(40.0, 40.0))
                                 .corner_radius(20.0),
                         );
@@ -114,13 +114,21 @@ impl AppComponent for PlayerComponent {
                             .corner_radius(20.0),
                         );
 
-                        let prev_btn = ui.add(
-                            egui::Button::new("|◀")
+                        let next_btn = ui.add(
+                            egui::Button::new("▶|")
                                 .min_size(vec2(40.0, 40.0))
                                 .corner_radius(20.0),
                         );
-                        let next_btn = ui.add(
-                            egui::Button::new("▶|")
+
+                        let mode_icon = match ctx.player.as_ref().unwrap().playback_mode {
+                            crate::app::player::PlaybackMode::Normal => "➡",
+                            crate::app::player::PlaybackMode::Repeat => "🔁",
+                            crate::app::player::PlaybackMode::RepeatOne => "🔂",
+                            crate::app::player::PlaybackMode::Shuffle => "🔀",
+                        };
+
+                        let mode_btn = ui.add(
+                            egui::Button::new(mode_icon)
                                 .min_size(vec2(40.0, 40.0))
                                 .corner_radius(20.0),
                         );
@@ -151,8 +159,8 @@ impl AppComponent for PlayerComponent {
 
                         if let Some(_selected_track) = &ctx.player.as_mut().unwrap().selected_track
                         {
-                            if stop_btn.clicked() {
-                                ctx.player.as_mut().unwrap().stop();
+                            if mode_btn.clicked() {
+                                ctx.player.as_mut().unwrap().toggle_playback_mode();
                             }
 
                             if play_pause_btn.clicked() {

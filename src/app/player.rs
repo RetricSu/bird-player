@@ -1,9 +1,18 @@
 use crate::app::library::LibraryItem;
 use crate::app::playlist::Playlist;
 use crate::{AudioCommand, UiCommand};
+use rand::seq::SliceRandom;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum PlaybackMode {
+    Normal,
+    Repeat,
+    RepeatOne,
+    Shuffle,
+}
 
 pub struct Player {
     pub track_state: TrackState,
@@ -14,6 +23,7 @@ pub struct Player {
     pub seek_to_timestamp: u64,
     pub duration: u64,
     pub cursor: Arc<AtomicU32>, // This can "overflow"
+    pub playback_mode: PlaybackMode,
 }
 
 impl Player {
@@ -31,6 +41,7 @@ impl Player {
             seek_to_timestamp: 0, // TODO: This should have subsecond precision, but is okay for now.
             duration: 0,
             cursor,
+            playback_mode: PlaybackMode::Normal,
         }
     }
 
@@ -123,10 +134,38 @@ impl Player {
     pub fn next(&mut self, playlist: &Playlist) {
         if let Some(selected_track) = &self.selected_track {
             if let Some(current_track_position) = playlist.get_pos(selected_track) {
-                if current_track_position < playlist.tracks.len() - 1 {
-                    let next_track = &playlist.tracks[current_track_position + 1];
-                    self.select_track(Some((*next_track).clone()));
-                    self.play();
+                match self.playback_mode {
+                    PlaybackMode::Normal => {
+                        if current_track_position < playlist.tracks.len() - 1 {
+                            let next_track = &playlist.tracks[current_track_position + 1];
+                            self.select_track(Some((*next_track).clone()));
+                            self.play();
+                        }
+                    }
+                    PlaybackMode::Repeat => {
+                        let next_position = (current_track_position + 1) % playlist.tracks.len();
+                        let next_track = &playlist.tracks[next_position];
+                        self.select_track(Some((*next_track).clone()));
+                        self.play();
+                    }
+                    PlaybackMode::RepeatOne => {
+                        // Just replay the current track
+                        self.seek_to(0);
+                        self.play();
+                    }
+                    PlaybackMode::Shuffle => {
+                        if playlist.tracks.len() > 1 {
+                            let mut rng = rand::thread_rng();
+                            let available_indices: Vec<usize> = (0..playlist.tracks.len())
+                                .filter(|&i| i != current_track_position)
+                                .collect();
+                            if let Some(&next_index) = available_indices.choose(&mut rng) {
+                                let next_track = &playlist.tracks[next_index];
+                                self.select_track(Some((*next_track).clone()));
+                                self.play();
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -149,6 +188,15 @@ impl Player {
 
     pub fn set_duration(&mut self, duration: u64) {
         self.duration = duration;
+    }
+
+    pub fn toggle_playback_mode(&mut self) {
+        self.playback_mode = match self.playback_mode {
+            PlaybackMode::Normal => PlaybackMode::Repeat,
+            PlaybackMode::Repeat => PlaybackMode::RepeatOne,
+            PlaybackMode::RepeatOne => PlaybackMode::Shuffle,
+            PlaybackMode::Shuffle => PlaybackMode::Normal,
+        };
     }
 }
 
