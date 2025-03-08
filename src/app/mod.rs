@@ -1,6 +1,6 @@
 use library::{
     Library, LibraryItem, LibraryItemContainer, LibraryPath, LibraryPathId, LibraryPathStatus,
-    LibraryView, ViewType,
+    LibraryView, Picture, ViewType,
 };
 use player::Player;
 use playlist::Playlist;
@@ -14,6 +14,11 @@ use itertools::Itertools;
 
 use id3::{Tag, TagLike};
 use rayon::prelude::*;
+
+use rand::Rng;
+use std::fs;
+use std::io::Write;
+use std::path::PathBuf;
 
 mod app_impl;
 mod components;
@@ -120,9 +125,30 @@ impl std::fmt::Display for TempError {
 
 impl App {
     pub fn load() -> Result<Self, TempError> {
-        let file = confy::get_configuration_file_path("music_player", None).unwrap();
-        println!("Load configuration file {:#?}", file);
+        let config_dir = confy::get_configuration_file_path("music_player", None)
+            .map_err(|_| TempError::MissingAppState)?
+            .parent()
+            .ok_or(TempError::MissingAppState)?
+            .to_path_buf();
+
+        // Create album_art directory in the config directory
+        let album_art_dir = config_dir.join("album_art");
+        fs::create_dir_all(&album_art_dir).map_err(|_| TempError::MissingAppState)?;
+
+        println!(
+            "Load configuration file {:#?}",
+            config_dir.join("music_player.yml")
+        );
         confy::load("music_player", None).map_err(|_| TempError::MissingAppState)
+    }
+
+    pub fn get_album_art_dir() -> PathBuf {
+        confy::get_configuration_file_path("music_player", None)
+            .map(|p| {
+                p.parent()
+                    .map_or_else(|| PathBuf::from("album_art"), |path| path.join("album_art"))
+            })
+            .unwrap_or_else(|_| PathBuf::from("album_art"))
     }
 
     pub fn save_state(&self) {
@@ -151,6 +177,14 @@ impl App {
         let path = lib_path.path().clone();
         let path_id = lib_path.id();
 
+        // Get the album art directory path
+        let album_art_dir = App::get_album_art_dir();
+        // Ensure the album art directory exists
+        if let Err(err) = fs::create_dir_all(&album_art_dir) {
+            tracing::error!("Failed to create album art directory: {}", err);
+            return;
+        }
+
         std::thread::spawn(move || {
             let files = walkdir::WalkDir::new(path)
                 .into_iter()
@@ -168,13 +202,49 @@ impl App {
                     let tag = Tag::read_from_path(entry.path());
 
                     let library_item = match tag {
-                        Ok(tag) => LibraryItem::new(entry.path().to_path_buf(), path_id)
-                            .set_title(tag.title().or(Some("Unknown Title")))
-                            .set_artist(tag.artist())
-                            .set_album(tag.album())
-                            .set_year(tag.year())
-                            .set_genre(tag.genre())
-                            .set_track_number(tag.track()),
+                        Ok(tag) => {
+                            let mut item = LibraryItem::new(entry.path().to_path_buf(), path_id)
+                                .set_title(tag.title().or(Some("Unknown Title")))
+                                .set_artist(tag.artist())
+                                .set_album(tag.album())
+                                .set_year(tag.year())
+                                .set_genre(tag.genre())
+                                .set_track_number(tag.track());
+
+                            // Extract pictures from ID3 tag
+                            for pic in tag.pictures() {
+                                // Create a unique filename for the picture
+                                let file_name = album_art_dir.join(format!(
+                                    "{}_{}_{}.{}",
+                                    entry
+                                        .path()
+                                        .file_stem()
+                                        .unwrap_or_default()
+                                        .to_string_lossy(),
+                                    u8::from(pic.picture_type),
+                                    rand::thread_rng().gen::<u64>(), // Add random number to ensure uniqueness
+                                    match pic.mime_type.as_str() {
+                                        "image/jpeg" => "jpg",
+                                        "image/png" => "png",
+                                        _ => "jpg", // Default to jpg for unknown types
+                                    }
+                                ));
+
+                                // Save the picture data to a file
+                                if let Ok(mut file) = fs::File::create(&file_name) {
+                                    if file.write_all(&pic.data).is_ok() {
+                                        item.add_picture(Picture::new(
+                                            pic.mime_type.to_string(),
+                                            u8::from(pic.picture_type),
+                                            pic.description.to_string(),
+                                            file_name,
+                                        ));
+                                    }
+                                }
+                            }
+
+                            item
+                        }
                         Err(_err) => {
                             tracing::warn!("Couldn't parse to id3: {:?}", &entry.path());
                             LibraryItem::new(entry.path().to_path_buf(), path_id)

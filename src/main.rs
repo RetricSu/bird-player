@@ -262,6 +262,9 @@ fn main() {
         "Music Player",
         native_options,
         Box::new(|cc| {
+            // Initialize image loaders
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+
             let mut fonts = egui::FontDefinitions::default();
 
             fonts.font_data.insert(
