@@ -12,45 +12,19 @@ impl AppComponent for LibraryComponent {
                 .default_open(true)
                 .show(ui, |ui| {
                     for container in &ctx.library.view().containers {
-                        let items = &container.items;
-                        // todo: correct the name to remove this patch
-                        let album_name = if container.name.is_empty() || container.name == "<?>" {
-                            "unknown album".to_string()
-                        } else {
-                            container.name.clone()
-                        };
+                        for item in &container.items {
+                            let item_label = ui.add(
+                                eframe::egui::Label::new(eframe::egui::RichText::new(
+                                    item.title().unwrap_or("unknown title".to_string()),
+                                ))
+                                .sense(eframe::egui::Sense::click()),
+                            );
 
-                        let library_group = eframe::egui::CollapsingHeader::new(
-                            eframe::egui::RichText::new(album_name),
-                        )
-                        .default_open(false)
-                        .show(ui, |ui: &mut eframe::egui::Ui| {
-                            for item in &container.items {
-                                let item_label = ui.add(
-                                    eframe::egui::Label::new(eframe::egui::RichText::new(
-                                        item.title().unwrap_or("unknown title".to_string()),
-                                    ))
-                                    .sense(eframe::egui::Sense::click()),
-                                );
+                            if item_label.double_clicked() {
+                                if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
+                                    let current_playlist =
+                                        &mut ctx.playlists[*current_playlist_idx];
 
-                                if item_label.double_clicked() {
-                                    if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
-                                        let current_playlist =
-                                            &mut ctx.playlists[*current_playlist_idx];
-
-                                        if !current_playlist.tracks.contains(item) {
-                                            current_playlist.add(item.clone());
-                                        }
-                                    }
-                                }
-                            }
-                        });
-
-                        if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
-                            let current_playlist = &mut ctx.playlists[*current_playlist_idx];
-
-                            if library_group.header_response.double_clicked() {
-                                for item in items {
                                     if !current_playlist.tracks.contains(item) {
                                         current_playlist.add(item.clone());
                                     }

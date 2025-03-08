@@ -16,15 +16,18 @@ impl AppComponent for PlayerComponent {
                 ScopeComponent::add(ctx, ui);
                 ui.vertical(|ui| {
                     ui.add_space(10.0); // Add margin at the top
-                    ui.label(format!(
-                        "{} - {}",
-                        &selected_track
-                            .artist()
-                            .unwrap_or("unknown artist".to_string()),
-                        &selected_track
-                            .title()
-                            .unwrap_or("unknown title".to_string())
-                    ));
+                    ui.add(
+                        eframe::egui::Label::new(format!(
+                            "{} - {}",
+                            &selected_track
+                                .artist()
+                                .unwrap_or("unknown artist".to_string()),
+                            &selected_track
+                                .title()
+                                .unwrap_or("unknown title".to_string())
+                        ))
+                        .wrap_mode(eframe::egui::TextWrapMode::Truncate),
+                    );
                     ui.add_space(10.0); // Add margin at the bottom
 
                     // Time Slider
