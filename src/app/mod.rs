@@ -203,8 +203,30 @@ impl App {
 
                     let library_item = match tag {
                         Ok(tag) => {
-                            let mut item = LibraryItem::new(entry.path().to_path_buf(), path_id)
-                                .set_title(tag.title().or(Some("Unknown Title")))
+                            let mut item = LibraryItem::new(entry.path().to_path_buf(), path_id);
+
+                            // Get filename without extension as fallback title
+                            let filename_title = entry
+                                .path()
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("Unknown Title")
+                                .to_string();
+
+                            // Use filename as title if ID3 tag is missing or contains invalid UTF-8
+                            let title = tag
+                                .title()
+                                .and_then(|t| {
+                                    if t.chars().any(|c| !c.is_ascii() && !c.is_alphabetic()) {
+                                        None
+                                    } else {
+                                        Some(t)
+                                    }
+                                })
+                                .unwrap_or(&filename_title);
+
+                            item = item
+                                .set_title(Some(title))
                                 .set_artist(tag.artist())
                                 .set_album(tag.album())
                                 .set_year(tag.year())
@@ -247,7 +269,16 @@ impl App {
                         }
                         Err(_err) => {
                             tracing::warn!("Couldn't parse to id3: {:?}", &entry.path());
+                            // Get filename without extension as title for failed ID3 reads
+                            let filename_title = entry
+                                .path()
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("Unknown Title")
+                                .to_string();
+
                             LibraryItem::new(entry.path().to_path_buf(), path_id)
+                                .set_title(Some(&filename_title))
                         }
                     };
 
