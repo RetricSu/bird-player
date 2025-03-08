@@ -97,16 +97,23 @@ impl AppComponent for PlayerComponent {
                                 .min_size(vec2(40.0, 40.0))
                                 .corner_radius(20.0),
                         );
-                        let play_btn = ui.add(
-                            egui::Button::new("▶")
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(20.0),
+
+                        // Merge play/pause into a single button
+                        let play_pause_btn = ui.add(
+                            egui::Button::new(
+                                if matches!(
+                                    ctx.player.as_ref().unwrap().track_state,
+                                    crate::app::player::TrackState::Playing
+                                ) {
+                                    "⏸"
+                                } else {
+                                    "▶"
+                                },
+                            )
+                            .min_size(vec2(40.0, 40.0))
+                            .corner_radius(20.0),
                         );
-                        let pause_btn = ui.add(
-                            egui::Button::new("⏸")
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(20.0),
-                        );
+
                         let prev_btn = ui.add(
                             egui::Button::new("|◀")
                                 .min_size(vec2(40.0, 40.0))
@@ -148,12 +155,15 @@ impl AppComponent for PlayerComponent {
                                 ctx.player.as_mut().unwrap().stop();
                             }
 
-                            if play_btn.clicked() {
-                                ctx.player.as_mut().unwrap().play();
-                            }
-
-                            if pause_btn.clicked() {
-                                ctx.player.as_mut().unwrap().pause();
+                            if play_pause_btn.clicked() {
+                                match ctx.player.as_ref().unwrap().track_state {
+                                    crate::app::player::TrackState::Playing => {
+                                        ctx.player.as_mut().unwrap().pause();
+                                    }
+                                    _ => {
+                                        ctx.player.as_mut().unwrap().play();
+                                    }
+                                }
                             }
 
                             if prev_btn.clicked() {
