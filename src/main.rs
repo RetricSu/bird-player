@@ -256,7 +256,8 @@ fn main() {
     };
 
     // load fonts
-    const FONT_DATA: &[u8] = include_bytes!("assets/fonts/NotoSansSC/NotoSansSC-Regular.ttf");
+    // Remove the embedded font and use system fonts instead
+    // const FONT_DATA: &[u8] = include_bytes!("assets/fonts/NotoSansSC/NotoSansSC-Regular.ttf");
 
     eframe::run_native(
         "Music Player",
@@ -265,18 +266,90 @@ fn main() {
             // Initialize image loaders
             egui_extras::install_image_loaders(&cc.egui_ctx);
 
+            // Create font definitions - start with defaults so we have fallbacks
             let mut fonts = egui::FontDefinitions::default();
 
-            fonts.font_data.insert(
-                "NotoSansSC".to_owned(),
-                egui::FontData::from_static(FONT_DATA).into(),
-            );
+            // Try to find a system font with CJK support
+            let source = font_kit::source::SystemSource::new();
 
-            fonts
-                .families
-                .get_mut(&egui::FontFamily::Proportional)
-                .unwrap()
-                .insert(0, "NotoSansSC".to_owned());
+            // Define font names to try based on OS for better CJK support
+            let font_names: Vec<&str> = match std::env::consts::OS {
+                "macos" => vec!["PingFang SC", "Hiragino Sans GB", "STSong", "Heiti SC"],
+                "windows" => vec!["Microsoft YaHei", "SimSun", "SimHei", "MS Gothic"],
+                _ => vec![], // Empty for other OSes - we'll use generic fallback
+            };
+
+            // Try to find one of the preferred fonts
+            let mut found_font = false;
+            for font_name in font_names {
+                // Get family by name
+                if let Ok(family_handle) = source.select_family_by_name(font_name) {
+                    // For the first font in the family
+                    if let Some(font_handle) = family_handle.fonts().first() {
+                        if let Ok(font_data) = match font_handle {
+                            font_kit::handle::Handle::Memory { bytes, .. } => Ok(bytes.to_vec()),
+                            font_kit::handle::Handle::Path { path, .. } => std::fs::read(path),
+                        } {
+                            // Register the font with egui
+                            const SYSTEM_FONT_NAME: &str = "SystemCJKFont";
+                            fonts.font_data.insert(
+                                SYSTEM_FONT_NAME.to_owned(),
+                                egui::FontData::from_owned(font_data).into(),
+                            );
+
+                            // Add as primary font for proportional text (at the beginning)
+                            fonts
+                                .families
+                                .get_mut(&egui::FontFamily::Proportional)
+                                .unwrap()
+                                .insert(0, SYSTEM_FONT_NAME.to_owned());
+
+                            // Also add to monospace as a fallback
+                            fonts
+                                .families
+                                .get_mut(&egui::FontFamily::Monospace)
+                                .unwrap()
+                                .push(SYSTEM_FONT_NAME.to_owned());
+
+                            tracing::info!("Using system font '{}' for CJK support", font_name);
+                            found_font = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // If we couldn't find any preferred fonts, try a generic sans-serif as backup
+            if !found_font {
+                if let Ok(font_handle) = source.select_best_match(
+                    &[font_kit::family_name::FamilyName::SansSerif],
+                    &font_kit::properties::Properties::new(),
+                ) {
+                    if let Ok(font_data) = match font_handle {
+                        font_kit::handle::Handle::Memory { bytes, .. } => Ok(bytes.to_vec()),
+                        font_kit::handle::Handle::Path { path, .. } => std::fs::read(&path),
+                    } {
+                        const SYSTEM_FONT_NAME: &str = "SystemFont";
+                        fonts.font_data.insert(
+                            SYSTEM_FONT_NAME.to_owned(),
+                            egui::FontData::from_owned(font_data).into(),
+                        );
+
+                        // Add as primary font
+                        fonts
+                            .families
+                            .get_mut(&egui::FontFamily::Proportional)
+                            .unwrap()
+                            .insert(0, SYSTEM_FONT_NAME.to_owned());
+
+                        tracing::info!("Using generic system font for text");
+                    } else {
+                        tracing::warn!("Could not load system font data, using defaults");
+                    }
+                } else {
+                    tracing::warn!("Could not find suitable system font, using defaults");
+                }
+            }
 
             cc.egui_ctx.set_fonts(fonts);
 
