@@ -64,6 +64,9 @@ pub struct App {
     pub playlist_idx_to_remove: Option<usize>,
 
     #[serde(skip_serializing, skip_deserializing)]
+    pub playlist_being_renamed: Option<usize>,
+
+    #[serde(skip_serializing, skip_deserializing)]
     pub library_cmd_tx: Option<Sender<LibraryCommand>>,
 
     #[serde(skip_serializing, skip_deserializing)]
@@ -99,6 +102,7 @@ impl Default for App {
             current_playlist_idx: None,
             player: None,
             playlist_idx_to_remove: None,
+            playlist_being_renamed: None,
             library_cmd_tx: None,
             library_cmd_rx: None,
             played_audio_buffer: None,
