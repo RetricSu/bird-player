@@ -28,7 +28,7 @@ impl AppComponent for PlayerComponent {
                         ))
                         .wrap_mode(eframe::egui::TextWrapMode::Truncate),
                     );
-                    ui.add_space(10.0); // Add margin at the bottom
+                    ui.label("lyrics goes here...");
 
                     // Time Slider
                     // Format the timestamp and duration as hours:minutes:seconds
@@ -68,6 +68,7 @@ impl AppComponent for PlayerComponent {
                         }
 
                         ui.style_mut().spacing.slider_width = ui.available_width() - 100.0;
+                        ui.style_mut().visuals.slider_trailing_fill = true; // the trailing_fill has some bug, so we need to use this
                         let time_slider = ui.add(
                             eframe::egui::Slider::new(&mut seek_to_timestamp, 0..=duration)
                                 .logarithmic(false)
@@ -90,7 +91,7 @@ impl AppComponent for PlayerComponent {
                         ui.label("/");
                         ui.label(format_time(duration));
                     });
-                    ui.add_space(20.0); // Add margin at the bottom
+                    ui.add_space(10.0); // Add margin at the bottom
                     ui.horizontal(|ui| {
                         let prev_btn = ui.add(
                             egui::Button::new("|◀")
@@ -136,7 +137,11 @@ impl AppComponent for PlayerComponent {
                         let mut volume = ctx.player.as_ref().unwrap().volume;
                         let previous_vol = volume;
 
+                        ui.label("1.0x");
+                        ui.label("download");
+
                         ui.label("📢");
+                        ui.style_mut().spacing.slider_width = ui.available_width();
                         let volume_slider = ui.add(
                             eframe::egui::Slider::new(&mut volume, 0.0_f32..=1.0_f32)
                                 .logarithmic(false)
