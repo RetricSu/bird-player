@@ -1,5 +1,5 @@
 use super::AppComponent;
-use crate::app::App;
+use crate::app::{App, Playlist};
 use eframe::egui;
 
 pub struct PlaylistTabs;
@@ -9,29 +9,59 @@ impl AppComponent for PlaylistTabs {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal_wrapped(|ui| {
+            // Add playlist tabs
             for (idx, playlist) in ctx.playlists.iter().enumerate() {
-                let playlist_tab = ui.add(
-                    egui::Label::new(playlist.get_name().unwrap()).sense(egui::Sense::click()),
-                );
+                let is_selected = ctx.current_playlist_idx == Some(idx);
 
-                if playlist_tab.clicked() {
+                // Create a visually distinct tab
+                let mut tab_text = egui::RichText::new(playlist.get_name().unwrap_or_default());
+                if is_selected {
+                    tab_text = tab_text.strong();
+                }
+
+                let tab_response = ui.add(egui::Button::new(tab_text).fill(if is_selected {
+                    ui.style().visuals.selection.bg_fill
+                } else {
+                    ui.style().visuals.widgets.inactive.bg_fill
+                }));
+
+                if tab_response.clicked() {
                     ctx.current_playlist_idx = Some(idx);
                 }
 
-                // TODO - make this bring up a context menu, however just delete for
-                // now.
-                if playlist_tab.clicked_by(egui::PointerButton::Secondary) {
+                // Right-click to delete playlist
+                if tab_response.secondary_clicked() {
                     ctx.playlist_idx_to_remove = Some(idx);
                 }
             }
 
+            // Add the "+" button for creating new playlists
+            let create_btn = ui.add(
+                egui::Button::new(egui::RichText::new("+").size(16.0))
+                    .min_size(egui::vec2(24.0, 24.0)),
+            );
+
+            if create_btn.clicked() {
+                let default_name_count = ctx
+                    .playlists
+                    .iter()
+                    .filter(|pl| pl.get_name().unwrap().starts_with("New Playlist"))
+                    .count();
+                let playlist_name = match default_name_count {
+                    0 => "New Playlist".to_string(),
+                    _ => format!("New Playlist ({})", default_name_count),
+                };
+
+                let mut new_playlist = Playlist::new();
+                new_playlist.set_name(playlist_name);
+                ctx.playlists.push(new_playlist);
+                ctx.current_playlist_idx = Some(ctx.playlists.len() - 1);
+            }
+
+            // Handle playlist removal
             if let Some(idx) = ctx.playlist_idx_to_remove {
                 ctx.playlist_idx_to_remove = None;
 
-                // Because the current playlist is referenced via index, we need to take
-                // into account that the index may be out of bounds when removing a
-                // playlist. This should be resolved when I figure out how to reference the
-                // actual selected playlist.
                 if let Some(mut current_playlist_idx) = ctx.current_playlist_idx {
                     if current_playlist_idx == 0 && idx == 0 {
                         ctx.current_playlist_idx = None;
