@@ -32,9 +32,10 @@ fn main() {
     let cursor = Arc::new(AtomicU32::new(0));
     let player = Player::new(audio_tx, ui_rx, cursor);
 
-    // Create a ring buffer with a capacity for up-to 200ms of audio.
-    // let ring_len = ((2 * config.sample_rate.0 as usize) / 1000) * num_channels;
-    let ring_len: usize = 4096;
+    // Create a ring buffer with a capacity for up-to 1 second of audio.
+    // Calculation: sample_rate * channels * (bytes per sample) * duration_in_seconds
+    // Using typical values: 48000 * 2 * 4 * 1 = 384000
+    let ring_len: usize = 384000;
 
     let gui_ring_buf = SpscRb::new(ring_len);
     let (gui_ring_buf_producer, gui_ring_buf_consumer) =
@@ -69,6 +70,7 @@ fn main() {
         let mut volume = 1.0;
         let mut current_track_path: Option<PathBuf> = None;
         let mut timer = std::time::Instant::now();
+        let mut last_ts = 0; // Track last timestamp to avoid duplicate updates
 
         loop {
             process_audio_cmd(&audio_rx, &mut state, &mut volume, &is_processing_ui_change);
@@ -106,14 +108,16 @@ fn main() {
                             break 'once Ok(());
                         }
 
-                        if timer.elapsed() > std::time::Duration::from_millis(500) {
-                            // Sending the timestamp every possible read spams the UI queue.
-                            // We only need to send this data twice a second or so...
+                        // Only send timestamp updates every second and only if the timestamp has changed
+                        if timer.elapsed() > std::time::Duration::from_secs(1)
+                            && packet.ts != last_ts
+                        {
                             ui_tx
                                 .send(UiCommand::CurrentTimestamp(packet.ts))
-                                .expect("Failed to send play to ui thread");
+                                .expect("Failed to send timestamp to ui thread");
 
                             timer = std::time::Instant::now();
+                            last_ts = packet.ts;
                         }
 
                         // Decode the packet into audio samples.
@@ -163,9 +167,6 @@ fn main() {
                     // Return if a fatal error occured.
                     ignore_end_of_stream_error(result)
                         .expect("Encountered some other error than EoF");
-
-                    // Finalize the decoder and return the verification result if it's been enabled.
-                    _ = do_verification(decoder.as_mut().unwrap().finalize());
                 }
                 PlayerState::Stopped => {
                     // This is kind of a hack to get stopping to work. Flush the buffer so there is
@@ -178,6 +179,11 @@ fn main() {
                     }
 
                     if let Some(ref current_track_path) = current_track_path {
+                        // Finalize the decoder before loading a new track
+                        if let Some(decoder) = decoder.as_mut() {
+                            _ = do_verification(decoder.finalize());
+                        }
+
                         if let Some(audio_output) = audio_engine_state.audio_output.as_mut() {
                             audio_output.flush()
                         }
@@ -218,6 +224,11 @@ fn main() {
                     if let Some(audio_output) = audio_engine_state.audio_output.as_mut() {
                         tracing::info!("AudioThread Loading File - Flushing output");
                         audio_output.flush()
+                    }
+
+                    // Finalize the current decoder before loading new file
+                    if let Some(decoder) = decoder.as_mut() {
+                        _ = do_verification(decoder.finalize());
                     }
 
                     audio_engine_state.audio_output = None;
