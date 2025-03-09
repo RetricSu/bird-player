@@ -14,6 +14,9 @@ impl AppComponent for PlaylistTable {
             let drop_id = ui.id().with("playlist_drop_target");
             let is_dragging_id = ui.id().with("is_dragging");
 
+            // Track which item to remove (if any)
+            let mut track_to_remove: Option<usize> = None;
+
             // Retrieve state from memory, or initialize if not present
             let dragged_item = ui
                 .memory_mut(|mem| mem.data.get_temp::<Option<usize>>(drag_id))
@@ -85,6 +88,12 @@ impl AppComponent for PlaylistTable {
 
                         // Get the track for this row
                         let track = &ctx.playlists[*current_playlist_idx].tracks[idx];
+                        let track_title = track.title().unwrap_or("unknown title".to_string());
+                        let track_artist = track.artist().unwrap_or("unknown artist".to_string());
+                        let track_album = track.album().unwrap_or("unknown album".to_string());
+                        let track_genre = track.genre().unwrap_or("unknown genre".to_string());
+                        let track_number = track.track_number();
+                        let track_clone = track.clone();
 
                         // First column - Drag handle + playing indicator
                         let mut drag_handle_text = "-";
@@ -120,16 +129,14 @@ impl AppComponent for PlaylistTable {
                         }
 
                         // Track number
-                        if let Some(track_number) = track.track_number() {
+                        if let Some(track_number) = track_number {
                             ui.label(track_number.to_string());
                         } else {
                             ui.label((idx + 1).to_string());
                         }
 
                         // Title (clickable) - prevent selection during drag
-                        let title_text = egui::RichText::new(
-                            track.title().unwrap_or("unknown title".to_string()),
-                        );
+                        let title_text = egui::RichText::new(track_title);
                         let title_response =
                             ui.add(egui::Label::new(title_text).sense(egui::Sense::click()));
 
@@ -138,25 +145,33 @@ impl AppComponent for PlaylistTable {
                             ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
                         }
 
+                        // Add context menu for the title
+                        title_response.context_menu(|ui| {
+                            if ui.button("Remove from playlist").clicked() {
+                                track_to_remove = Some(idx);
+                                ui.close_menu();
+                            }
+                        });
+
                         // Artist
-                        ui.label(track.artist().unwrap_or("unknown artist".to_string()));
+                        ui.label(track_artist);
 
                         // Album
-                        ui.label(track.album().unwrap_or("unknown album".to_string()));
+                        ui.label(track_album);
 
                         // Genre
-                        ui.label(track.genre().unwrap_or("unknown genre".to_string()));
+                        ui.label(track_genre);
 
                         ui.end_row();
 
                         // Handle click to play/stop track (don't respond to clicks during dragging)
                         if title_response.clicked() && !is_dragging {
-                            if ctx.player.as_ref().unwrap().selected_track != Some(track.clone()) {
-                                ctx.player.as_mut().unwrap().selected_track = Some(track.clone());
-                                ctx.player
-                                    .as_mut()
-                                    .unwrap()
-                                    .select_track(Some(track.clone()));
+                            if ctx.player.as_ref().unwrap().selected_track
+                                != Some(track_clone.clone())
+                            {
+                                ctx.player.as_mut().unwrap().selected_track =
+                                    Some(track_clone.clone());
+                                ctx.player.as_mut().unwrap().select_track(Some(track_clone));
                                 ctx.player.as_mut().unwrap().play();
                             } else {
                                 ctx.player.as_mut().unwrap().stop();
@@ -165,6 +180,13 @@ impl AppComponent for PlaylistTable {
                         }
                     }
                 });
+
+            // Handle track removal after the iteration is complete
+            if let Some(idx) = track_to_remove {
+                if idx < ctx.playlists[*current_playlist_idx].tracks.len() {
+                    ctx.playlists[*current_playlist_idx].tracks.remove(idx);
+                }
+            }
 
             // Draw drag indicator and drop line if dragging
             if is_dragging && dragged_item.is_some() && pointer_pos.is_some() {
