@@ -20,7 +20,7 @@ impl AppComponent for LibraryComponent {
             for item in ctx.library.items() {
                 folder_items
                     .entry(item.library_id())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(item);
             }
 
