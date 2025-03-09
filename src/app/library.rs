@@ -109,15 +109,24 @@ pub struct LibraryPath {
     id: LibraryPathId,
     path: PathBuf,
     status: LibraryPathStatus,
+    display_name: String,
 }
 
 impl LibraryPath {
     pub fn new(path: PathBuf) -> Self {
         use rand::Rng; // TODO - use ULID?
+                       // Extract the folder name from the path for display
+        let display_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Unknown Folder")
+            .to_string();
+
         Self {
             path,
             status: LibraryPathStatus::NotImported,
             id: LibraryPathId::new(rand::thread_rng().gen()),
+            display_name,
         }
     }
 
@@ -135,6 +144,10 @@ impl LibraryPath {
 
     pub fn set_status(&mut self, status: LibraryPathStatus) {
         self.status = status;
+    }
+
+    pub fn display_name(&self) -> &str {
+        &self.display_name
     }
 }
 

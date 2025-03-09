@@ -10,8 +10,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 
-use itertools::Itertools;
-
 use id3::{Tag, TagLike};
 use rayon::prelude::*;
 
@@ -180,6 +178,8 @@ impl App {
         let lib_cmd_tx = self.library_cmd_tx.as_ref().unwrap().clone();
         let path = lib_path.path().clone();
         let path_id = lib_path.id();
+        // Store path display string for later use
+        let path_display = path.display().to_string();
 
         // Get the album art directory path
         let album_art_dir = App::get_album_art_dir();
@@ -292,37 +292,29 @@ impl App {
 
             tracing::info!("Done parsing library items");
 
-            // Populate the library
+            // Populate the library with parsed items
             for item in &items {
                 lib_cmd_tx
                     .send(LibraryCommand::AddItem((*item).clone()))
                     .expect("failed to send library item")
             }
 
-            // Build the views
+            // The new implementation doesn't need album grouping anymore as we're organizing by folders
+            // We'll still create a view for backward compatibility, but it won't be used
+            // in our updated library_component
             let mut library_view = LibraryView {
                 view_type: ViewType::Album,
                 containers: Vec::new(),
             };
 
-            // In order for group by to work from itertools, items must be consecutive, so sort them first.
-            let mut library_items_clone = items.clone();
-            library_items_clone.sort_by_key(|item| item.album());
+            // Create a single container for all items of this path
+            // This maintains compatibility with the existing code
+            let lib_item_container = LibraryItemContainer {
+                name: format!("Folder: {}", path_display),
+                items: items.clone(),
+            };
 
-            let grouped_library_by_album = &library_items_clone.into_iter().group_by(|item| {
-                item.album()
-                    .unwrap_or("unknown album".to_string())
-                    .to_string()
-            });
-
-            for (album_name, album_library_items) in grouped_library_by_album {
-                let lib_item_container = LibraryItemContainer {
-                    name: album_name.clone(),
-                    items: album_library_items.collect::<Vec<LibraryItem>>(),
-                };
-
-                library_view.containers.push(lib_item_container.clone());
-            }
+            library_view.containers.push(lib_item_container);
 
             lib_cmd_tx
                 .send(LibraryCommand::AddView(library_view))
@@ -331,7 +323,6 @@ impl App {
             lib_cmd_tx
                 .send(LibraryCommand::AddPathId(path_id))
                 .expect("Failed to send library view");
-            //lib_path.set_imported();
         });
     }
 }
