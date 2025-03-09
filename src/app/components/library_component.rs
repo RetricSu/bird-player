@@ -13,6 +13,27 @@ impl AppComponent for LibraryComponent {
         let mut path_to_remove: Option<LibraryPathId> = None;
 
         eframe::egui::ScrollArea::both().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add(Label::new("Music Files"));
+
+                // Add a button to select and import a folder
+                if ui.button("+").clicked() {
+                    if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
+                        // Add the path to the library
+                        ctx.library.add_path(new_path);
+
+                        // Get the last added path and import it
+                        if let Some(newest_path) = ctx.library.paths().last() {
+                            if newest_path.status()
+                                == crate::app::library::LibraryPathStatus::NotImported
+                            {
+                                ctx.import_library_paths(newest_path);
+                            }
+                        }
+                    }
+                }
+            });
+
             // Group library items by their library_id (which corresponds to folder paths)
             let mut folder_items: HashMap<LibraryPathId, Vec<&LibraryItem>> = HashMap::new();
 

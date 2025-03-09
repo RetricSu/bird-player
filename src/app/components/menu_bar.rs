@@ -57,7 +57,7 @@ impl AppComponent for MenuBar {
 
             ui.menu_button("Playback", |ui| {
                 let play_btn = ui.button("Play");
-                let stop_btn = ui.button("Stop");
+                let stop_btn: eframe::egui::Response = ui.button("Stop");
                 let pause_btn = ui.button("Pause");
                 let next_btn = ui.button("Next");
                 let prev_btn = ui.button("Previous");
