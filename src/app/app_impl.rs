@@ -45,6 +45,7 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::top("Player").show(ctx, |ui| {
             PlayerComponent::add(self, ui);
+            ui.add_space(5.0); // Add margin at the bottom
         });
 
         egui::TopBottomPanel::bottom("Footer").show(ctx, |ui| {

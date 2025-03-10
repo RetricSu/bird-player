@@ -7,6 +7,8 @@ use crate::{app::App, UiCommand};
 
 pub struct PlayerComponent;
 
+const BUTTON_CORNER_RADIUS: f32 = 5.0;
+
 impl AppComponent for PlayerComponent {
     type Context = App;
 
@@ -27,8 +29,18 @@ impl AppComponent for PlayerComponent {
                                 .unwrap_or("unknown title".to_string())
                         ))
                         .wrap_mode(eframe::egui::TextWrapMode::Truncate),
-                    );
+                    )
+                    .highlight();
+                    ui.label(format!(
+                        "from {}",
+                        ctx.playlists[ctx.current_playlist_idx.unwrap()]
+                            .get_name()
+                            .unwrap()
+                    ));
                     ui.label("lyrics goes here...");
+
+                    // Add space to push controls to bottom
+                    ui.add_space(ui.available_height() - 70.0);
 
                     // Time Slider
                     // Format the timestamp and duration as hours:minutes:seconds
@@ -96,7 +108,7 @@ impl AppComponent for PlayerComponent {
                         let prev_btn = ui.add(
                             egui::Button::new("|◀")
                                 .min_size(vec2(40.0, 40.0))
-                                .corner_radius(20.0),
+                                .corner_radius(BUTTON_CORNER_RADIUS),
                         );
 
                         // Merge play/pause into a single button
@@ -112,13 +124,13 @@ impl AppComponent for PlayerComponent {
                                 },
                             )
                             .min_size(vec2(40.0, 40.0))
-                            .corner_radius(20.0),
+                            .corner_radius(BUTTON_CORNER_RADIUS),
                         );
 
                         let next_btn = ui.add(
                             egui::Button::new("▶|")
                                 .min_size(vec2(40.0, 40.0))
-                                .corner_radius(20.0),
+                                .corner_radius(BUTTON_CORNER_RADIUS),
                         );
 
                         let mode_icon = match ctx.player.as_ref().unwrap().playback_mode {
@@ -131,7 +143,7 @@ impl AppComponent for PlayerComponent {
                         let mode_btn = ui.add(
                             egui::Button::new(mode_icon)
                                 .min_size(vec2(40.0, 40.0))
-                                .corner_radius(20.0),
+                                .corner_radius(BUTTON_CORNER_RADIUS),
                         );
 
                         let mut volume = ctx.player.as_ref().unwrap().volume;
