@@ -1,7 +1,7 @@
 use super::AppComponent;
 use crate::app::App;
 use crate::egui::epaint::*;
-use crate::egui::{vec2, ColorImage, TextureHandle};
+use crate::egui::{vec2, ColorImage, Shape, TextureHandle};
 use ::image::io::Reader as ImageReader;
 use eframe::egui::{Rect, Sense};
 use log::{error, info, warn};
@@ -11,48 +11,30 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 struct CassetteColors {
-    body_outer: Color32,
-    body_inner: Color32,
-    center_outer: Color32,
-    center_inner: Color32,
+    stroke: Color32,
     holes: Color32,
     tape: Color32,
-    reel_base: Color32,
-    reel_center: Color32,
-    reel_inner: Color32,
-    reel_spokes: Color32,
     reel_stroke: Color32,
+    reel_spokes: Color32,
 }
 
 impl CassetteColors {
     fn from_theme(ui: &eframe::egui::Ui) -> Self {
         if ui.visuals().dark_mode {
             Self {
-                body_outer: Color32::from_rgb(40, 40, 45),
-                body_inner: Color32::from_rgb(35, 35, 40),
-                center_outer: Color32::from_rgb(25, 25, 30),
-                center_inner: Color32::from_rgb(30, 30, 35),
-                holes: Color32::from_rgb(20, 20, 20),
-                tape: Color32::from_rgb(50, 50, 50),
-                reel_base: Color32::from_rgb(20, 20, 20),
-                reel_center: Color32::from_rgb(120, 120, 120),
-                reel_inner: Color32::from_rgb(30, 30, 30),
-                reel_spokes: Color32::from_rgb(80, 80, 80),
-                reel_stroke: Color32::from_rgb(60, 60, 60),
+                stroke: Color32::from_rgb(60, 60, 65),
+                holes: Color32::from_rgb(40, 40, 45),
+                tape: Color32::from_rgb(50, 50, 55),
+                reel_stroke: Color32::from_rgb(60, 60, 65),
+                reel_spokes: Color32::from_rgb(80, 80, 85),
             }
         } else {
             Self {
-                body_outer: Color32::from_rgb(220, 220, 225),
-                body_inner: Color32::from_rgb(210, 210, 215),
-                center_outer: Color32::from_rgb(200, 200, 205),
-                center_inner: Color32::from_rgb(205, 205, 210),
-                holes: Color32::from_rgb(180, 180, 180),
-                tape: Color32::from_rgb(160, 160, 160),
-                reel_base: Color32::from_rgb(190, 190, 190),
-                reel_center: Color32::from_rgb(170, 170, 170),
-                reel_inner: Color32::from_rgb(180, 180, 180),
-                reel_spokes: Color32::from_rgb(160, 160, 160),
-                reel_stroke: Color32::from_rgb(150, 150, 150),
+                stroke: Color32::from_rgb(160, 160, 165),
+                holes: Color32::from_rgb(140, 140, 145),
+                tape: Color32::from_rgb(150, 150, 155),
+                reel_stroke: Color32::from_rgb(160, 160, 165),
+                reel_spokes: Color32::from_rgb(180, 180, 185),
             }
         }
     }
@@ -90,32 +72,72 @@ impl AppComponent for ScopeComponent {
                 vec2(ALBUM_ART_SIZE, ALBUM_ART_SIZE),
             );
 
-            ui.painter().rect_filled(rect, 8.0, colors.body_outer);
+            // Draw main cassette frame
+            let corner_radius = 0.0;
+            ui.painter().add(Shape::Rect(RectShape {
+                rect,
+                corner_radius: corner_radius.into(),
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(1.0, colors.stroke),
+                stroke_kind: StrokeKind::Middle,
+                round_to_pixels: None,
+                blur_width: 0.0,
+                brush: None,
+            }));
 
-            ui.painter()
-                .rect_filled(rect.shrink(1.0), 7.0, colors.body_inner);
+            /*
+            ui.painter().add(Shape::Rect(RectShape {
+                rect: rect.shrink(10.0),
+                corner_radius: corner_radius.into(),
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(1.0, colors.stroke),
+                stroke_kind: StrokeKind::Middle,
+                round_to_pixels: None,
+                blur_width: 0.0,
+                brush: None,
+            }));
 
-            ui.painter()
-                .rect_filled(center_rect.expand(10.0), 4.0, colors.center_outer);
+            // Draw center frame
+            ui.painter().add(Shape::Rect(RectShape {
+                rect: center_rect.expand(10.0),
+                corner_radius: corner_radius.into(),
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(1.0, colors.stroke),
+                stroke_kind: StrokeKind::Middle,
+                round_to_pixels: None,
+                blur_width: 0.0,
+                brush: None,
+            }));
 
-            ui.painter()
-                .rect_filled(center_rect.expand(9.0), 3.0, colors.center_inner);
+
+            ui.painter().add(Shape::Rect(RectShape {
+                rect: center_rect.expand(9.0),
+                corner_radius: corner_radius.into(),
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(1.0, colors.stroke),
+                stroke_kind: StrokeKind::Middle,
+                round_to_pixels: None,
+                blur_width: 0.0,
+                brush: None,
+            }));
+            */
 
             let hole_radius = 5.0;
             let holes_y = rect.min.y + 15.0;
             let hole1_x = rect.min.x + rect.width() * 0.25;
             let hole2_x = rect.min.x + rect.width() * 0.75;
 
-            ui.painter().circle_filled(
+            // Draw holes with stroke
+            ui.painter().circle_stroke(
                 eframe::egui::pos2(hole1_x, holes_y),
                 hole_radius,
-                colors.holes,
+                Stroke::new(1.0, colors.holes),
             );
 
-            ui.painter().circle_filled(
+            ui.painter().circle_stroke(
                 eframe::egui::pos2(hole2_x, holes_y),
                 hole_radius,
-                colors.holes,
+                Stroke::new(1.0, colors.holes),
             );
 
             let (current_angle, _tape_progress) = update_animation(ctx);
@@ -141,7 +163,7 @@ impl AppComponent for ScopeComponent {
                 ui,
                 left_reel_center,
                 current_angle,
-                colors.reel_base,
+                colors.reel_stroke,
                 1.0 - playback_progress,
                 &colors,
             );
@@ -150,7 +172,7 @@ impl AppComponent for ScopeComponent {
                 ui,
                 right_reel_center,
                 -current_angle,
-                colors.reel_base,
+                colors.reel_stroke,
                 playback_progress,
                 &colors,
             );
@@ -302,21 +324,29 @@ fn draw_reel(
     ui: &mut eframe::egui::Ui,
     center: eframe::egui::Pos2,
     angle: f32,
-    color: Color32,
+    _color: Color32,
     _tape_amount: f32,
     colors: &CassetteColors,
 ) {
-    ui.painter().circle_filled(center, REEL_RADIUS, color);
-
+    // Draw outer circle
     ui.painter()
-        .circle_stroke(center, REEL_RADIUS, Stroke::new(2.0, colors.reel_stroke));
+        .circle_stroke(center, REEL_RADIUS, Stroke::new(1.0, colors.reel_stroke));
 
-    ui.painter()
-        .circle_filled(center, REEL_RADIUS * 0.25, colors.reel_center);
+    // Draw middle circle
+    ui.painter().circle_stroke(
+        center,
+        REEL_RADIUS * 0.25,
+        Stroke::new(1.0, colors.reel_stroke),
+    );
 
-    ui.painter()
-        .circle_filled(center, REEL_RADIUS * 0.1, colors.reel_inner);
+    // Draw inner circle
+    ui.painter().circle_stroke(
+        center,
+        REEL_RADIUS * 0.1,
+        Stroke::new(1.0, colors.reel_stroke),
+    );
 
+    // Draw spokes
     for i in 0..SPROCKET_HOLES {
         let spoke_angle = angle + i as f32 * 2.0 * std::f32::consts::PI / SPROCKET_HOLES as f32;
         let spoke_pos = center
@@ -325,20 +355,33 @@ fn draw_reel(
                 spoke_angle.sin() * REEL_RADIUS * 0.6,
             );
 
-        ui.painter()
-            .circle_filled(spoke_pos, REEL_RADIUS * 0.12, colors.reel_spokes);
+        ui.painter().circle_stroke(
+            spoke_pos,
+            REEL_RADIUS * 0.12,
+            Stroke::new(1.0, colors.reel_spokes),
+        );
     }
 }
 
 fn show_default_album_art(ui: &mut eframe::egui::Ui, rect: eframe::egui::Rect) {
     let colors = CassetteColors::from_theme(ui);
-    ui.painter().rect_filled(rect, 4.0, colors.center_outer);
+    let corner_radius = 0.0;
+    ui.painter().add(Shape::Rect(RectShape {
+        rect,
+        corner_radius: corner_radius.into(),
+        fill: Color32::WHITE,
+        stroke: Stroke::new(1.0, colors.stroke),
+        stroke_kind: StrokeKind::Middle,
+        round_to_pixels: None,
+        blur_width: 0.0,
+        brush: None,
+    }));
 
     ui.painter().text(
         rect.center(),
         eframe::egui::Align2::CENTER_CENTER,
         "🎵",
         eframe::egui::FontId::proportional(32.0),
-        Color32::WHITE,
+        Color32::GRAY,
     );
 }
