@@ -1,6 +1,6 @@
-
 /target
 **/*.rs.bk
 *.swp
 *.swo
 *.json
+.DS_Store

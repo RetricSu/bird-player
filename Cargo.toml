@@ -6,9 +6,9 @@ edition = "2021"
 
 [dependencies]
 cpal = "0.15"
-eframe = "0.28"
-egui_extras = "0.28"
-id3 = "1.13"
+eframe = "0.31.1"
+egui_extras = { version = "0.31.1", features = ["all_loaders", "image"] }
+id3 = "1.16.2"
 itertools = "0.12"
 rayon = "1.10"
 rfd = "0.6"
@@ -23,6 +23,8 @@ rand = "0.8.5"
 symphonia = { version = "0.5.4", features = ["mp3"] }
 arrayvec = "0.7.4"
 rb = "0.4.1"
+image = "0.24"
+font-kit = "0.14.2"
 
 [dependencies.confy]
 version = "0.6.1"

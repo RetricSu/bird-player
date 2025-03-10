@@ -1,119 +1,213 @@
+use eframe::egui::{self, vec2};
+
+use super::scope_component::ScopeComponent;
 use super::AppComponent;
 use crate::egui::style::HandleShape;
 use crate::{app::App, UiCommand};
 
 pub struct PlayerComponent;
 
+const BUTTON_CORNER_RADIUS: f32 = 5.0;
+
 impl AppComponent for PlayerComponent {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        ui.horizontal(|ui| {
-            let stop_btn = ui.button("■");
-            let play_btn = ui.button("▶");
-            let pause_btn = ui.button("⏸");
-            let prev_btn = ui.button("|◀");
-            let next_btn = ui.button("▶|");
+        if let Some(selected_track) = ctx.player.as_mut().unwrap().selected_track.clone() {
+            ui.horizontal(|ui| {
+                ScopeComponent::add(ctx, ui);
+                ui.vertical(|ui| {
+                    ui.add_space(10.0); // Add margin at the top
+                    ui.add(
+                        eframe::egui::Label::new(format!(
+                            "{} - {}",
+                            &selected_track
+                                .artist()
+                                .unwrap_or("unknown artist".to_string()),
+                            &selected_track
+                                .title()
+                                .unwrap_or("unknown title".to_string())
+                        ))
+                        .wrap_mode(eframe::egui::TextWrapMode::Truncate),
+                    )
+                    .highlight();
+                    ui.label(format!(
+                        "from {}",
+                        ctx.playlists[ctx.current_playlist_idx.unwrap()]
+                            .get_name()
+                            .unwrap()
+                    ));
+                    ui.label("lyrics goes here...");
 
-            let mut volume = ctx.player.as_ref().unwrap().volume;
-            let previous_vol = volume;
+                    // Add space to push controls to bottom
+                    ui.add_space(ui.available_height() - 70.0);
 
-            let volume_slider = ui.add(
-                eframe::egui::Slider::new(&mut volume, 0.0_f32..=1.0_f32)
-                    .logarithmic(false)
-                    .show_value(true)
-                    .clamp_to_range(true)
-                    .step_by(0.01)
-                    .custom_formatter(|num, _| {
-                        let db = 20.0 * num.log10();
-                        format!("{db:.02}dB")
-                    }),
-            );
+                    // Time Slider
+                    // Format the timestamp and duration as hours:minutes:seconds
+                    ui.horizontal(|ui| {
+                        let format_time = |timestamp: u64| -> String {
+                            let seconds = timestamp / 1000;
+                            let minutes = seconds / 60;
+                            let hours = minutes / 60;
+                            let _seconds_remainder = seconds % 60;
+                            let minutes_remainder = minutes % 60;
 
-            if volume_slider.dragged() {
-                if let Some(is_processing_ui_change) = &ctx.is_processing_ui_change {
-                    // Only send if the volume is actually changing
-                    if volume != previous_vol {
+                            format!("{:02}:{:02}", hours, minutes_remainder)
+                        };
+
+                        let mut seek_to_timestamp = ctx.player.as_ref().unwrap().seek_to_timestamp;
+                        let mut duration = ctx.player.as_ref().unwrap().duration;
+
+                        if let Ok(new_seek_cmd) = ctx.player.as_ref().unwrap().ui_rx.try_recv() {
+                            match new_seek_cmd {
+                                UiCommand::CurrentTimestamp(seek_timestamp) => {
+                                    seek_to_timestamp = seek_timestamp;
+                                }
+                                UiCommand::TotalTrackDuration(dur) => {
+                                    tracing::info!("Received Duration: {}", dur);
+                                    duration = dur;
+                                    ctx.player.as_mut().unwrap().set_duration(dur);
+                                }
+                                UiCommand::AudioFinished => {
+                                    tracing::info!("Track finished, getting next...");
+
+                                    ctx.player
+                                        .as_mut()
+                                        .unwrap()
+                                        .next(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
+                                } //_ => {}
+                            }
+                        }
+
+                        ui.style_mut().spacing.slider_width = ui.available_width() - 100.0;
+                        ui.style_mut().visuals.slider_trailing_fill = true; // the trailing_fill has some bug, so we need to use this
+                        let time_slider = ui.add(
+                            eframe::egui::Slider::new(&mut seek_to_timestamp, 0..=duration)
+                                .logarithmic(false)
+                                .show_value(false)
+                                .clamping(eframe::egui::SliderClamping::Always)
+                                .trailing_fill(true)
+                                .handle_shape(HandleShape::Rect { aspect_ratio: 0.5 }),
+                        );
+
                         ctx.player
                             .as_mut()
                             .unwrap()
-                            .set_volume(volume, is_processing_ui_change);
-                    }
-                }
-            }
+                            .set_seek_to_timestamp(seek_to_timestamp);
 
-            let mut seek_to_timestamp = ctx.player.as_ref().unwrap().seek_to_timestamp;
-            let mut duration = ctx.player.as_ref().unwrap().duration;
+                        if time_slider.drag_stopped() {
+                            ctx.player.as_mut().unwrap().seek_to(seek_to_timestamp);
+                        }
 
-            if let Ok(new_seek_cmd) = ctx.player.as_ref().unwrap().ui_rx.try_recv() {
-                match new_seek_cmd {
-                    UiCommand::CurrentTimestamp(seek_timestamp) => {
-                        seek_to_timestamp = seek_timestamp;
-                    }
-                    UiCommand::TotalTrackDuration(dur) => {
-                        tracing::info!("Received Duration: {}", dur);
-                        duration = dur;
-                        ctx.player.as_mut().unwrap().set_duration(dur);
-                    }
-                    UiCommand::AudioFinished => {
-                        tracing::info!("Track finished, getting next...");
+                        ui.label(format_time(seek_to_timestamp));
+                        ui.label("/");
+                        ui.label(format_time(duration));
+                    });
+                    ui.add_space(10.0); // Add margin at the bottom
+                    ui.horizontal(|ui| {
+                        let prev_btn = ui.add(
+                            egui::Button::new("|◀")
+                                .min_size(vec2(40.0, 40.0))
+                                .corner_radius(BUTTON_CORNER_RADIUS),
+                        );
 
-                        ctx.player
-                            .as_mut()
-                            .unwrap()
-                            .next(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
-                    } //_ => {}
-                }
-            }
+                        // Merge play/pause into a single button
+                        let play_pause_btn = ui.add(
+                            egui::Button::new(
+                                if matches!(
+                                    ctx.player.as_ref().unwrap().track_state,
+                                    crate::app::player::TrackState::Playing
+                                ) {
+                                    "⏸"
+                                } else {
+                                    "▶"
+                                },
+                            )
+                            .min_size(vec2(40.0, 40.0))
+                            .corner_radius(BUTTON_CORNER_RADIUS),
+                        );
 
-            // Time Slider
-            // TODO - use custom_formatter to maybe turn the duration/timestamp into a
-            // hr:min:seconds:ms display?
-            let time_slider = ui.add(
-                eframe::egui::Slider::new(&mut seek_to_timestamp, 0..=duration)
-                    .logarithmic(false)
-                    .show_value(false)
-                    .clamp_to_range(true)
-                    .trailing_fill(true)
-                    .handle_shape(HandleShape::Rect { aspect_ratio: 0.5 }),
-            );
+                        let next_btn = ui.add(
+                            egui::Button::new("▶|")
+                                .min_size(vec2(40.0, 40.0))
+                                .corner_radius(BUTTON_CORNER_RADIUS),
+                        );
 
-            ctx.player
-                .as_mut()
-                .unwrap()
-                .set_seek_to_timestamp(seek_to_timestamp);
+                        let mode_icon = match ctx.player.as_ref().unwrap().playback_mode {
+                            crate::app::player::PlaybackMode::Normal => "➡",
+                            crate::app::player::PlaybackMode::Repeat => "🔁",
+                            crate::app::player::PlaybackMode::RepeatOne => "🔂",
+                            crate::app::player::PlaybackMode::Shuffle => "🔀",
+                        };
 
-            if time_slider.drag_stopped() {
-                ctx.player.as_mut().unwrap().seek_to(seek_to_timestamp);
-            }
+                        let mode_btn = ui.add(
+                            egui::Button::new(mode_icon)
+                                .min_size(vec2(40.0, 40.0))
+                                .corner_radius(BUTTON_CORNER_RADIUS),
+                        );
 
-            if let Some(_selected_track) = &ctx.player.as_mut().unwrap().selected_track {
-                if stop_btn.clicked() {
-                    ctx.player.as_mut().unwrap().stop();
-                }
+                        let mut volume = ctx.player.as_ref().unwrap().volume;
+                        let previous_vol = volume;
 
-                if play_btn.clicked() {
-                    ctx.player.as_mut().unwrap().play();
-                }
+                        ui.label("1.0x");
+                        ui.label("download");
 
-                if pause_btn.clicked() {
-                    ctx.player.as_mut().unwrap().pause();
-                }
+                        ui.label("📢");
+                        ui.style_mut().spacing.slider_width = ui.available_width();
+                        let volume_slider = ui.add(
+                            eframe::egui::Slider::new(&mut volume, 0.0_f32..=1.0_f32)
+                                .logarithmic(false)
+                                .show_value(false)
+                                .clamping(eframe::egui::SliderClamping::Always)
+                                .step_by(0.01),
+                        );
 
-                if prev_btn.clicked() {
-                    ctx.player
-                        .as_mut()
-                        .unwrap()
-                        .previous(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
-                }
+                        if volume_slider.dragged() {
+                            if let Some(is_processing_ui_change) = &ctx.is_processing_ui_change {
+                                // Only send if the volume is actually changing
+                                if volume != previous_vol {
+                                    ctx.player
+                                        .as_mut()
+                                        .unwrap()
+                                        .set_volume(volume, is_processing_ui_change);
+                                }
+                            }
+                        }
 
-                if next_btn.clicked() {
-                    ctx.player
-                        .as_mut()
-                        .unwrap()
-                        .next(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
-                }
-            }
-        });
+                        if let Some(_selected_track) = &ctx.player.as_mut().unwrap().selected_track
+                        {
+                            if mode_btn.clicked() {
+                                ctx.player.as_mut().unwrap().toggle_playback_mode();
+                            }
+
+                            if play_pause_btn.clicked() {
+                                match ctx.player.as_ref().unwrap().track_state {
+                                    crate::app::player::TrackState::Playing => {
+                                        ctx.player.as_mut().unwrap().pause();
+                                    }
+                                    _ => {
+                                        ctx.player.as_mut().unwrap().play();
+                                    }
+                                }
+                            }
+
+                            if prev_btn.clicked() {
+                                ctx.player
+                                    .as_mut()
+                                    .unwrap()
+                                    .previous(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
+                            }
+
+                            if next_btn.clicked() {
+                                ctx.player
+                                    .as_mut()
+                                    .unwrap()
+                                    .next(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
+                            }
+                        }
+                    });
+                });
+            });
+        }
     }
 }

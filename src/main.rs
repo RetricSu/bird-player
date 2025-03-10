@@ -32,9 +32,10 @@ fn main() {
     let cursor = Arc::new(AtomicU32::new(0));
     let player = Player::new(audio_tx, ui_rx, cursor);
 
-    // Create a ring buffer with a capacity for up-to 200ms of audio.
-    // let ring_len = ((2 * config.sample_rate.0 as usize) / 1000) * num_channels;
-    let ring_len: usize = 4096;
+    // Create a ring buffer with a capacity for up-to 1 second of audio.
+    // Calculation: sample_rate * channels * (bytes per sample) * duration_in_seconds
+    // Using typical values: 48000 * 2 * 4 * 1 = 384000
+    let ring_len: usize = 384000;
 
     let gui_ring_buf = SpscRb::new(ring_len);
     let (gui_ring_buf_producer, gui_ring_buf_consumer) =
@@ -69,6 +70,7 @@ fn main() {
         let mut volume = 1.0;
         let mut current_track_path: Option<PathBuf> = None;
         let mut timer = std::time::Instant::now();
+        let mut last_ts = 0; // Track last timestamp to avoid duplicate updates
 
         loop {
             process_audio_cmd(&audio_rx, &mut state, &mut volume, &is_processing_ui_change);
@@ -106,14 +108,16 @@ fn main() {
                             break 'once Ok(());
                         }
 
-                        if timer.elapsed() > std::time::Duration::from_millis(500) {
-                            // Sending the timestamp every possible read spams the UI queue.
-                            // We only need to send this data twice a second or so...
+                        // Only send timestamp updates every second and only if the timestamp has changed
+                        if timer.elapsed() > std::time::Duration::from_secs(1)
+                            && packet.ts != last_ts
+                        {
                             ui_tx
                                 .send(UiCommand::CurrentTimestamp(packet.ts))
-                                .expect("Failed to send play to ui thread");
+                                .expect("Failed to send timestamp to ui thread");
 
                             timer = std::time::Instant::now();
+                            last_ts = packet.ts;
                         }
 
                         // Decode the packet into audio samples.
@@ -163,9 +167,6 @@ fn main() {
                     // Return if a fatal error occured.
                     ignore_end_of_stream_error(result)
                         .expect("Encountered some other error than EoF");
-
-                    // Finalize the decoder and return the verification result if it's been enabled.
-                    _ = do_verification(decoder.as_mut().unwrap().finalize());
                 }
                 PlayerState::Stopped => {
                     // This is kind of a hack to get stopping to work. Flush the buffer so there is
@@ -178,6 +179,11 @@ fn main() {
                     }
 
                     if let Some(ref current_track_path) = current_track_path {
+                        // Finalize the decoder before loading a new track
+                        if let Some(decoder) = decoder.as_mut() {
+                            _ = do_verification(decoder.finalize());
+                        }
+
                         if let Some(audio_output) = audio_engine_state.audio_output.as_mut() {
                             audio_output.flush()
                         }
@@ -220,6 +226,11 @@ fn main() {
                         audio_output.flush()
                     }
 
+                    // Finalize the current decoder before loading new file
+                    if let Some(decoder) = decoder.as_mut() {
+                        _ = do_verification(decoder.finalize());
+                    }
+
                     audio_engine_state.audio_output = None;
 
                     current_track_path = Some((*path).clone());
@@ -240,29 +251,105 @@ fn main() {
     }); // Audio Thread end
 
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 768.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([680.0, 468.0]),
         ..Default::default()
     };
 
     // load fonts
-    const FONT_DATA: &[u8] = include_bytes!("assets/fonts/NotoSansSC/NotoSansSC-Regular.ttf");
+    // Remove the embedded font and use system fonts instead
+    // const FONT_DATA: &[u8] = include_bytes!("assets/fonts/NotoSansSC/NotoSansSC-Regular.ttf");
 
     eframe::run_native(
         "Music Player",
         native_options,
         Box::new(|cc| {
+            // Initialize image loaders
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+
+            // Create font definitions - start with defaults so we have fallbacks
             let mut fonts = egui::FontDefinitions::default();
 
-            fonts.font_data.insert(
-                "NotoSansSC".to_owned(),
-                egui::FontData::from_static(FONT_DATA),
-            );
+            // Try to find a system font with CJK support
+            let source = font_kit::source::SystemSource::new();
 
-            fonts
-                .families
-                .get_mut(&egui::FontFamily::Proportional)
-                .unwrap()
-                .insert(0, "NotoSansSC".to_owned());
+            // Define font names to try based on OS for better CJK support
+            let font_names: Vec<&str> = match std::env::consts::OS {
+                "macos" => vec!["PingFang SC", "Hiragino Sans GB", "STSong", "Heiti SC"],
+                "windows" => vec!["Microsoft YaHei", "SimSun", "SimHei", "MS Gothic"],
+                _ => vec![], // Empty for other OSes - we'll use generic fallback
+            };
+
+            // Try to find one of the preferred fonts
+            let mut found_font = false;
+            for font_name in font_names {
+                // Get family by name
+                if let Ok(family_handle) = source.select_family_by_name(font_name) {
+                    // For the first font in the family
+                    if let Some(font_handle) = family_handle.fonts().first() {
+                        if let Ok(font_data) = match font_handle {
+                            font_kit::handle::Handle::Memory { bytes, .. } => Ok(bytes.to_vec()),
+                            font_kit::handle::Handle::Path { path, .. } => std::fs::read(path),
+                        } {
+                            // Register the font with egui
+                            const SYSTEM_FONT_NAME: &str = "SystemCJKFont";
+                            fonts.font_data.insert(
+                                SYSTEM_FONT_NAME.to_owned(),
+                                egui::FontData::from_owned(font_data).into(),
+                            );
+
+                            // Add as primary font for proportional text (at the beginning)
+                            fonts
+                                .families
+                                .get_mut(&egui::FontFamily::Proportional)
+                                .unwrap()
+                                .insert(0, SYSTEM_FONT_NAME.to_owned());
+
+                            // Also add to monospace as a fallback
+                            fonts
+                                .families
+                                .get_mut(&egui::FontFamily::Monospace)
+                                .unwrap()
+                                .push(SYSTEM_FONT_NAME.to_owned());
+
+                            tracing::info!("Using system font '{}' for CJK support", font_name);
+                            found_font = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // If we couldn't find any preferred fonts, try a generic sans-serif as backup
+            if !found_font {
+                if let Ok(font_handle) = source.select_best_match(
+                    &[font_kit::family_name::FamilyName::SansSerif],
+                    &font_kit::properties::Properties::new(),
+                ) {
+                    if let Ok(font_data) = match font_handle {
+                        font_kit::handle::Handle::Memory { bytes, .. } => Ok(bytes.to_vec()),
+                        font_kit::handle::Handle::Path { path, .. } => std::fs::read(&path),
+                    } {
+                        const SYSTEM_FONT_NAME: &str = "SystemFont";
+                        fonts.font_data.insert(
+                            SYSTEM_FONT_NAME.to_owned(),
+                            egui::FontData::from_owned(font_data).into(),
+                        );
+
+                        // Add as primary font
+                        fonts
+                            .families
+                            .get_mut(&egui::FontFamily::Proportional)
+                            .unwrap()
+                            .insert(0, SYSTEM_FONT_NAME.to_owned());
+
+                        tracing::info!("Using generic system font for text");
+                    } else {
+                        tracing::warn!("Could not load system font data, using defaults");
+                    }
+                } else {
+                    tracing::warn!("Could not find suitable system font, using defaults");
+                }
+            }
 
             cc.egui_ctx.set_fonts(fonts);
 

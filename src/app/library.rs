@@ -109,15 +109,24 @@ pub struct LibraryPath {
     id: LibraryPathId,
     path: PathBuf,
     status: LibraryPathStatus,
+    display_name: String,
 }
 
 impl LibraryPath {
     pub fn new(path: PathBuf) -> Self {
         use rand::Rng; // TODO - use ULID?
+                       // Extract the folder name from the path for display
+        let display_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Unknown Folder")
+            .to_string();
+
         Self {
             path,
             status: LibraryPathStatus::NotImported,
             id: LibraryPathId::new(rand::thread_rng().gen()),
+            display_name,
         }
     }
 
@@ -135,6 +144,10 @@ impl LibraryPath {
 
     pub fn set_status(&mut self, status: LibraryPathStatus) {
         self.status = status;
+    }
+
+    pub fn display_name(&self) -> &str {
+        &self.display_name
     }
 }
 
@@ -164,6 +177,7 @@ pub struct LibraryItem {
     genre: Option<String>,
     track_number: Option<u32>,
     key: usize,
+    pictures: Vec<Picture>,
 }
 
 impl LibraryItem {
@@ -179,6 +193,7 @@ impl LibraryItem {
             genre: None,
             track_number: None,
             key: rand::thread_rng().gen(),
+            pictures: Vec::new(),
         }
     }
 
@@ -256,6 +271,18 @@ impl LibraryItem {
     pub fn track_number(&self) -> Option<u32> {
         self.track_number
     }
+
+    pub fn pictures(&self) -> &Vec<Picture> {
+        &self.pictures
+    }
+
+    pub fn add_picture(&mut self, picture: Picture) {
+        self.pictures.push(picture);
+    }
+
+    pub fn clear_pictures(&mut self) {
+        self.pictures.clear();
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -275,4 +302,28 @@ pub enum ViewType {
     Album,
     Artist,
     Genre,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Picture {
+    pub mime_type: String,
+    pub picture_type: u8,
+    pub description: String,
+    pub file_path: PathBuf,
+}
+
+impl Picture {
+    pub fn new(
+        mime_type: String,
+        picture_type: u8,
+        description: String,
+        file_path: PathBuf,
+    ) -> Self {
+        Self {
+            mime_type,
+            picture_type,
+            description,
+            file_path,
+        }
+    }
 }
