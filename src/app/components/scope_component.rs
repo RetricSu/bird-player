@@ -243,13 +243,33 @@ impl AppComponent for ScopeComponent {
 
                         if let Some(texture) = cache.borrow().get(&path) {
                             let image_rect = center_rect;
+
+                            // Calculate UV coordinates for center-cropped fit
+                            let image_aspect = texture.size_vec2()[0] / texture.size_vec2()[1];
+                            let rect_aspect = image_rect.width() / image_rect.height();
+
+                            let (uv_min, uv_max) = if image_aspect > rect_aspect {
+                                // Image is wider than display area - crop sides
+                                let crop_width = rect_aspect / image_aspect;
+                                let offset = (1.0 - crop_width) / 2.0;
+                                (
+                                    eframe::egui::pos2(offset, 0.0),
+                                    eframe::egui::pos2(1.0 - offset, 1.0),
+                                )
+                            } else {
+                                // Image is taller than display area - crop top/bottom
+                                let crop_height = image_aspect / rect_aspect;
+                                let offset = (1.0 - crop_height) / 2.0;
+                                (
+                                    eframe::egui::pos2(0.0, offset),
+                                    eframe::egui::pos2(1.0, 1.0 - offset),
+                                )
+                            };
+
                             ui.painter().image(
                                 texture.id(),
                                 image_rect,
-                                eframe::egui::Rect::from_min_max(
-                                    eframe::egui::pos2(0.0, 0.0),
-                                    eframe::egui::pos2(1.0, 1.0),
-                                ),
+                                eframe::egui::Rect::from_min_max(uv_min, uv_max),
                                 Color32::WHITE,
                             );
                             true
