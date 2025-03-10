@@ -12,7 +12,6 @@ use std::time::Instant;
 
 struct CassetteColors {
     stroke: Color32,
-    holes: Color32,
     tape: Color32,
     reel_stroke: Color32,
     reel_spokes: Color32,
@@ -23,16 +22,14 @@ impl CassetteColors {
         if ui.visuals().dark_mode {
             Self {
                 stroke: Color32::from_rgb(60, 60, 65),
-                holes: Color32::from_rgb(40, 40, 45),
-                tape: Color32::from_rgb(50, 50, 55),
+                tape: Color32::from_rgb(0, 0, 0),
                 reel_stroke: Color32::from_rgb(60, 60, 65),
                 reel_spokes: Color32::from_rgb(80, 80, 85),
             }
         } else {
             Self {
                 stroke: Color32::from_rgb(160, 160, 165),
-                holes: Color32::from_rgb(140, 140, 145),
-                tape: Color32::from_rgb(150, 150, 155),
+                tape: Color32::from_rgb(0, 0, 0),
                 reel_stroke: Color32::from_rgb(160, 160, 165),
                 reel_spokes: Color32::from_rgb(180, 180, 185),
             }
@@ -43,7 +40,7 @@ impl CassetteColors {
 pub struct ScopeComponent;
 const ALBUM_ART_SIZE: f32 = 120.0;
 const CASSETTE_WIDTH: f32 = 280.0;
-const CASSETTE_HEIGHT: f32 = 180.0;
+const CASSETTE_HEIGHT: f32 = 160.0;
 const REEL_RADIUS: f32 = 40.0;
 
 thread_local! {
@@ -71,8 +68,8 @@ impl AppComponent for ScopeComponent {
                 vec2(ALBUM_ART_SIZE, ALBUM_ART_SIZE),
             );
 
-            // Draw main cassette frame
-            let corner_radius = 0.0;
+            // Draw main cassette frame with rounded corners
+            let corner_radius = 8.0;
             ui.painter().add(Shape::Rect(RectShape {
                 rect,
                 corner_radius: corner_radius.into(),
@@ -84,60 +81,91 @@ impl AppComponent for ScopeComponent {
                 brush: None,
             }));
 
-            /*
-            ui.painter().add(Shape::Rect(RectShape {
-                rect: rect.shrink(10.0),
-                corner_radius: corner_radius.into(),
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(1.0, colors.stroke),
-                stroke_kind: StrokeKind::Middle,
-                round_to_pixels: None,
-                blur_width: 0.0,
-                brush: None,
-            }));
-
-            // Draw center frame
-            ui.painter().add(Shape::Rect(RectShape {
-                rect: center_rect.expand(10.0),
-                corner_radius: corner_radius.into(),
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(1.0, colors.stroke),
-                stroke_kind: StrokeKind::Middle,
-                round_to_pixels: None,
-                blur_width: 0.0,
-                brush: None,
-            }));
-
-
-            ui.painter().add(Shape::Rect(RectShape {
-                rect: center_rect.expand(9.0),
-                corner_radius: corner_radius.into(),
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(1.0, colors.stroke),
-                stroke_kind: StrokeKind::Middle,
-                round_to_pixels: None,
-                blur_width: 0.0,
-                brush: None,
-            }));
-            */
-
-            let hole_radius = 5.0;
-            let holes_y = rect.min.y + 15.0;
-            let hole1_x = rect.min.x + rect.width() * 0.25;
-            let hole2_x = rect.min.x + rect.width() * 0.75;
-
-            // Draw holes with stroke
-            ui.painter().circle_stroke(
-                eframe::egui::pos2(hole1_x, holes_y),
-                hole_radius,
-                Stroke::new(1.0, colors.holes),
+            // Draw bottom detail area
+            let detail_height = 20.0;
+            let detail_rect = Rect::from_min_max(
+                rect.left_bottom() - vec2(0.0, detail_height),
+                rect.right_bottom(),
             );
 
-            ui.painter().circle_stroke(
-                eframe::egui::pos2(hole2_x, holes_y),
-                hole_radius,
-                Stroke::new(1.0, colors.holes),
+            // Draw horizontal lines for detail area
+            ui.painter().line_segment(
+                [
+                    detail_rect.left_top(),
+                    eframe::egui::pos2(detail_rect.right(), detail_rect.top()),
+                ],
+                Stroke::new(1.0, colors.stroke),
             );
+
+            // Draw round holes on the sides
+            let button_radius = 8.0;
+            let button_margin = 20.0;
+
+            // Left hole
+            ui.painter().circle_stroke(
+                detail_rect.left_center() + vec2(button_margin, 0.0),
+                button_radius,
+                Stroke::new(1.0, colors.stroke),
+            );
+
+            // Right hole
+            ui.painter().circle_stroke(
+                detail_rect.right_center() - vec2(button_margin, 0.0),
+                button_radius,
+                Stroke::new(1.0, colors.stroke),
+            );
+
+            // Draw trapezoid frame in the center
+            let trapezoid_width = 120.0;
+            let trapezoid_inset = 10.0;
+            let center_x = detail_rect.center().x;
+
+            let trapezoid_points = vec![
+                eframe::egui::pos2(
+                    center_x - (trapezoid_width - trapezoid_inset) / 2.0,
+                    detail_rect.top() + 4.0,
+                ),
+                eframe::egui::pos2(
+                    center_x + (trapezoid_width - trapezoid_inset) / 2.0,
+                    detail_rect.top() + 4.0,
+                ),
+                eframe::egui::pos2(center_x + trapezoid_width / 2.0, detail_rect.bottom() - 2.0),
+                eframe::egui::pos2(center_x - trapezoid_width / 2.0, detail_rect.bottom() - 2.0),
+            ];
+
+            ui.painter().add(Shape::convex_polygon(
+                trapezoid_points.clone(),
+                Color32::TRANSPARENT,
+                Stroke::new(1.0, colors.stroke),
+            ));
+
+            // Draw holes in the trapezoid frame with varying sizes as rounded rectangles
+            let hole_sizes = [2.0, 3.0, 4.0, 4.0, 3.0, 2.0]; // Height of the holes
+            let hole_width = 3.0; // Fixed width for all holes
+            let num_holes = hole_sizes.len();
+            let hole_spacing = (trapezoid_width - trapezoid_inset / 2.0) / (num_holes as f32 + 1.0);
+            let hole_y = detail_rect.bottom() - 8.0;
+
+            for i in 1..=num_holes {
+                let hole_x = center_x - trapezoid_width / 2.0 + (i as f32 * hole_spacing);
+                let hole_height = hole_sizes[i - 1];
+
+                let hole_rect = Rect::from_center_size(
+                    eframe::egui::pos2(hole_x, hole_y),
+                    vec2(hole_width, hole_height),
+                );
+
+                ui.painter().add(Shape::Rect(RectShape {
+                    rect: hole_rect,
+                    corner_radius: 1.0.into(),
+                    fill: ui.visuals().window_fill(), // Use window background color for transparent/white fill
+                    stroke: Stroke::new(1.0, colors.stroke),
+                    stroke_kind: StrokeKind::Middle,
+                    round_to_pixels: None,
+                    blur_width: 0.0,
+                    brush: None,
+                }));
+            }
 
             let (current_angle, _tape_progress) = update_animation(ctx);
 
