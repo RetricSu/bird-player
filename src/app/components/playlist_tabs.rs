@@ -35,7 +35,8 @@ impl AppComponent for PlaylistTabs {
                     }
                 } else {
                     // Show normal tab button
-                    let mut tab_text = egui::RichText::new(playlist.get_name().unwrap_or_default());
+                    let mut tab_text =
+                        egui::RichText::new(playlist.get_name().unwrap_or_default()).size(12.0);
                     if is_selected {
                         tab_text = tab_text.strong();
                     }
@@ -65,10 +66,7 @@ impl AppComponent for PlaylistTabs {
             }
 
             // Add the "+" button for creating new playlists
-            let create_btn = ui.add(
-                egui::Button::new(egui::RichText::new("+").size(16.0))
-                    .min_size(egui::vec2(24.0, 24.0)),
-            );
+            let create_btn = ui.add(egui::Button::new(egui::RichText::new("+").size(12.0)));
 
             if create_btn.clicked() {
                 let mut new_playlist = Playlist::new();
