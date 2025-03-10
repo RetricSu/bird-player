@@ -305,22 +305,28 @@ fn draw_tape(
     let right_amount = progress;
 
     let max_fill_radius = REEL_RADIUS * 0.8;
-    let center_hole_radius = REEL_RADIUS * 0.15;
+    let center_hole_radius = REEL_RADIUS * 0.3;
 
     if left_amount > 0.05 {
         let left_fill_radius = REEL_RADIUS * 0.3 + max_fill_radius * left_amount;
         ui.painter()
             .circle_filled(left_reel_center, left_fill_radius, colors.tape);
-        ui.painter()
-            .circle_filled(left_reel_center, center_hole_radius, Color32::TRANSPARENT);
+        ui.painter().circle_filled(
+            left_reel_center,
+            center_hole_radius,
+            ui.visuals().window_fill(),
+        );
     }
 
     if right_amount > 0.05 {
         let right_fill_radius = REEL_RADIUS * 0.3 + max_fill_radius * right_amount;
         ui.painter()
             .circle_filled(right_reel_center, right_fill_radius, colors.tape);
-        ui.painter()
-            .circle_filled(right_reel_center, center_hole_radius, Color32::TRANSPARENT);
+        ui.painter().circle_filled(
+            right_reel_center,
+            center_hole_radius,
+            ui.visuals().window_fill(),
+        );
     }
 }
 
