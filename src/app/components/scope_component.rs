@@ -45,7 +45,6 @@ const ALBUM_ART_SIZE: f32 = 120.0;
 const CASSETTE_WIDTH: f32 = 280.0;
 const CASSETTE_HEIGHT: f32 = 180.0;
 const REEL_RADIUS: f32 = 40.0;
-const SPROCKET_HOLES: usize = 6;
 
 thread_local! {
     static LAST_UPDATE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
@@ -306,17 +305,22 @@ fn draw_tape(
     let right_amount = progress;
 
     let max_fill_radius = REEL_RADIUS * 0.8;
+    let center_hole_radius = REEL_RADIUS * 0.15;
 
     if left_amount > 0.05 {
         let left_fill_radius = REEL_RADIUS * 0.3 + max_fill_radius * left_amount;
         ui.painter()
             .circle_filled(left_reel_center, left_fill_radius, colors.tape);
+        ui.painter()
+            .circle_filled(left_reel_center, center_hole_radius, Color32::TRANSPARENT);
     }
 
     if right_amount > 0.05 {
         let right_fill_radius = REEL_RADIUS * 0.3 + max_fill_radius * right_amount;
         ui.painter()
             .circle_filled(right_reel_center, right_fill_radius, colors.tape);
+        ui.painter()
+            .circle_filled(right_reel_center, center_hole_radius, Color32::TRANSPARENT);
     }
 }
 
@@ -328,39 +332,44 @@ fn draw_reel(
     _tape_amount: f32,
     colors: &CassetteColors,
 ) {
-    // Draw outer circle
+    // Draw outer circle (main reel)
     ui.painter()
         .circle_stroke(center, REEL_RADIUS, Stroke::new(1.0, colors.reel_stroke));
 
-    // Draw middle circle
-    ui.painter().circle_stroke(
-        center,
-        REEL_RADIUS * 0.25,
-        Stroke::new(1.0, colors.reel_stroke),
-    );
-
-    // Draw inner circle
-    ui.painter().circle_stroke(
-        center,
-        REEL_RADIUS * 0.1,
-        Stroke::new(1.0, colors.reel_stroke),
-    );
-
-    // Draw spokes
-    for i in 0..SPROCKET_HOLES {
-        let spoke_angle = angle + i as f32 * 2.0 * std::f32::consts::PI / SPROCKET_HOLES as f32;
-        let spoke_pos = center
+    // Draw gear frame around the center
+    let gear_radius = REEL_RADIUS * 0.3;
+    let num_teeth = 12;
+    for i in 0..num_teeth {
+        let tooth_angle = angle + i as f32 * 2.0 * std::f32::consts::PI / num_teeth as f32;
+        let inner_point = center
             + vec2(
-                spoke_angle.cos() * REEL_RADIUS * 0.6,
-                spoke_angle.sin() * REEL_RADIUS * 0.6,
+                tooth_angle.cos() * gear_radius * 0.8,
+                tooth_angle.sin() * gear_radius * 0.8,
+            );
+        let outer_point = center
+            + vec2(
+                tooth_angle.cos() * gear_radius,
+                tooth_angle.sin() * gear_radius,
             );
 
-        ui.painter().circle_stroke(
-            spoke_pos,
-            REEL_RADIUS * 0.12,
-            Stroke::new(1.0, colors.reel_spokes),
+        ui.painter().line_segment(
+            [inner_point, outer_point],
+            Stroke::new(1.5, colors.reel_spokes),
         );
     }
+
+    // Draw middle circle (gear frame)
+    ui.painter()
+        .circle_stroke(center, gear_radius, Stroke::new(1.0, colors.reel_stroke));
+
+    // Draw center hole
+    ui.painter()
+        .circle_filled(center, REEL_RADIUS * 0.15, Color32::TRANSPARENT);
+    ui.painter().circle_stroke(
+        center,
+        REEL_RADIUS * 0.15,
+        Stroke::new(1.0, colors.reel_stroke),
+    );
 }
 
 fn show_default_album_art(ui: &mut eframe::egui::Ui, rect: eframe::egui::Rect) {
