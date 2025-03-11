@@ -63,7 +63,7 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             egui::SidePanel::left("Library Window")
-                .default_width(350.0)
+                .default_width(200.0)
                 .show(ctx, |ui| {
                     LibraryComponent::add(self, ui);
                 });

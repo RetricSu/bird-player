@@ -1,6 +1,6 @@
 use super::AppComponent;
 use crate::app::{App, LibraryItem, LibraryPathId};
-use eframe::egui::{CollapsingHeader, Label, RichText, Sense};
+use eframe::egui::{CollapsingHeader, Label, RichText, Sense, TextWrapMode};
 use std::collections::HashMap;
 
 pub struct LibraryComponent;
@@ -81,7 +81,8 @@ impl AppComponent for LibraryComponent {
                                     // Create a clickable label for each track
                                     let item_label = ui.add(
                                         Label::new(RichText::new(display_text))
-                                            .sense(Sense::click()),
+                                            .sense(Sense::click())
+                                            .wrap_mode(TextWrapMode::Truncate),
                                     );
 
                                     // Handle double-click to add to current playlist
