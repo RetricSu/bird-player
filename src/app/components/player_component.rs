@@ -1,13 +1,12 @@
-use eframe::egui::{self, vec2};
+use eframe::egui::{self};
 
 use super::scope_component::ScopeComponent;
 use super::AppComponent;
+use crate::app::style::ButtonExt;
 use crate::egui::style::HandleShape;
 use crate::{app::App, UiCommand};
 
 pub struct PlayerComponent;
-
-const BUTTON_CORNER_RADIUS: f32 = 5.0;
 
 impl AppComponent for PlayerComponent {
     type Context = App;
@@ -103,13 +102,12 @@ impl AppComponent for PlayerComponent {
                         ui.label("/");
                         ui.label(format_time(duration));
                     });
+
                     ui.add_space(10.0); // Add margin at the bottom
+
+                    // Play/Pause, Previous, Next, Mode buttons
                     ui.horizontal(|ui| {
-                        let prev_btn = ui.add(
-                            egui::Button::new("|◀")
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(BUTTON_CORNER_RADIUS),
-                        );
+                        let prev_btn = ui.add(egui::Button::new("|◀").player_style());
 
                         // Merge play/pause into a single button
                         let play_pause_btn = ui.add(
@@ -123,15 +121,10 @@ impl AppComponent for PlayerComponent {
                                     "▶"
                                 },
                             )
-                            .min_size(vec2(40.0, 40.0))
-                            .corner_radius(BUTTON_CORNER_RADIUS),
+                            .player_style(),
                         );
 
-                        let next_btn = ui.add(
-                            egui::Button::new("▶|")
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(BUTTON_CORNER_RADIUS),
-                        );
+                        let next_btn = ui.add(egui::Button::new("▶|").player_style());
 
                         let mode_icon = match ctx.player.as_ref().unwrap().playback_mode {
                             crate::app::player::PlaybackMode::Normal => "➡",
@@ -140,11 +133,7 @@ impl AppComponent for PlayerComponent {
                             crate::app::player::PlaybackMode::Shuffle => "🔀",
                         };
 
-                        let mode_btn = ui.add(
-                            egui::Button::new(mode_icon)
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(BUTTON_CORNER_RADIUS),
-                        );
+                        let mode_btn = ui.add(egui::Button::new(mode_icon).player_style());
 
                         let mut volume = ctx.player.as_ref().unwrap().volume;
                         let previous_vol = volume;

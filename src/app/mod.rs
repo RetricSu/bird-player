@@ -24,7 +24,7 @@ mod library;
 pub mod player;
 mod playlist;
 pub mod scope;
-
+mod style;
 pub enum AudioCommand {
     Stop,
     Play,
