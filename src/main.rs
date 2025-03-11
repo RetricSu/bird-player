@@ -251,13 +251,12 @@ fn main() {
     }); // Audio Thread end
 
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([680.0, 468.0]),
+        viewport: egui::ViewportBuilder::default()
+        .with_decorations(false) // Hide the OS-specific "chrome" around the window
+        .with_inner_size([680.0, 468.0])
+        .with_transparent(true), // To have rounded corners we need transparency,
         ..Default::default()
     };
-
-    // load fonts
-    // Remove the embedded font and use system fonts instead
-    // const FONT_DATA: &[u8] = include_bytes!("assets/fonts/NotoSansSC/NotoSansSC-Regular.ttf");
 
     eframe::run_native(
         "Music Player",
