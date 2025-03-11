@@ -282,7 +282,7 @@ impl AppComponent for ScopeComponent {
             }
 
             if show_wave_canvas {
-                show_default_album_art(ui, center_rect);
+                show_default_album_art(ctx, ui, center_rect);
             }
         });
     }
@@ -426,7 +426,7 @@ fn draw_reel(
     );
 }
 
-fn show_default_album_art(ui: &mut eframe::egui::Ui, rect: eframe::egui::Rect) {
+fn show_default_album_art(ctx: &App, ui: &mut eframe::egui::Ui, rect: eframe::egui::Rect) {
     let colors = CassetteColors::from_theme(ui);
     let corner_radius = 0.0;
     ui.painter().add(Shape::Rect(RectShape {
@@ -440,11 +440,90 @@ fn show_default_album_art(ui: &mut eframe::egui::Ui, rect: eframe::egui::Rect) {
         brush: None,
     }));
 
-    ui.painter().text(
-        rect.center(),
-        eframe::egui::Align2::CENTER_CENTER,
-        "🎵",
-        eframe::egui::FontId::proportional(32.0),
-        Color32::GRAY,
-    );
+    // Create a vertical layout for the text
+    let text_spacing = 24.0;
+    let title_pos = rect.center();
+    let artist_pos = rect.center() + vec2(0.0, text_spacing);
+
+    // Get track information from the player
+    if let Some(selected_track) = &ctx.player.as_ref().unwrap().selected_track {
+        // Calculate maximum text width (80% of rect width to leave some margin)
+        let max_width = rect.width() * 0.8;
+        let title_font = eframe::egui::FontId::proportional(12.0);
+        let artist_font = eframe::egui::FontId::proportional(12.0);
+
+        // Draw title with truncation
+        let title = selected_track
+            .title()
+            .unwrap_or("Unknown Title".to_string());
+        let title_galley =
+            ui.painter()
+                .layout_no_wrap(title.clone(), title_font.clone(), Color32::DARK_GRAY);
+
+        let truncated_title = if title_galley.rect.width() > max_width {
+            // Find appropriate truncation point
+            let mut truncated = title.clone();
+            while truncated.len() > 3 {
+                // Keep at least 3 chars
+                truncated.pop();
+                let test_galley = ui.painter().layout_no_wrap(
+                    format!("{}...", truncated),
+                    title_font.clone(),
+                    Color32::DARK_GRAY,
+                );
+                if test_galley.rect.width() <= max_width {
+                    truncated.push_str("...");
+                    break;
+                }
+            }
+            truncated
+        } else {
+            title
+        };
+
+        ui.painter().text(
+            title_pos,
+            eframe::egui::Align2::CENTER_CENTER,
+            truncated_title,
+            title_font,
+            Color32::DARK_GRAY,
+        );
+
+        // Draw artist with truncation
+        let artist = selected_track
+            .artist()
+            .unwrap_or("Unknown Artist".to_string());
+        let artist_galley =
+            ui.painter()
+                .layout_no_wrap(artist.clone(), artist_font.clone(), Color32::DARK_GRAY);
+
+        let truncated_artist = if artist_galley.rect.width() > max_width {
+            // Find appropriate truncation point
+            let mut truncated = artist.clone();
+            while truncated.len() > 3 {
+                // Keep at least 3 chars
+                truncated.pop();
+                let test_galley = ui.painter().layout_no_wrap(
+                    format!("{}...", truncated),
+                    artist_font.clone(),
+                    Color32::DARK_GRAY,
+                );
+                if test_galley.rect.width() <= max_width {
+                    truncated.push_str("...");
+                    break;
+                }
+            }
+            truncated
+        } else {
+            artist
+        };
+
+        ui.painter().text(
+            artist_pos,
+            eframe::egui::Align2::CENTER_CENTER,
+            truncated_artist,
+            artist_font,
+            Color32::DARK_GRAY,
+        );
+    }
 }
