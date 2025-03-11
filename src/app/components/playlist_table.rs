@@ -60,8 +60,7 @@ impl AppComponent for PlaylistTable {
                 .min_col_width(25.0)
                 .show(ui, |ui| {
                     // Header - use empty label for the drag handle column
-                    ui.label(""); // Empty first column (no drag handle)
-                    ui.strong("#");
+                    ui.label("#"); // Empty first column (no drag handle)
                     ui.strong("Title");
                     ui.strong("Artist");
                     ui.strong("Album");
@@ -92,21 +91,30 @@ impl AppComponent for PlaylistTable {
                         let track_artist = track.artist().unwrap_or("unknown artist".to_string());
                         let track_album = track.album().unwrap_or("unknown album".to_string());
                         let track_genre = track.genre().unwrap_or("unknown genre".to_string());
-                        let track_number = track.track_number();
                         let track_clone = track.clone();
 
                         // First column - Drag handle + playing indicator
-                        let mut drag_handle_text = "-";
+                        let drag_handle_text = (idx + 1).to_string();
+                        let mut drag_handle_text = egui::RichText::new(drag_handle_text).strong();
+                        let mut title_text = egui::RichText::new(track_title);
+                        let mut artist_text = egui::RichText::new(track_artist);
+                        let mut album_text = egui::RichText::new(track_album);
+                        let mut genre_text = egui::RichText::new(track_genre);
 
-                        // Add playing indicator if needed
                         if let Some(selected_track) = &ctx.player.as_ref().unwrap().selected_track {
                             if selected_track == track {
-                                drag_handle_text = "- ▶";
+                                // Highlight the row in blue when it's the currently playing track
+                                drag_handle_text =
+                                    drag_handle_text.color(egui::Color32::LIGHT_BLUE);
+                                title_text = title_text.color(egui::Color32::LIGHT_BLUE);
+                                artist_text = artist_text.color(egui::Color32::LIGHT_BLUE);
+                                album_text = album_text.color(egui::Color32::LIGHT_BLUE);
+                                genre_text = genre_text.color(egui::Color32::LIGHT_BLUE);
                             }
                         }
 
                         // Disable text selection on drag handle
-                        let mut drag_handle = egui::RichText::new(drag_handle_text).strong();
+                        let mut drag_handle = drag_handle_text;
                         if is_dragging {
                             drag_handle = drag_handle.color(egui::Color32::from_rgb(120, 120, 180));
                         }
@@ -128,15 +136,7 @@ impl AppComponent for PlaylistTable {
                             });
                         }
 
-                        // Track number
-                        if let Some(track_number) = track_number {
-                            ui.label(track_number.to_string());
-                        } else {
-                            ui.label((idx + 1).to_string());
-                        }
-
                         // Title (clickable) - prevent selection during drag
-                        let title_text = egui::RichText::new(track_title);
                         let title_response =
                             ui.add(egui::Label::new(title_text).sense(egui::Sense::click()));
 
@@ -154,13 +154,13 @@ impl AppComponent for PlaylistTable {
                         });
 
                         // Artist
-                        ui.label(track_artist);
+                        ui.label(artist_text);
 
                         // Album
-                        ui.label(track_album);
+                        ui.label(album_text);
 
                         // Genre
-                        ui.label(track_genre);
+                        ui.label(genre_text);
 
                         ui.end_row();
 
