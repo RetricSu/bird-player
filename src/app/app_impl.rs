@@ -3,12 +3,14 @@ use eframe::egui;
 use super::{App, LibraryCommand};
 use crate::app::components::{
     footer::Footer, library_component::LibraryComponent, player_component::PlayerComponent,
-    playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs, AppComponent,
+    playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs, window_chrome::WindowChrome,
+    AppComponent,
 };
 
 impl eframe::App for App {
     fn on_exit(&mut self, _ctx: Option<&eframe::glow::Context>) {
         tracing::info!("exiting and saving");
+        self.update_player_persistence();
         self.save_state();
     }
 
@@ -43,6 +45,13 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(display));
         }
 
+        // Add window chrome at the top
+        egui::TopBottomPanel::top("Window Chrome")
+            .show_separator_line(true)
+            .show(ctx, |ui| {
+                WindowChrome::add(self, ui);
+            });
+
         egui::TopBottomPanel::top("Player").show(ctx, |ui| {
             PlayerComponent::add(self, ui);
             ui.add_space(5.0); // Add margin at the bottom
@@ -54,7 +63,7 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             egui::SidePanel::left("Library Window")
-                .default_width(350.0)
+                .default_width(200.0)
                 .show(ctx, |ui| {
                     LibraryComponent::add(self, ui);
                 });

@@ -52,6 +52,9 @@ fn main() {
     app.played_audio_buffer = Some(gui_ring_buf_consumer);
     app.is_processing_ui_change = Some(is_processing_ui_change.clone());
 
+    // Restore player state
+    restore_player_state(&mut app);
+
     // Audio output setup
     let _audio_thread = thread::spawn(move || {
         let mut state = PlayerState::Unstarted;
@@ -251,13 +254,12 @@ fn main() {
     }); // Audio Thread end
 
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([680.0, 468.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_decorations(false) // Hide the OS-specific "chrome" around the window
+            .with_inner_size([680.0, 468.0])
+            .with_transparent(true), // To have rounded corners we need transparency,
         ..Default::default()
     };
-
-    // load fonts
-    // Remove the embedded font and use system fonts instead
-    // const FONT_DATA: &[u8] = include_bytes!("assets/fonts/NotoSansSC/NotoSansSC-Regular.ttf");
 
     eframe::run_native(
         "Music Player",
@@ -594,4 +596,75 @@ fn do_verification(finalization: FinalizeResult) -> Result<i32> {
         // Verification not enabled by user, or unsupported by the codec.
         _ => Ok(0),
     }
+}
+
+// Function to restore player state from saved settings
+fn restore_player_state(app: &mut App) {
+    let player = app.player.as_mut().unwrap();
+
+    // Restore volume if it was saved
+    if let Some(volume) = app.last_volume {
+        let is_processing = app
+            .is_processing_ui_change
+            .clone()
+            .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+        player.set_volume(volume, &is_processing);
+    }
+
+    // Restore playback mode if it was saved
+    if let Some(mode) = app.last_playback_mode {
+        player.playback_mode = mode;
+    }
+
+    // If there was a playing track, try to find and load it
+    if let (Some(track_path), Some(current_playlist_idx)) =
+        (&app.last_track_path, app.current_playlist_idx)
+    {
+        if current_playlist_idx < app.playlists.len() && !app.playlists.is_empty() {
+            let playlist = &app.playlists[current_playlist_idx];
+
+            // Skip if the playlist is empty
+            if playlist.tracks.is_empty() {
+                tracing::warn!("Cannot restore track - playlist is empty");
+                return;
+            }
+
+            // Try to find the track in the current playlist
+            if let Some(track) = playlist
+                .tracks
+                .iter()
+                .find(|track| track.path() == *track_path)
+            {
+                tracing::info!("Restoring track: {:?}", track_path);
+
+                // Set the selected track
+                player.select_track(Some((*track).clone()));
+
+                // Set the seek position if available
+                if let Some(position) = app.last_position {
+                    tracing::info!("Restoring position: {} ms", position);
+                    player.seek_to(position);
+                }
+
+                // Start playback if it was playing when the app was closed
+                if let Some(true) = app.was_playing {
+                    tracing::info!("Resuming playback");
+                    player.play();
+                }
+            } else {
+                tracing::warn!("Cannot find saved track in playlist: {:?}", track_path);
+            }
+        } else {
+            tracing::warn!("Cannot restore track - invalid playlist index");
+        }
+    } else {
+        tracing::info!("No previous track to restore");
+    }
+
+    // Clear the saved state now that we've restored it (or failed to)
+    app.last_track_path = None;
+    app.last_position = None;
+    app.last_playback_mode = None; // Keep the mode in memory
+    app.last_volume = None; // Keep the volume in memory
+    app.was_playing = None;
 }

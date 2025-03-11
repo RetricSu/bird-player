@@ -1,13 +1,18 @@
-use eframe::egui::{self, vec2};
+use eframe::egui::{self};
+use std::time::Instant;
 
 use super::scope_component::ScopeComponent;
 use super::AppComponent;
+use crate::app::style::{ButtonExt, SliderExt};
 use crate::egui::style::HandleShape;
 use crate::{app::App, UiCommand};
 
 pub struct PlayerComponent;
 
-const BUTTON_CORNER_RADIUS: f32 = 5.0;
+// For periodic state saving
+thread_local! {
+    static LAST_SAVE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
+}
 
 impl AppComponent for PlayerComponent {
     type Context = App;
@@ -16,6 +21,7 @@ impl AppComponent for PlayerComponent {
         if let Some(selected_track) = ctx.player.as_mut().unwrap().selected_track.clone() {
             ui.horizontal(|ui| {
                 ScopeComponent::add(ctx, ui);
+
                 ui.vertical(|ui| {
                     ui.add_space(10.0); // Add margin at the top
                     ui.add(
@@ -62,6 +68,19 @@ impl AppComponent for PlayerComponent {
                             match new_seek_cmd {
                                 UiCommand::CurrentTimestamp(seek_timestamp) => {
                                     seek_to_timestamp = seek_timestamp;
+
+                                    // Save player state every 30 seconds during playback
+                                    LAST_SAVE.with(|last_save| {
+                                        let elapsed = last_save.borrow().elapsed().as_secs();
+                                        if elapsed > 30 {
+                                            // Update persistence state
+                                            ctx.update_player_persistence();
+                                            ctx.save_state();
+
+                                            // Reset timer
+                                            *last_save.borrow_mut() = Instant::now();
+                                        }
+                                    });
                                 }
                                 UiCommand::TotalTrackDuration(dur) => {
                                     tracing::info!("Received Duration: {}", dur);
@@ -75,7 +94,7 @@ impl AppComponent for PlayerComponent {
                                         .as_mut()
                                         .unwrap()
                                         .next(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
-                                } //_ => {}
+                                }
                             }
                         }
 
@@ -103,13 +122,12 @@ impl AppComponent for PlayerComponent {
                         ui.label("/");
                         ui.label(format_time(duration));
                     });
+
                     ui.add_space(10.0); // Add margin at the bottom
+
+                    // Play/Pause, Previous, Next, Mode buttons
                     ui.horizontal(|ui| {
-                        let prev_btn = ui.add(
-                            egui::Button::new("|◀")
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(BUTTON_CORNER_RADIUS),
-                        );
+                        let prev_btn = ui.add(egui::Button::new("|◀").player_style());
 
                         // Merge play/pause into a single button
                         let play_pause_btn = ui.add(
@@ -123,15 +141,10 @@ impl AppComponent for PlayerComponent {
                                     "▶"
                                 },
                             )
-                            .min_size(vec2(40.0, 40.0))
-                            .corner_radius(BUTTON_CORNER_RADIUS),
+                            .player_style(),
                         );
 
-                        let next_btn = ui.add(
-                            egui::Button::new("▶|")
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(BUTTON_CORNER_RADIUS),
-                        );
+                        let next_btn = ui.add(egui::Button::new("▶|").player_style());
 
                         let mode_icon = match ctx.player.as_ref().unwrap().playback_mode {
                             crate::app::player::PlaybackMode::Normal => "➡",
@@ -140,71 +153,79 @@ impl AppComponent for PlayerComponent {
                             crate::app::player::PlaybackMode::Shuffle => "🔀",
                         };
 
-                        let mode_btn = ui.add(
-                            egui::Button::new(mode_icon)
-                                .min_size(vec2(40.0, 40.0))
-                                .corner_radius(BUTTON_CORNER_RADIUS),
-                        );
+                        let mode_btn = ui.add(egui::Button::new(mode_icon).player_style());
 
-                        let mut volume = ctx.player.as_ref().unwrap().volume;
-                        let previous_vol = volume;
+                        ui.vertical(|ui| {
+                            // small buttons
+                            ui.horizontal(|ui| {
+                                // other small buttons
+                                ui.button("1.0x").clicked();
+                                if ui.button("列表").clicked() {
+                                    ctx.show_library_and_playlist = !ctx.show_library_and_playlist;
+                                };
+                                if ui.button("歌词").clicked() {};
 
-                        ui.label("1.0x");
-                        ui.label("download");
+                                if ui.button("最小化").clicked() {};
+                                if ui.button("移除歌曲").clicked() {};
+                            });
 
-                        ui.label("📢");
-                        ui.style_mut().spacing.slider_width = ui.available_width();
-                        let volume_slider = ui.add(
-                            eframe::egui::Slider::new(&mut volume, 0.0_f32..=1.0_f32)
-                                .logarithmic(false)
-                                .show_value(false)
-                                .clamping(eframe::egui::SliderClamping::Always)
-                                .step_by(0.01),
-                        );
+                            // volume slider
+                            ui.horizontal(|ui| {
+                                let mut volume = ctx.player.as_ref().unwrap().volume;
+                                let previous_vol = volume;
+                                ui.label("📢");
+                                ui.style_mut().spacing.slider_width = ui.available_width();
+                                let volume_slider = ui.add(
+                                    eframe::egui::Slider::new(&mut volume, 0.0_f32..=1.0_f32)
+                                        .volume_style(),
+                                );
 
-                        if volume_slider.dragged() {
-                            if let Some(is_processing_ui_change) = &ctx.is_processing_ui_change {
-                                // Only send if the volume is actually changing
-                                if volume != previous_vol {
-                                    ctx.player
-                                        .as_mut()
-                                        .unwrap()
-                                        .set_volume(volume, is_processing_ui_change);
-                                }
-                            }
-                        }
-
-                        if let Some(_selected_track) = &ctx.player.as_mut().unwrap().selected_track
-                        {
-                            if mode_btn.clicked() {
-                                ctx.player.as_mut().unwrap().toggle_playback_mode();
-                            }
-
-                            if play_pause_btn.clicked() {
-                                match ctx.player.as_ref().unwrap().track_state {
-                                    crate::app::player::TrackState::Playing => {
-                                        ctx.player.as_mut().unwrap().pause();
-                                    }
-                                    _ => {
-                                        ctx.player.as_mut().unwrap().play();
+                                if volume_slider.dragged() {
+                                    if let Some(is_processing_ui_change) =
+                                        &ctx.is_processing_ui_change
+                                    {
+                                        // Only send if the volume is actually changing
+                                        if volume != previous_vol {
+                                            ctx.player
+                                                .as_mut()
+                                                .unwrap()
+                                                .set_volume(volume, is_processing_ui_change);
+                                        }
                                     }
                                 }
-                            }
 
-                            if prev_btn.clicked() {
-                                ctx.player
-                                    .as_mut()
-                                    .unwrap()
-                                    .previous(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
-                            }
+                                if let Some(_selected_track) =
+                                    &ctx.player.as_mut().unwrap().selected_track
+                                {
+                                    if mode_btn.clicked() {
+                                        ctx.player.as_mut().unwrap().toggle_playback_mode();
+                                    }
 
-                            if next_btn.clicked() {
-                                ctx.player
-                                    .as_mut()
-                                    .unwrap()
-                                    .next(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
-                            }
-                        }
+                                    if play_pause_btn.clicked() {
+                                        match ctx.player.as_ref().unwrap().track_state {
+                                            crate::app::player::TrackState::Playing => {
+                                                ctx.player.as_mut().unwrap().pause();
+                                            }
+                                            _ => {
+                                                ctx.player.as_mut().unwrap().play();
+                                            }
+                                        }
+                                    }
+
+                                    if prev_btn.clicked() {
+                                        ctx.player.as_mut().unwrap().previous(
+                                            &ctx.playlists[(ctx.current_playlist_idx).unwrap()],
+                                        );
+                                    }
+
+                                    if next_btn.clicked() {
+                                        ctx.player.as_mut().unwrap().next(
+                                            &ctx.playlists[(ctx.current_playlist_idx).unwrap()],
+                                        );
+                                    }
+                                }
+                            });
+                        });
                     });
                 });
             });
