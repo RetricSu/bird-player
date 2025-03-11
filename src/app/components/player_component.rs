@@ -43,7 +43,19 @@ impl AppComponent for PlayerComponent {
                             .get_name()
                             .unwrap()
                     ));
-                    ui.label("lyrics goes here...");
+
+                    // Display lyrics if they exist
+                    if let Some(lyrics) = &selected_track.lyrics() {
+                        ui.add_space(10.0);
+                        eframe::egui::ScrollArea::vertical()
+                            .max_height(150.0)
+                            .id_salt("lyrics_scroll")
+                            .show(ui, |ui| {
+                                ui.label(lyrics);
+                            });
+                    } else {
+                        ui.label("No lyrics available");
+                    }
 
                     // Add space to push controls to bottom
                     ui.add_space(ui.available_height() - 70.0);

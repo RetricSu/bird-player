@@ -178,6 +178,7 @@ pub struct LibraryItem {
     track_number: Option<u32>,
     key: usize,
     pictures: Vec<Picture>,
+    lyrics: Option<String>,
 }
 
 impl LibraryItem {
@@ -194,6 +195,7 @@ impl LibraryItem {
             track_number: None,
             key: rand::thread_rng().gen(),
             pictures: Vec::new(),
+            lyrics: None,
         }
     }
 
@@ -282,6 +284,17 @@ impl LibraryItem {
 
     pub fn clear_pictures(&mut self) {
         self.pictures.clear();
+    }
+
+    pub fn set_lyrics(&mut self, lyrics: Option<&str>) -> Self {
+        if let Some(lyrics) = lyrics {
+            self.lyrics = Some(lyrics.to_string());
+        }
+        self.to_owned()
+    }
+
+    pub fn lyrics(&self) -> Option<String> {
+        self.lyrics.clone()
     }
 }
 
