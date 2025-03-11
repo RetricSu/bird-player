@@ -79,8 +79,9 @@ pub struct App {
     #[serde(skip_serializing, skip_deserializing)]
     pub temp_buf: Option<Vec<f32>>,
 
-    #[serde(skip_serializing, skip_deserializing)]
     pub quit: bool,
+
+    pub is_maximized: bool,
 
     #[serde(skip_serializing, skip_deserializing)]
     pub lib_config_selections: std::collections::HashSet<LibraryPathId>,
@@ -110,6 +111,7 @@ impl Default for App {
             scope: Some(Scope::new()),
             temp_buf: Some(vec![0.0f32; 4096]),
             quit: false,
+            is_maximized: false,
             lib_config_selections: Default::default(),
             is_library_cfg_open: false,
             is_processing_ui_change: None,

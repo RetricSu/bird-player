@@ -4,6 +4,7 @@ pub mod player_component;
 pub mod playlist_table;
 pub mod playlist_tabs;
 pub mod scope_component;
+pub mod window_chrome;
 
 pub trait AppComponent {
     type Context;

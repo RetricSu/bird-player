@@ -140,7 +140,7 @@ impl AppComponent for PlayerComponent {
                             // small buttons
                             ui.horizontal(|ui| {
                                 // other small buttons
-                                if ui.button("1.0x").clicked() {}
+                                ui.button("1.0x").clicked();
                                 if ui.button("列表").clicked() {
                                     ctx.show_library_and_playlist = !ctx.show_library_and_playlist;
                                 };

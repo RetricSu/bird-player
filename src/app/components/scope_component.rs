@@ -15,6 +15,7 @@ struct CassetteColors {
     tape: Color32,
     reel_stroke: Color32,
     reel_spokes: Color32,
+    default_album_art: Color32,
 }
 
 impl CassetteColors {
@@ -25,6 +26,7 @@ impl CassetteColors {
                 tape: Color32::from_rgb(0, 0, 0),
                 reel_stroke: Color32::from_rgb(60, 60, 65),
                 reel_spokes: Color32::from_rgb(80, 80, 85),
+                default_album_art: Color32::from_rgb(0, 0, 0),
             }
         } else {
             Self {
@@ -32,6 +34,7 @@ impl CassetteColors {
                 tape: Color32::from_rgb(0, 0, 0),
                 reel_stroke: Color32::from_rgb(160, 160, 165),
                 reel_spokes: Color32::from_rgb(180, 180, 185),
+                default_album_art: Color32::from_rgb(255, 255, 255),
             }
         }
     }
@@ -432,7 +435,7 @@ fn show_default_album_art(ctx: &App, ui: &mut eframe::egui::Ui, rect: eframe::eg
     ui.painter().add(Shape::Rect(RectShape {
         rect,
         corner_radius: corner_radius.into(),
-        fill: Color32::WHITE,
+        fill: colors.default_album_art,
         stroke: Stroke::new(1.0, colors.stroke),
         stroke_kind: StrokeKind::Middle,
         round_to_pixels: None,

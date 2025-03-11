@@ -3,7 +3,8 @@ use eframe::egui;
 use super::{App, LibraryCommand};
 use crate::app::components::{
     footer::Footer, library_component::LibraryComponent, player_component::PlayerComponent,
-    playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs, AppComponent,
+    playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs, window_chrome::WindowChrome,
+    AppComponent,
 };
 
 impl eframe::App for App {
@@ -42,6 +43,13 @@ impl eframe::App for App {
 
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(display));
         }
+
+        // Add window chrome at the top
+        egui::TopBottomPanel::top("Window Chrome")
+            .show_separator_line(true)
+            .show(ctx, |ui| {
+                WindowChrome::add(self, ui);
+            });
 
         egui::TopBottomPanel::top("Player").show(ctx, |ui| {
             PlayerComponent::add(self, ui);
