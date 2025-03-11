@@ -90,6 +90,9 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub is_processing_ui_change: Option<Arc<AtomicBool>>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub show_library_and_playlist: bool,
 }
 
 impl Default for App {
@@ -110,6 +113,7 @@ impl Default for App {
             lib_config_selections: Default::default(),
             is_library_cfg_open: false,
             is_processing_ui_change: None,
+            show_library_and_playlist: true,
         }
     }
 }
