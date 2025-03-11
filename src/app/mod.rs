@@ -55,6 +55,13 @@ pub struct App {
 
     pub current_playlist_idx: Option<usize>,
 
+    // New fields for player state persistence
+    pub last_track_path: Option<PathBuf>,
+    pub last_position: Option<u64>,
+    pub last_playback_mode: Option<player::PlaybackMode>,
+    pub last_volume: Option<f32>,
+    pub was_playing: Option<bool>,
+
     #[serde(skip_serializing, skip_deserializing)]
     pub player: Option<Player>,
 
@@ -102,6 +109,12 @@ impl Default for App {
             library: Library::new(),
             playlists: vec![],
             current_playlist_idx: None,
+            // Initialize the new fields
+            last_track_path: None,
+            last_position: None,
+            last_playback_mode: None,
+            last_volume: None,
+            was_playing: None,
             player: None,
             playlist_idx_to_remove: None,
             playlist_being_renamed: None,
@@ -160,10 +173,31 @@ impl App {
     }
 
     pub fn save_state(&self) {
+        // Update player state information before saving
         let store_result = confy::store("music_player", None, self);
         match store_result {
             Ok(_) => tracing::info!("Store was successful"),
             Err(err) => tracing::error!("Failed to store the app state: {}", err),
+        }
+    }
+
+    /// Capture the current player state for persistence
+    pub fn update_player_persistence(&mut self) {
+        if let Some(player) = &self.player {
+            // Save the current track path if there's a selected track
+            self.last_track_path = player.selected_track.as_ref().map(|track| track.path());
+
+            // Save the current playing position
+            self.last_position = Some(player.seek_to_timestamp);
+
+            // Save the current playback mode
+            self.last_playback_mode = Some(player.playback_mode);
+
+            // Save the current volume
+            self.last_volume = Some(player.volume);
+
+            // Save whether the player was playing or paused
+            self.was_playing = Some(matches!(player.track_state, player::TrackState::Playing));
         }
     }
 

@@ -10,6 +10,7 @@ use crate::app::components::{
 impl eframe::App for App {
     fn on_exit(&mut self, _ctx: Option<&eframe::glow::Context>) {
         tracing::info!("exiting and saving");
+        self.update_player_persistence();
         self.save_state();
     }
 

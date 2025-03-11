@@ -2,11 +2,12 @@ use crate::app::library::LibraryItem;
 use crate::app::playlist::Playlist;
 use crate::{AudioCommand, UiCommand};
 use rand::seq::SliceRandom;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum PlaybackMode {
     Normal,
     Repeat,

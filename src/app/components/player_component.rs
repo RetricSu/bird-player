@@ -1,4 +1,5 @@
 use eframe::egui::{self};
+use std::time::Instant;
 
 use super::scope_component::ScopeComponent;
 use super::AppComponent;
@@ -7,6 +8,11 @@ use crate::egui::style::HandleShape;
 use crate::{app::App, UiCommand};
 
 pub struct PlayerComponent;
+
+// For periodic state saving
+thread_local! {
+    static LAST_SAVE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
+}
 
 impl AppComponent for PlayerComponent {
     type Context = App;
@@ -62,6 +68,19 @@ impl AppComponent for PlayerComponent {
                             match new_seek_cmd {
                                 UiCommand::CurrentTimestamp(seek_timestamp) => {
                                     seek_to_timestamp = seek_timestamp;
+
+                                    // Save player state every 30 seconds during playback
+                                    LAST_SAVE.with(|last_save| {
+                                        let elapsed = last_save.borrow().elapsed().as_secs();
+                                        if elapsed > 30 {
+                                            // Update persistence state
+                                            ctx.update_player_persistence();
+                                            ctx.save_state();
+
+                                            // Reset timer
+                                            *last_save.borrow_mut() = Instant::now();
+                                        }
+                                    });
                                 }
                                 UiCommand::TotalTrackDuration(dur) => {
                                     tracing::info!("Received Duration: {}", dur);
@@ -75,7 +94,7 @@ impl AppComponent for PlayerComponent {
                                         .as_mut()
                                         .unwrap()
                                         .next(&ctx.playlists[(ctx.current_playlist_idx).unwrap()]);
-                                } //_ => {}
+                                }
                             }
                         }
 
