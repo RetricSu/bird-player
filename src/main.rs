@@ -84,7 +84,7 @@ fn main() {
                 PlayerState::Playing => {
                     // Reset idle sleep duration when playing
                     idle_sleep = std::time::Duration::from_millis(1);
-                    
+
                     // decode the next packet.
                     let result: std::result::Result<(), symphonia::core::errors::Error> = 'once: {
                         if state != PlayerState::Playing {
@@ -118,8 +118,9 @@ fn main() {
 
                         // Only send timestamp updates every second and only if the timestamp has changed significantly
                         let current_time = timer.elapsed();
-                        if current_time > std::time::Duration::from_secs(1) && 
-                           (packet.ts > last_ts + 1000 || packet.ts < last_ts) // Only update if changed by more than 1 second or went backwards
+                        if current_time > std::time::Duration::from_secs(1)
+                            && (packet.ts > last_ts + 1000 || packet.ts < last_ts)
+                        // Only update if changed by more than 1 second or went backwards
                         {
                             ui_tx
                                 .send(UiCommand::CurrentTimestamp(packet.ts))
@@ -180,7 +181,7 @@ fn main() {
                 PlayerState::Stopped => {
                     // Increase sleep duration in stopped state
                     idle_sleep = std::time::Duration::from_millis(10);
-                    
+
                     // This is kind of a hack to get stopping to work. Flush the buffer so there is
                     // nothing left in the resampler, but the decoder needs to be reset. This is as
                     // simple as reloading the current track so the next time it plays from the
@@ -276,7 +277,7 @@ fn main() {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_decorations(false) // Hide the OS-specific "chrome" around the window
-            .with_inner_size([680.0, 468.0])
+            .with_inner_size([750.0, 468.0])
             .with_min_inner_size([300.0, 0.0]) // Set minimum size to match initial size
             .with_transparent(true), // To have rounded corners we need transparency,
         ..Default::default()

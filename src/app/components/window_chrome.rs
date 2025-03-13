@@ -63,12 +63,12 @@ impl AppComponent for WindowChrome {
 
                 // Maximize button
                 let maximize_response = ui.add(
-                    egui::Button::new(RichText::new("[]").size(14.0))
+                    egui::Button::new(RichText::new("↗").size(14.0))
                         .min_size(button_size)
                         .fill(Color32::TRANSPARENT),
                 );
                 if maximize_response.clicked() {
-                    // Toggle maximize state
+                    // Toggle maximizui da h
                     ui.ctx()
                         .send_viewport_cmd(egui::ViewportCommand::Maximized(!ctx.is_maximized));
                     ctx.is_maximized = !ctx.is_maximized;
