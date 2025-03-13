@@ -103,13 +103,14 @@ impl AppComponent for PlaylistTable {
 
                         if let Some(selected_track) = &ctx.player.as_ref().unwrap().selected_track {
                             if selected_track == track {
+                                let highlight_color = ui.style().visuals.selection.bg_fill;
+
                                 // Highlight the row in blue when it's the currently playing track
-                                drag_handle_text =
-                                    drag_handle_text.color(egui::Color32::LIGHT_BLUE);
-                                title_text = title_text.color(egui::Color32::LIGHT_BLUE);
-                                artist_text = artist_text.color(egui::Color32::LIGHT_BLUE);
-                                album_text = album_text.color(egui::Color32::LIGHT_BLUE);
-                                genre_text = genre_text.color(egui::Color32::LIGHT_BLUE);
+                                drag_handle_text = drag_handle_text.color(highlight_color);
+                                title_text = title_text.color(highlight_color);
+                                artist_text = artist_text.color(highlight_color);
+                                album_text = album_text.color(highlight_color);
+                                genre_text = genre_text.color(highlight_color);
                             }
                         }
 

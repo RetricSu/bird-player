@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: # Define the permissions for the GITHUB_TOKEN
+  contents: write
+  actions: write
+  deployments: write
+  pages: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            TARGET: aarch64-apple-darwin
+            BUNDLE: true
+            EXTENSION: .zip
+
+          - os: macos-latest
+            TARGET: x86_64-apple-darwin
+            BUNDLE: true
+            EXTENSION: .zip
+
+          - os: ubuntu-latest
+            TARGET: x86_64-unknown-linux-musl
+            BUNDLE: false
+
+          - os: windows-latest
+            TARGET: x86_64-pc-windows-msvc
+            BUNDLE: false
+            EXTENSION: .exe
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Building ${{ matrix.TARGET }}
+        run: echo "${{ matrix.TARGET }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install musl-gcc if needed
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get install -y musl-tools
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.TARGET }}
+          override: true
+
+      - name: Install cargo-bundle if needed
+        if: ${{ matrix.BUNDLE == true }}
+        run: cargo install cargo-bundle
+
+      - name: Cargo bundle
+        if: ${{ matrix.BUNDLE == true }}
+        run: cargo bundle --release --target=${{ matrix.TARGET }}
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Cargo build
+        if: ${{ matrix.BUNDLE == false }}
+        run: cargo build --release --target=${{ matrix.TARGET }}
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Package macOS bundle
+        if: ${{ matrix.BUNDLE == true }}
+        run: |
+          brew install zip
+          zip -r target/${{ matrix.TARGET }}/release/bird-player${{ matrix.EXTENSION }} target/${{ matrix.TARGET }}/release/bundle/osx/bird-player.app
+
+      - name: Rename
+        run: cp target/${{ matrix.TARGET }}/release/bird-player${{ matrix.EXTENSION }} bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+
+      - uses: actions/upload-artifact@master
+        with:
+          name: bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          path: ./target/${{ matrix.TARGET }}/release/bird-player${{ matrix.EXTENSION }}
+
+      - uses: svenstaro/upload-release-action@v2
+        name: Upload binaries to release
+        if: ${{ github.event_name == 'push' }}
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          asset_name: bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          tag: ${{ github.ref }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          overwrite: true
