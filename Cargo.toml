@@ -1,8 +1,13 @@
 [package]
-name = "music-player"
+name = "bird-player"
+description = "A music player for local music files"
 version = "0.1.0"
-authors = ["Ryan Blecher <notryanb@gmail.com>"]
+authors = ["RetricSu <inneverland2013@gmail.com>"]
 edition = "2021"
+
+[package.metadata.bundle]
+name = "bird-player"
+identifier = "bird.player.app"
 
 [dependencies]
 cpal = "0.15"

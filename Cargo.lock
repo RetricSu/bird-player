@@ -498,6 +498,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "bird-player"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "confy",
+ "cpal",
+ "eframe",
+ "egui_extras",
+ "font-kit",
+ "id3",
+ "image 0.24.9",
+ "itertools",
+ "log",
+ "rand",
+ "rayon",
+ "rb",
+ "rfd",
+ "rubato",
+ "serde",
+ "serde_json",
+ "symphonia",
+ "tracing",
+ "tracing-subscriber",
+ "walkdir",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2229,33 +2256,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e3e04debbb59698c15bacbb6d93584a8c0ca9cc3213cb423d31f760d8843ce5"
 dependencies = [
  "adler2",
-]
-
-[[package]]
-name = "music-player"
-version = "0.1.0"
-dependencies = [
- "arrayvec",
- "confy",
- "cpal",
- "eframe",
- "egui_extras",
- "font-kit",
- "id3",
- "image 0.24.9",
- "itertools",
- "log",
- "rand",
- "rayon",
- "rb",
- "rfd",
- "rubato",
- "serde",
- "serde_json",
- "symphonia",
- "tracing",
- "tracing-subscriber",
- "walkdir",
 ]
 
 [[package]]
