@@ -103,6 +103,9 @@ pub struct App {
     pub show_library_and_playlist: bool,
 
     pub library_folders_expanded: bool,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub show_about_dialog: bool,
 }
 
 impl Default for App {
@@ -132,6 +135,7 @@ impl Default for App {
             is_processing_ui_change: None,
             show_library_and_playlist: true,
             library_folders_expanded: true,
+            show_about_dialog: false,
         }
     }
 }

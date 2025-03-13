@@ -1,6 +1,6 @@
 use super::AppComponent;
 use crate::app::App;
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, Color32, RichText, Window};
 use rfd;
 
 pub struct WindowChrome;
@@ -41,7 +41,7 @@ impl AppComponent for WindowChrome {
 
             ui.menu_button("Help", |ui| {
                 if ui.button("About").clicked() {
-                    // TODO: Implement about dialog
+                    ctx.show_about_dialog = true;
                     ui.close_menu();
                 }
             });
@@ -91,5 +91,34 @@ impl AppComponent for WindowChrome {
                 }
             });
         });
+
+        // Show About dialog if requested
+        if ctx.show_about_dialog {
+            Window::new("About")
+                .collapsible(false)
+                .resizable(false)
+                .show(ui.ctx(), |ui| {
+                    ui.vertical(|ui| {
+                        ui.add_space(20.0);
+                        ui.heading(RichText::new("Bird Player").size(24.0));
+                        ui.add_space(10.0);
+                        ui.label(RichText::new("Version 0.1.0").size(16.0));
+                        ui.add_space(20.0);
+                        ui.label("A simple GUI music player inspired by foobar2000");
+                        ui.label("written in Rust using egui");
+                        ui.add_space(20.0);
+                        ui.label("Features:");
+                        ui.label("• Basic music player functionality (play, pause, stop)");
+                        ui.label("• Music library with ID3 tag support");
+                        ui.label("• Playlist management");
+                        ui.label("• Drag and drop support");
+                        ui.label("• State persistence");
+                        ui.add_space(20.0);
+                        if ui.button("Close").clicked() {
+                            ctx.show_about_dialog = false;
+                        }
+                    });
+                });
+        }
     }
 }
