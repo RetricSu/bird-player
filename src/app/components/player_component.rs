@@ -201,7 +201,18 @@ impl AppComponent for PlayerComponent {
                                     };
                                     if ui.button("歌词").clicked() {};
 
-                                    if ui.button("最小化").clicked() {};
+                                    if ui.button("最小化").clicked() {
+                                        // Hide library and playlist
+                                        ctx.show_library_and_playlist = false;
+
+                                        // Set minimal window size
+                                        ui.ctx().send_viewport_cmd(
+                                            egui::ViewportCommand::InnerSize(vec2(
+                                                300.0, // Minimal width
+                                                200.0, // Same compact height as 列表 button
+                                            )),
+                                        );
+                                    };
                                     if ui.button("移除歌曲").clicked() {};
                                 });
 
