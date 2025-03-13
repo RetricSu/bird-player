@@ -115,7 +115,7 @@ impl AppComponent for PlaylistTable {
                         // First column - Drag handle + playing indicator
                         let drag_handle_text = (idx + 1).to_string();
                         let mut drag_handle_text = egui::RichText::new(drag_handle_text).strong();
-                        let mut title_text = egui::RichText::new(track_title);
+                        let mut title_text = egui::RichText::new(track_title.clone());
                         let mut artist_text = egui::RichText::new(track_artist.clone());
                         let mut album_text = egui::RichText::new(track_album.clone());
                         let mut genre_text = egui::RichText::new(track_genre.clone());
@@ -156,22 +156,85 @@ impl AppComponent for PlaylistTable {
                             });
                         }
 
-                        // Title (clickable) - prevent selection during drag
-                        let title_response =
-                            ui.add(egui::Label::new(title_text).sense(egui::Sense::click()));
+                        // First handle the title column - make it editable via right-click menu
+                        if editing_field == Some("title".to_string())
+                            && editing_track_idx == Some(idx)
+                        {
+                            // Get the current edit value from memory
+                            let mut current_value = ui.memory_mut(|mem| {
+                                mem.data
+                                    .get_temp::<String>(edit_value_id)
+                                    .unwrap_or_else(|| track_title.clone())
+                            });
 
-                        // Show pointing hand cursor when hovering over the title (only when not dragging)
-                        if title_response.hovered() && !is_dragging {
-                            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
-                        }
+                            let response = ui.text_edit_singleline(&mut current_value);
 
-                        // Add context menu for the title
-                        title_response.context_menu(|ui| {
-                            if ui.button("Remove from playlist").clicked() {
-                                track_to_remove = Some(idx);
-                                ui.close_menu();
+                            // Update the value in memory
+                            ui.memory_mut(|mem| {
+                                mem.data.insert_temp(edit_value_id, current_value.clone());
+                            });
+
+                            // Check if Enter was pressed or focus was lost
+                            let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
+                            if response.lost_focus() || enter_pressed {
+                                // Only update if value has changed
+                                if current_value != track_title {
+                                    // Queue the update for after the grid rendering
+                                    tracks_to_update.push((
+                                        idx,
+                                        "title".to_string(),
+                                        current_value,
+                                    ));
+                                }
+
+                                // Clear editing state
+                                ui.memory_mut(|mem| {
+                                    mem.data.insert_temp(edit_field_id, None::<String>);
+                                    mem.data.insert_temp(edit_track_idx_id, None::<usize>);
+                                });
                             }
-                        });
+                        } else {
+                            // Regular title display with click-to-play functionality
+                            let title_response =
+                                ui.add(egui::Label::new(title_text).sense(egui::Sense::click()));
+
+                            // Show pointing hand cursor when hovering over the title (only when not dragging)
+                            if title_response.hovered() && !is_dragging {
+                                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+                            }
+
+                            // Add context menu for the title
+                            title_response.context_menu(|ui| {
+                                if ui.button("Edit title").clicked() {
+                                    // Start editing title
+                                    ui.ctx().memory_mut(|mem| {
+                                        mem.data
+                                            .insert_temp(edit_field_id, Some("title".to_string()));
+                                        mem.data.insert_temp(edit_track_idx_id, Some(idx));
+                                        mem.data.insert_temp(edit_value_id, track_title.clone());
+                                    });
+                                    ui.close_menu();
+                                }
+
+                                if ui.button("Remove from playlist").clicked() {
+                                    track_to_remove = Some(idx);
+                                    ui.close_menu();
+                                }
+                            });
+
+                            // Handle click to play/stop track (don't respond to clicks during dragging)
+                            if title_response.clicked() && !is_dragging {
+                                let is_selected =
+                                    ctx.player.as_ref().unwrap().selected_track.as_ref()
+                                        == Some(track);
+
+                                if !is_selected {
+                                    track_to_play = Some(idx);
+                                } else {
+                                    track_to_stop = true;
+                                }
+                            }
+                        }
 
                         // Artist - make editable
                         if editing_field == Some("artist".to_string())
@@ -220,7 +283,7 @@ impl AppComponent for PlaylistTable {
                                     mem.data
                                         .insert_temp(edit_field_id, Some("artist".to_string()));
                                     mem.data.insert_temp(edit_track_idx_id, Some(idx));
-                                    mem.data.insert_temp(edit_value_id, track_artist);
+                                    mem.data.insert_temp(edit_value_id, track_artist.clone());
                                 });
                             }
 
@@ -285,7 +348,7 @@ impl AppComponent for PlaylistTable {
                                     mem.data
                                         .insert_temp(edit_field_id, Some("album".to_string()));
                                     mem.data.insert_temp(edit_track_idx_id, Some(idx));
-                                    mem.data.insert_temp(edit_value_id, track_album);
+                                    mem.data.insert_temp(edit_value_id, track_album.clone());
                                 });
                             }
 
@@ -350,7 +413,7 @@ impl AppComponent for PlaylistTable {
                                     mem.data
                                         .insert_temp(edit_field_id, Some("genre".to_string()));
                                     mem.data.insert_temp(edit_track_idx_id, Some(idx));
-                                    mem.data.insert_temp(edit_value_id, track_genre);
+                                    mem.data.insert_temp(edit_value_id, track_genre.clone());
                                 });
                             }
 
@@ -369,18 +432,6 @@ impl AppComponent for PlaylistTable {
                         }
 
                         ui.end_row();
-
-                        // Handle click to play/stop track (don't respond to clicks during dragging)
-                        if title_response.clicked() && !is_dragging {
-                            let is_selected =
-                                ctx.player.as_ref().unwrap().selected_track.as_ref() == Some(track);
-
-                            if !is_selected {
-                                track_to_play = Some(idx);
-                            } else {
-                                track_to_stop = true;
-                            }
-                        }
                     }
                 });
 

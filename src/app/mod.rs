@@ -393,6 +393,10 @@ impl App {
 
         // Update the corresponding field in the tag
         match field {
+            "title" => {
+                tag.set_title(value);
+                track.set_title(Some(value));
+            }
             "artist" => {
                 tag.set_artist(value);
                 track.set_artist(Some(value));
