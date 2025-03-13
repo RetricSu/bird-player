@@ -213,7 +213,67 @@ impl AppComponent for PlayerComponent {
                                             )),
                                         );
                                     };
-                                    if ui.button("移除歌曲").clicked() {};
+                                    if ui.button("移除歌曲").clicked() {
+                                        if let Some(selected_track) =
+                                            &ctx.player.as_ref().unwrap().selected_track
+                                        {
+                                            if let Some(current_playlist_idx) =
+                                                ctx.current_playlist_idx
+                                            {
+                                                // Find the position of the current track in the playlist
+                                                if let Some(current_track_position) = ctx.playlists
+                                                    [current_playlist_idx]
+                                                    .get_pos(selected_track)
+                                                {
+                                                    // Get the next track before removing the current one
+                                                    let next_track = if current_track_position
+                                                        < ctx.playlists[current_playlist_idx]
+                                                            .tracks
+                                                            .len()
+                                                            - 1
+                                                    {
+                                                        Some(
+                                                            ctx.playlists[current_playlist_idx]
+                                                                .tracks[current_track_position + 1]
+                                                                .clone(),
+                                                        )
+                                                    } else if !ctx.playlists[current_playlist_idx]
+                                                        .tracks
+                                                        .is_empty()
+                                                        && current_track_position > 0
+                                                    {
+                                                        // If we're removing the last track, get the previous one
+                                                        Some(
+                                                            ctx.playlists[current_playlist_idx]
+                                                                .tracks[current_track_position - 1]
+                                                                .clone(),
+                                                        )
+                                                    } else {
+                                                        None
+                                                    };
+
+                                                    // Remove the current track
+                                                    ctx.playlists[current_playlist_idx]
+                                                        .remove(current_track_position);
+
+                                                    // Play the next track if available
+                                                    if let Some(track) = next_track {
+                                                        ctx.player
+                                                            .as_mut()
+                                                            .unwrap()
+                                                            .select_track(Some(track));
+                                                        ctx.player.as_mut().unwrap().play();
+                                                    } else {
+                                                        // If no tracks left, clear the selected track
+                                                        ctx.player
+                                                            .as_mut()
+                                                            .unwrap()
+                                                            .select_track(None);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    };
                                 });
 
                                 // volume slider
