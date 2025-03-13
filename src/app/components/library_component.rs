@@ -14,10 +14,41 @@ impl AppComponent for LibraryComponent {
 
         eframe::egui::ScrollArea::both().show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.add(Label::new("Music Files"));
+                // Create a clickable label for "Music Files" with context menu
+                let music_label =
+                    ui.add(Label::new(RichText::new("Music Files").strong()).sense(Sense::click()));
+
+                // Add context menu with expand/collapse options
+                music_label.context_menu(|ui| {
+                    if ui.button("Expand all folders").clicked() {
+                        // Set all folders to expanded
+                        ctx.library_folders_expanded = true;
+
+                        // Force clear the memory to make all folders expand
+                        ui.ctx().memory_mut(|mem| {
+                            mem.data.clear();
+                        });
+
+                        ui.close_menu();
+                    }
+
+                    if ui.button("Collapse all folders").clicked() {
+                        // Set all folders to collapsed
+                        ctx.library_folders_expanded = false;
+
+                        // Force clear the memory to make all folders collapse
+                        ui.ctx().memory_mut(|mem| {
+                            mem.data.clear();
+                        });
+
+                        ui.close_menu();
+                    }
+                });
+
+                ui.add_space(5.0); // Add a small space between label and buttons
 
                 // Add a button to select and import a folder
-                if ui.button("+").clicked() {
+                if ui.button("+").on_hover_text("Add music folder").clicked() {
                     if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
                         // Add the path to the library
                         ctx.library.add_path(new_path);
@@ -33,6 +64,9 @@ impl AppComponent for LibraryComponent {
                     }
                 }
             });
+
+            // Add some vertical spacing
+            ui.add_space(5.0);
 
             // Group library items by their library_id (which corresponds to folder paths)
             let mut folder_items: HashMap<LibraryPathId, Vec<&LibraryItem>> = HashMap::new();
@@ -51,42 +85,57 @@ impl AppComponent for LibraryComponent {
                     let path_id = lib_path.id();
                     let folder_name = lib_path.display_name();
 
-                    // Create a collapsing header for each folder (default open)
-                    CollapsingHeader::new(RichText::new(folder_name).strong())
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            // Display each item in the folder
-                            if let Some(items) = folder_items.get(&path_id) {
-                                // Create a sorted copy for display
-                                let mut sorted_items = items.clone();
-                                sorted_items.sort_by(|a, b| {
-                                    a.title()
-                                        .unwrap_or_default()
-                                        .cmp(&b.title().unwrap_or_default())
-                                });
+                    // Create a header with default behavior that allows individual control
+                    // but is also affected by the global expand/collapse actions
+                    let header = CollapsingHeader::new(RichText::new(folder_name).strong())
+                        .default_open(ctx.library_folders_expanded); // Use the global setting after memory clear
 
-                                for item in sorted_items {
-                                    // Format display with title and artist if available
-                                    let display_text = match (item.title(), item.artist()) {
-                                        (Some(title), Some(artist)) => {
-                                            format!("{} - {}", title, artist)
+                    // Show the header and get its response
+                    let section = header.show(ui, |ui| {
+                        // Only show contents if the header is expanded
+                        if let Some(items) = folder_items.get(&path_id) {
+                            // Create a sorted copy for display
+                            let mut sorted_items = items.clone();
+                            sorted_items.sort_by(|a, b| {
+                                a.title()
+                                    .unwrap_or_default()
+                                    .cmp(&b.title().unwrap_or_default())
+                            });
+
+                            for item in sorted_items {
+                                // Format display with title and artist if available
+                                let display_text = match (item.title(), item.artist()) {
+                                    (Some(title), Some(artist)) => {
+                                        format!("{} - {}", title, artist)
+                                    }
+                                    (Some(title), None) => title,
+                                    (None, Some(artist)) => {
+                                        format!("Unknown Title - {}", artist)
+                                    }
+                                    (None, None) => "Unknown Track".to_string(),
+                                };
+
+                                // Create a clickable label for each track
+                                let item_label = ui.add(
+                                    Label::new(RichText::new(display_text))
+                                        .sense(Sense::click())
+                                        .wrap_mode(TextWrapMode::Truncate),
+                                );
+
+                                // Handle double-click to add to current playlist
+                                if item_label.double_clicked() {
+                                    if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
+                                        let current_playlist =
+                                            &mut ctx.playlists[*current_playlist_idx];
+                                        if !current_playlist.tracks.contains(item) {
+                                            current_playlist.add((*item).clone());
                                         }
-                                        (Some(title), None) => title,
-                                        (None, Some(artist)) => {
-                                            format!("Unknown Title - {}", artist)
-                                        }
-                                        (None, None) => "Unknown Track".to_string(),
-                                    };
+                                    }
+                                }
 
-                                    // Create a clickable label for each track
-                                    let item_label = ui.add(
-                                        Label::new(RichText::new(display_text))
-                                            .sense(Sense::click())
-                                            .wrap_mode(TextWrapMode::Truncate),
-                                    );
-
-                                    // Handle double-click to add to current playlist
-                                    if item_label.double_clicked() {
+                                // Add context menu for individual tracks
+                                item_label.context_menu(|ui| {
+                                    if ui.button("Add to playlist").clicked() {
                                         if let Some(current_playlist_idx) =
                                             &ctx.current_playlist_idx
                                         {
@@ -95,53 +144,39 @@ impl AppComponent for LibraryComponent {
                                             if !current_playlist.tracks.contains(item) {
                                                 current_playlist.add((*item).clone());
                                             }
+                                            ui.close_menu();
                                         }
                                     }
-
-                                    // Add context menu for individual tracks
-                                    item_label.context_menu(|ui| {
-                                        if ui.button("Add to playlist").clicked() {
-                                            if let Some(current_playlist_idx) =
-                                                &ctx.current_playlist_idx
-                                            {
-                                                let current_playlist =
-                                                    &mut ctx.playlists[*current_playlist_idx];
-                                                if !current_playlist.tracks.contains(item) {
-                                                    current_playlist.add((*item).clone());
-                                                }
-                                                ui.close_menu();
-                                            }
-                                        }
-                                    });
-                                }
+                                });
                             }
-                        })
-                        .header_response
-                        .context_menu(|ui| {
-                            // Add context menu for the folder header
-                            if ui.button("Add all to playlist").clicked() {
-                                if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
-                                    let current_playlist =
-                                        &mut ctx.playlists[*current_playlist_idx];
+                        }
+                    });
 
-                                    // Add all tracks from this folder to the playlist
-                                    if let Some(items) = folder_items.get(&path_id) {
-                                        for item in items {
-                                            if !current_playlist.tracks.contains(item) {
-                                                current_playlist.add((*item).clone());
-                                            }
+                    // Add context menu to the header response
+                    section.header_response.context_menu(|ui| {
+                        // Add context menu for the folder header
+                        if ui.button("Add all to playlist").clicked() {
+                            if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
+                                let current_playlist = &mut ctx.playlists[*current_playlist_idx];
+
+                                // Add all tracks from this folder to the playlist
+                                if let Some(items) = folder_items.get(&path_id) {
+                                    for item in items {
+                                        if !current_playlist.tracks.contains(item) {
+                                            current_playlist.add((*item).clone());
                                         }
                                     }
-                                    ui.close_menu();
                                 }
-                            }
-
-                            if ui.button("Remove from library").clicked() {
-                                // Mark this path for removal after the loop
-                                path_to_remove = Some(path_id);
                                 ui.close_menu();
                             }
-                        });
+                        }
+
+                        if ui.button("Remove from library").clicked() {
+                            // Mark this path for removal after the loop
+                            path_to_remove = Some(path_id);
+                            ui.close_menu();
+                        }
+                    });
                 }
             }
         });
