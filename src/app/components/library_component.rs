@@ -43,6 +43,50 @@ impl AppComponent for LibraryComponent {
 
                         ui.close_menu();
                     }
+
+                    if ui.button("Re-sync all folders").clicked() {
+                        // First, collect all the paths that need to be reimported
+                        let paths_to_reimport: Vec<_> = ctx
+                            .library
+                            .paths()
+                            .iter()
+                            .filter(|p| {
+                                p.status() == crate::app::library::LibraryPathStatus::Imported
+                            })
+                            .map(|p| p.path().clone())
+                            .collect();
+
+                        // Remove these paths from the library
+                        let paths_to_remove: Vec<_> = ctx
+                            .library
+                            .paths()
+                            .iter()
+                            .filter(|p| {
+                                p.status() == crate::app::library::LibraryPathStatus::Imported
+                            })
+                            .map(|p| p.id())
+                            .collect();
+
+                        for path_id in paths_to_remove {
+                            ctx.library.remove_path(path_id);
+                        }
+
+                        // Re-add and import each path
+                        for path in paths_to_reimport {
+                            ctx.library.add_path(path);
+
+                            // Get the last added path and import it
+                            if let Some(newest_path) = ctx.library.paths().last() {
+                                if newest_path.status()
+                                    == crate::app::library::LibraryPathStatus::NotImported
+                                {
+                                    ctx.import_library_paths(newest_path);
+                                }
+                            }
+                        }
+
+                        ui.close_menu();
+                    }
                 });
 
                 ui.add_space(5.0); // Add a small space between label and buttons
