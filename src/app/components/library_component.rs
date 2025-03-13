@@ -165,9 +165,13 @@ impl AppComponent for LibraryComponent {
                                         .sense(Sense::click())
                                         .wrap_mode(TextWrapMode::Truncate),
                                 );
+                                if item_label.hovered() {
+                                    ui.ctx()
+                                        .set_cursor_icon(eframe::egui::CursorIcon::PointingHand);
+                                }
 
-                                // Handle double-click to add to current playlist
-                                if item_label.double_clicked() {
+                                // Handle click to add to current playlist
+                                if item_label.clicked() {
                                     if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
                                         let current_playlist =
                                             &mut ctx.playlists[*current_playlist_idx];
