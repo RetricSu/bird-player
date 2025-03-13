@@ -1,6 +1,7 @@
 use super::AppComponent;
 use crate::app::App;
 use eframe::egui::{self, Color32, RichText};
+use rfd;
 
 pub struct WindowChrome;
 
@@ -12,7 +13,19 @@ impl AppComponent for WindowChrome {
             // Menu list
             ui.menu_button("File", |ui| {
                 if ui.button("Open").clicked() {
-                    // TODO: Implement file open
+                    if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
+                        // Add the path to the library
+                        ctx.library.add_path(new_path);
+
+                        // Get the last added path and import it
+                        if let Some(newest_path) = ctx.library.paths().last() {
+                            if newest_path.status()
+                                == crate::app::library::LibraryPathStatus::NotImported
+                            {
+                                ctx.import_library_paths(newest_path);
+                            }
+                        }
+                    }
                     ui.close_menu();
                 }
                 if ui.button("Settings").clicked() {
