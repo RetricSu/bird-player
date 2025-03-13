@@ -28,10 +28,13 @@ impl AppComponent for WindowChrome {
                     }
                     ui.close_menu();
                 }
-                if ui.button("Settings").clicked() {
-                    // TODO: Implement settings
+                let settings_label =
+                    egui::RichText::new("Settings").text_style(egui::TextStyle::Button);
+                let settings_btn = ui.button(settings_label);
+                if settings_btn.clicked() {
                     ui.close_menu();
                 }
+                settings_btn.on_hover_text("Not implemented yet");
                 ui.separator();
                 if ui.button("Exit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);

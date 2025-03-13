@@ -182,7 +182,8 @@ impl AppComponent for PlayerComponent {
                                 // small buttons
                                 ui.horizontal(|ui| {
                                     // other small buttons
-                                    ui.button("1.0x").clicked();
+                                    ui.add(egui::Button::new("1.0x"))
+                                        .on_hover_text("Not implemented yet");
                                     if ui.button("列表").clicked() {
                                         ctx.show_library_and_playlist =
                                             !ctx.show_library_and_playlist;
@@ -199,7 +200,8 @@ impl AppComponent for PlayerComponent {
                                             )),
                                         );
                                     };
-                                    if ui.button("歌词").clicked() {};
+                                    ui.add(egui::Button::new("歌词"))
+                                        .on_hover_text("Not implemented yet");
 
                                     if ui.button("最小化").clicked() {
                                         // Hide library and playlist
