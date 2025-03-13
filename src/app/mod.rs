@@ -106,6 +106,8 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub show_about_dialog: bool,
+
+    pub default_window_height: f64,
 }
 
 impl Default for App {
@@ -136,6 +138,7 @@ impl Default for App {
             show_library_and_playlist: true,
             library_folders_expanded: true,
             show_about_dialog: false,
+            default_window_height: 468.0,
         }
     }
 }

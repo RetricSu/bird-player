@@ -1,4 +1,4 @@
-use eframe::egui::{self};
+use eframe::egui::{self, vec2};
 use std::time::Instant;
 
 use super::scope_component::ScopeComponent;
@@ -174,6 +174,15 @@ impl AppComponent for PlayerComponent {
                                 ui.button("1.0x").clicked();
                                 if ui.button("列表").clicked() {
                                     ctx.show_library_and_playlist = !ctx.show_library_and_playlist;
+                                    // Adjust window height based on visibility
+                                    let new_height = if ctx.show_library_and_playlist {
+                                        ctx.default_window_height as f32
+                                    } else {
+                                        200.0 // Compact height when library and playlist are hidden
+                                    };
+                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                                        vec2(ui.ctx().screen_rect().width(), new_height),
+                                    ));
                                 };
                                 if ui.button("歌词").clicked() {};
 
