@@ -257,6 +257,7 @@ fn main() {
         viewport: egui::ViewportBuilder::default()
             .with_decorations(false) // Hide the OS-specific "chrome" around the window
             .with_inner_size([680.0, 468.0])
+            .with_min_inner_size([300.0, 0.0]) // Set minimum size to match initial size
             .with_transparent(true), // To have rounded corners we need transparency,
         ..Default::default()
     };
