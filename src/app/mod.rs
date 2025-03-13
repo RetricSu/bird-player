@@ -366,4 +366,63 @@ impl App {
                 .expect("Failed to send library view");
         });
     }
+
+    pub fn update_track_metadata(
+        &mut self,
+        track: &mut LibraryItem,
+        field: &str,
+        value: &str,
+    ) -> bool {
+        // Get the file path from the LibraryItem
+        let path = track.path();
+
+        // Try to read the existing tag
+        let mut tag = match id3::Tag::read_from_path(&path) {
+            Ok(tag) => tag,
+            Err(err) => {
+                // If there's no tag, create a new one
+                if let id3::ErrorKind::NoTag = err.kind {
+                    tracing::info!("Creating new ID3 tag for file: {:?}", path);
+                    id3::Tag::new()
+                } else {
+                    tracing::error!("Failed to read ID3 tag for file {:?}: {}", path, err);
+                    return false;
+                }
+            }
+        };
+
+        // Update the corresponding field in the tag
+        match field {
+            "artist" => {
+                tag.set_artist(value);
+                track.set_artist(Some(value));
+            }
+            "album" => {
+                tag.set_album(value);
+                track.set_album(Some(value));
+            }
+            "genre" => {
+                tag.set_genre(value);
+                track.set_genre(Some(value));
+            }
+            _ => return false, // Unsupported field
+        }
+
+        // Write the updated tag back to the file
+        match tag.write_to_path(&path, id3::Version::Id3v24) {
+            Ok(_) => {
+                tracing::info!(
+                    "Successfully updated {} to '{}' for file: {:?}",
+                    field,
+                    value,
+                    path
+                );
+                true
+            }
+            Err(e) => {
+                tracing::error!("Failed to write {} tag for file {:?}: {}", field, path, e);
+                false
+            }
+        }
+    }
 }
