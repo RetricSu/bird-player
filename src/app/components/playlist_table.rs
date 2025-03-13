@@ -70,7 +70,6 @@ impl AppComponent for PlaylistTable {
 
             // Track which track to play/stop
             let mut track_to_play: Option<usize> = None;
-            let mut track_to_stop: bool = false;
 
             // Use a single Grid for all rows (including header) to ensure alignment
             egui::Grid::new("playlist_full")
@@ -230,8 +229,6 @@ impl AppComponent for PlaylistTable {
 
                                 if !is_selected {
                                     track_to_play = Some(idx);
-                                } else {
-                                    track_to_stop = true;
                                 }
                             }
                         }
@@ -453,9 +450,6 @@ impl AppComponent for PlaylistTable {
                     ctx.player.as_mut().unwrap().select_track(Some(track_clone));
                     ctx.player.as_mut().unwrap().play();
                 }
-            } else if track_to_stop {
-                ctx.player.as_mut().unwrap().stop();
-                ctx.player.as_mut().unwrap().selected_track = None;
             }
 
             // Handle track removal after the iteration is complete
