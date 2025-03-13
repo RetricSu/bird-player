@@ -74,12 +74,17 @@ fn main() {
         let mut current_track_path: Option<PathBuf> = None;
         let mut timer = std::time::Instant::now();
         let mut last_ts = 0; // Track last timestamp to avoid duplicate updates
+        let mut idle_sleep = std::time::Duration::from_millis(1); // Sleep duration for idle states
 
         loop {
+            // Process any pending commands
             process_audio_cmd(&audio_rx, &mut state, &mut volume, &is_processing_ui_change);
 
             match state {
                 PlayerState::Playing => {
+                    // Reset idle sleep duration when playing
+                    idle_sleep = std::time::Duration::from_millis(1);
+                    
                     // decode the next packet.
                     let result: std::result::Result<(), symphonia::core::errors::Error> = 'once: {
                         if state != PlayerState::Playing {
@@ -111,9 +116,10 @@ fn main() {
                             break 'once Ok(());
                         }
 
-                        // Only send timestamp updates every second and only if the timestamp has changed
-                        if timer.elapsed() > std::time::Duration::from_secs(1)
-                            && packet.ts != last_ts
+                        // Only send timestamp updates every second and only if the timestamp has changed significantly
+                        let current_time = timer.elapsed();
+                        if current_time > std::time::Duration::from_secs(1) && 
+                           (packet.ts > last_ts + 1000 || packet.ts < last_ts) // Only update if changed by more than 1 second or went backwards
                         {
                             ui_tx
                                 .send(UiCommand::CurrentTimestamp(packet.ts))
@@ -172,6 +178,9 @@ fn main() {
                         .expect("Encountered some other error than EoF");
                 }
                 PlayerState::Stopped => {
+                    // Increase sleep duration in stopped state
+                    idle_sleep = std::time::Duration::from_millis(10);
+                    
                     // This is kind of a hack to get stopping to work. Flush the buffer so there is
                     // nothing left in the resampler, but the decoder needs to be reset. This is as
                     // simple as reloading the current track so the next time it plays from the
@@ -246,9 +255,20 @@ fn main() {
                     state = PlayerState::Playing;
                 }
                 PlayerState::Paused => {
-                    // don't decode AND don't flush the buffer?
+                    // Increase sleep duration in paused state
+                    idle_sleep = std::time::Duration::from_millis(50);
+                    std::thread::sleep(idle_sleep);
                 }
-                PlayerState::Unstarted => {}
+                PlayerState::Unstarted => {
+                    // Maximum sleep duration in unstarted state
+                    idle_sleep = std::time::Duration::from_millis(100);
+                    std::thread::sleep(idle_sleep);
+                }
+            }
+
+            // Yield to other threads if we're not actively playing
+            if state != PlayerState::Playing {
+                std::thread::yield_now();
             }
         }
     }); // Audio Thread end
