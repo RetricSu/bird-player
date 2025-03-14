@@ -13,13 +13,7 @@ use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::units::Duration;
 
 pub trait AudioOutput {
-    //fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
-    fn write(
-        &mut self,
-        decoded: AudioBufferRef<'_>,
-        gui_ring_buf_producer: &rb::Producer<f32>,
-        volume: f32,
-    ) -> Result<()>;
+    fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()>;
     fn flush(&mut self);
 }
 
@@ -292,7 +286,7 @@ mod cpal {
 
             // Create a ring buffer with a capacity for up-to 200ms of audio.
             // let ring_len = ((2 * config.sample_rate.0 as usize) / 1000) * num_channels;
-            let ring_len: usize = 4096;
+            let ring_len: usize = 8192; // Increased to reduce buffer underruns
 
             let ring_buf = SpscRb::new(ring_len);
             let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
@@ -353,12 +347,7 @@ mod cpal {
     where
         f32: cpal::FromSample<T>,
     {
-        fn write(
-            &mut self,
-            decoded: AudioBufferRef<'_>,
-            gui_ring_buf_producer: &rb::Producer<f32>,
-            volume: f32,
-        ) -> Result<()> {
+        fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()> {
             // Do nothing if there are no audio frames.
             if decoded.frames() == 0 {
                 return Ok(());
@@ -377,20 +366,66 @@ mod cpal {
                 self.sample_buf.samples()
             };
 
-            // Write all samples to the ring buffer.
-            let _written_count_to_scope = gui_ring_buf_producer.write(
-                &samples
-                    .iter()
-                    .map(|s| s.to_sample::<f32>())
-                    .collect::<Vec<f32>>(),
-            );
+            // Now handle audio output with volume adjustment
+            // Using a fixed-size buffer to avoid allocations in the hot path
+            // This buffer is used to batch samples with volume applied
+            const BATCH_SIZE: usize = 1024;
+            let mut volume_adjusted_samples = [T::MID; BATCH_SIZE];
 
-            // Write all samples to the ring buffer.
-            while let Some(written) = self
-                .ring_buf_producer
-                .write_blocking(&samples.iter().map(|s| s.mul(volume)).collect::<Vec<_>>())
-            {
-                samples = &samples[written..];
+            while !samples.is_empty() {
+                // Calculate how many samples to process in this batch
+                let batch_count = std::cmp::min(BATCH_SIZE, samples.len());
+
+                // Apply volume to batch
+                for i in 0..batch_count {
+                    volume_adjusted_samples[i] = samples[i].mul(volume);
+                }
+
+                // Write the volume-adjusted batch to the ring buffer
+                match self
+                    .ring_buf_producer
+                    .write_blocking(&volume_adjusted_samples[..batch_count])
+                {
+                    Some(written) => {
+                        // If not all samples were written, try again with the remaining ones
+                        if written < batch_count {
+                            // Move remaining unwritten samples to the beginning of the batch
+                            for i in 0..(batch_count - written) {
+                                volume_adjusted_samples[i] = volume_adjusted_samples[written + i];
+                            }
+
+                            // Continuously try to write the remaining samples
+                            let mut remaining = batch_count - written;
+                            while remaining > 0 {
+                                if let Some(written) = self
+                                    .ring_buf_producer
+                                    .write_blocking(&volume_adjusted_samples[..remaining])
+                                {
+                                    if written == 0 {
+                                        // If we can't write any more, break to avoid infinite loop
+                                        break;
+                                    }
+
+                                    // Move remaining samples again
+                                    for i in 0..(remaining - written) {
+                                        volume_adjusted_samples[i] =
+                                            volume_adjusted_samples[written + i];
+                                    }
+                                    remaining -= written;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Advance to the next batch of samples
+                        samples = &samples[batch_count..];
+                    }
+                    None => {
+                        // If we can't write at all, break out
+                        break;
+                    }
+                }
             }
 
             Ok(())

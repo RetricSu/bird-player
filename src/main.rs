@@ -1,5 +1,4 @@
 pub use crate::app::player::Player;
-pub use crate::app::scope::Scope;
 pub use crate::app::App;
 pub use crate::app::*;
 
@@ -10,7 +9,6 @@ use std::sync::Arc;
 use std::thread;
 
 use eframe::egui;
-use rb::*;
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::{Error, Result};
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
@@ -32,24 +30,12 @@ fn main() {
     let cursor = Arc::new(AtomicU32::new(0));
     let player = Player::new(audio_tx, ui_rx, cursor);
 
-    // Create a ring buffer with a capacity for up-to 1 second of audio.
-    // Calculation: sample_rate * channels * (bytes per sample) * duration_in_seconds
-    // Using typical values: 48000 * 2 * 4 * 1 = 384000
-    let ring_len: usize = 384000;
-
-    let gui_ring_buf = SpscRb::new(ring_len);
-    let (gui_ring_buf_producer, gui_ring_buf_consumer) =
-        (gui_ring_buf.producer(), gui_ring_buf.consumer());
-
     // App setup
     let is_processing_ui_change = Arc::new(AtomicBool::new(false));
     let mut app = App::load().unwrap_or_default();
-    app.scope = Some(Scope::new());
-    app.temp_buf = Some(vec![0.0f32; 48000]);
     app.player = Some(player);
     app.library_cmd_tx = Some(lib_cmd_tx);
     app.library_cmd_rx = Some(lib_cmd_rx);
-    app.played_audio_buffer = Some(gui_ring_buf_consumer);
     app.is_processing_ui_change = Some(is_processing_ui_change.clone());
 
     // Restore player state
@@ -150,9 +136,7 @@ fn main() {
                                 // for the packet is >= the seeked position (0 if not seeking).
                                 if packet.ts() >= play_opts.seek_ts {
                                     if let Some(audio_output) = audio_output {
-                                        audio_output
-                                            .write(decoded, &gui_ring_buf_producer, volume)
-                                            .unwrap();
+                                        audio_output.write(decoded, volume).unwrap();
                                     }
                                 }
 

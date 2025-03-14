@@ -7,7 +7,7 @@ A modern music player built with [egui](https://github.com/emilk/egui) and Rust,
 - 🎨 Retro-inspired UI built with egui, reminiscent of classic 2000s music players
 - 🎵 Support for MP3 audio format
 - 📁 Local music library management with familiar browsing experience
-- 🏷️ ID3 tag support for music metadata
+- 🏷️ ID3 tag management and editing support for music metadata
 - ⚡ High-performance audio playback with CPAL
 - 🎚️ Real-time audio processing and resampling
 - 💾 Configuration persistence

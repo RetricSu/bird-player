@@ -4,7 +4,6 @@ use library::{
 };
 use player::Player;
 use playlist::Playlist;
-use scope::Scope;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, Sender};
@@ -24,7 +23,6 @@ pub mod i18n;
 mod library;
 pub mod player;
 mod playlist;
-pub mod scope;
 mod style;
 
 // Re-export the i18n functions for convenience
@@ -85,15 +83,6 @@ pub struct App {
     #[serde(skip_serializing, skip_deserializing)]
     pub library_cmd_rx: Option<Receiver<LibraryCommand>>,
 
-    #[serde(skip_serializing, skip_deserializing)]
-    pub played_audio_buffer: Option<rb::Consumer<f32>>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub scope: Option<Scope>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub temp_buf: Option<Vec<f32>>,
-
     pub quit: bool,
 
     pub is_maximized: bool,
@@ -140,9 +129,6 @@ impl Default for App {
             playlist_being_renamed: None,
             library_cmd_tx: None,
             library_cmd_rx: None,
-            played_audio_buffer: None,
-            scope: Some(Scope::new()),
-            temp_buf: Some(vec![0.0f32; 4096]),
             quit: false,
             is_maximized: false,
             lib_config_selections: Default::default(),
@@ -177,10 +163,6 @@ impl App {
 
             // Set the language from the loaded config
             i18n::set_language(app.current_language);
-
-            // Set up scope
-            app.scope = Some(Scope::new());
-            app.temp_buf = Some(vec![0.0f32; 4096]);
 
             app.is_maximized = false;
             app.is_library_cfg_open = false;

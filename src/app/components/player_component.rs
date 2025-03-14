@@ -1,7 +1,7 @@
 use eframe::egui::{self, vec2};
 use std::time::Instant;
 
-use super::scope_component::ScopeComponent;
+use super::cassette_component::CassetteComponent;
 use super::AppComponent;
 use crate::app::style::{ButtonExt, SliderExt};
 use crate::app::t;
@@ -124,8 +124,8 @@ impl AppComponent for PlayerComponent {
 
         // Now render UI without borrowing ctx in closures that also borrow ctx
         ui.horizontal(|ui| {
-            // Call scope component with separate ctx reference
-            ScopeComponent::add(ctx, ui);
+            // Call cassette component with separate ctx reference
+            CassetteComponent::add(ctx, ui);
 
             // Add minimum width constraint for the vertical layout
             let min_width = 200.0; // Minimum width in pixels

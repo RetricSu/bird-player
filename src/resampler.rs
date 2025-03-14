@@ -9,8 +9,18 @@ use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal, SignalSpec};
 use symphonia::core::conv::{FromSample, IntoSample};
 use symphonia::core::sample::Sample;
 
+/// Resampling algorithm type
+pub enum ResamplerType {
+    /// High quality FFT-based resampling (higher CPU usage)
+    HighQuality,
+    /// Linear interpolation resampling (lower CPU usage)
+    Linear,
+}
+
 pub struct Resampler<T> {
-    resampler: rubato::FftFixedIn<f32>,
+    resampler_type: ResamplerType,
+    fft_resampler: Option<rubato::FftFixedIn<f32>>,
+    linear_resampler: Option<rubato::SincFixedIn<f32>>,
     input: Vec<Vec<f32>>,
     output: Vec<Vec<f32>>,
     interleaved: Vec<T>,
@@ -22,6 +32,7 @@ where
     T: Sample + FromSample<f32> + IntoSample<f32>,
 {
     fn resample_inner(&mut self) -> &[T] {
+        // Process with either FFT or linear resampler
         {
             let mut input: arrayvec::ArrayVec<&[f32], 32> = Default::default();
 
@@ -29,14 +40,34 @@ where
                 input.push(&channel[..self.duration]);
             }
 
-            // Resample.
-            rubato::Resampler::process_into_buffer(
-                &mut self.resampler,
-                &input,
-                &mut self.output,
-                None,
-            )
-            .unwrap();
+            // Resample using the selected algorithm
+            match (
+                &mut self.fft_resampler,
+                &mut self.linear_resampler,
+                &self.resampler_type,
+            ) {
+                (Some(resampler), _, ResamplerType::HighQuality) => {
+                    // Use FFT resampler
+                    rubato::Resampler::process_into_buffer(
+                        resampler,
+                        &input,
+                        &mut self.output,
+                        None,
+                    )
+                    .unwrap();
+                }
+                (_, Some(resampler), ResamplerType::Linear) => {
+                    // Use linear resampler
+                    rubato::Resampler::process_into_buffer(
+                        resampler,
+                        &input,
+                        &mut self.output,
+                        None,
+                    )
+                    .unwrap();
+                }
+                _ => panic!("No resampler available for the selected type"),
+            }
         }
 
         // Remove consumed samples from the input buffer.
@@ -46,17 +77,25 @@ where
 
         // Interleave the planar samples from Rubato.
         let num_channels = self.output.len();
+        let output_frames = self.output[0].len();
 
-        self.interleaved
-            .resize(num_channels * self.output[0].len(), T::MID);
+        // Ensure our pre-allocated buffer is large enough
+        if self.interleaved.len() < num_channels * output_frames {
+            self.interleaved
+                .resize(num_channels * output_frames, T::MID);
+        }
 
-        for (i, frame) in self.interleaved.chunks_exact_mut(num_channels).enumerate() {
+        // Interleave the samples from planar to interleaved format
+        for (i, frame) in self.interleaved[..num_channels * output_frames]
+            .chunks_exact_mut(num_channels)
+            .enumerate()
+        {
             for (ch, s) in frame.iter_mut().enumerate() {
                 *s = self.output[ch][i].into_sample();
             }
         }
 
-        &self.interleaved
+        &self.interleaved[..num_channels * output_frames]
     }
 }
 
@@ -67,26 +106,73 @@ where
     pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self {
         let duration = duration as usize;
         let num_channels = spec.channels.count();
+        let from_sample_rate = spec.rate as usize;
 
-        let resampler = rubato::FftFixedIn::<f32>::new(
-            spec.rate as usize,
-            to_sample_rate,
-            duration,
-            2,
-            num_channels,
-        )
-        .unwrap();
+        // Pre-calculate max output frames based on resampling ratio
+        // Add 10% margin to be safe
+        let max_output_frames = ((duration as f64)
+            * ((to_sample_rate as f64) / (from_sample_rate as f64))
+            * 1.1) as usize;
 
-        let output = rubato::Resampler::output_buffer_allocate(&resampler);
+        // Choose resampler type based on resampling ratio
+        // For minor resampling (less than 10% difference), use linear
+        // For major resampling, use FFT for better quality
+        let ratio_diff =
+            ((to_sample_rate as f64) - (from_sample_rate as f64)).abs() / (from_sample_rate as f64);
+        let resampler_type = if ratio_diff < 0.1 {
+            ResamplerType::Linear
+        } else {
+            ResamplerType::HighQuality
+        };
+
+        // Create appropriate resampler based on type
+        let (fft_resampler, linear_resampler, output) = match resampler_type {
+            ResamplerType::HighQuality => {
+                let resampler = rubato::FftFixedIn::<f32>::new(
+                    from_sample_rate,
+                    to_sample_rate,
+                    duration,
+                    2,
+                    num_channels,
+                )
+                .unwrap();
+                let output = rubato::Resampler::output_buffer_allocate(&resampler);
+                (Some(resampler), None, output)
+            }
+            ResamplerType::Linear => {
+                // Use simpler SincFixedIn with fewer parameters
+                let resampler = rubato::SincFixedIn::<f32>::new(
+                    from_sample_rate as f64 / to_sample_rate as f64,
+                    0.95,
+                    rubato::InterpolationParameters {
+                        sinc_len: 256,
+                        f_cutoff: 0.95,
+                        oversampling_factor: 128,
+                        interpolation: rubato::InterpolationType::Linear,
+                        window: rubato::WindowFunction::BlackmanHarris2,
+                    },
+                    duration,
+                    num_channels,
+                )
+                .unwrap();
+                let output = rubato::Resampler::output_buffer_allocate(&resampler);
+                (None, Some(resampler), output)
+            }
+        };
 
         let input = vec![Vec::with_capacity(duration); num_channels];
 
+        // Pre-allocate interleaved buffer with maximum expected size to avoid reallocations
+        let interleaved = vec![T::MID; num_channels * max_output_frames];
+
         Self {
-            resampler,
+            resampler_type,
+            fft_resampler,
+            linear_resampler,
             input,
             output,
+            interleaved,
             duration,
-            interleaved: Default::default(),
         }
     }
 
