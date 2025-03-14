@@ -4,7 +4,6 @@ use library::{
 };
 use player::Player;
 use playlist::Playlist;
-use scope::Scope;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, Sender};
@@ -20,11 +19,15 @@ use std::path::PathBuf;
 
 mod app_impl;
 mod components;
+pub mod i18n;
 mod library;
 pub mod player;
 mod playlist;
-pub mod scope;
 mod style;
+
+// Re-export the i18n functions for convenience
+pub use i18n::{get_language, set_language, t, tf, Language};
+
 pub enum AudioCommand {
     Stop,
     Play,
@@ -55,6 +58,9 @@ pub struct App {
 
     pub current_playlist_idx: Option<usize>,
 
+    // Language setting
+    pub current_language: i18n::Language,
+
     // New fields for player state persistence
     pub last_track_path: Option<PathBuf>,
     pub last_position: Option<u64>,
@@ -77,15 +83,6 @@ pub struct App {
     #[serde(skip_serializing, skip_deserializing)]
     pub library_cmd_rx: Option<Receiver<LibraryCommand>>,
 
-    #[serde(skip_serializing, skip_deserializing)]
-    pub played_audio_buffer: Option<rb::Consumer<f32>>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub scope: Option<Scope>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub temp_buf: Option<Vec<f32>>,
-
     pub quit: bool,
 
     pub is_maximized: bool,
@@ -101,14 +98,26 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub show_library_and_playlist: bool,
+
+    pub library_folders_expanded: bool,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub show_about_dialog: bool,
+
+    pub default_window_height: f64,
 }
 
 impl Default for App {
     fn default() -> Self {
+        // Create a default playlist
+        let mut default_playlist = playlist::Playlist::new();
+        default_playlist.set_name("Default Playlist".to_string());
+
         Self {
             library: Library::new(),
-            playlists: vec![],
-            current_playlist_idx: None,
+            playlists: vec![default_playlist],
+            current_playlist_idx: Some(0), // Set the first playlist as selected
+            current_language: i18n::Language::English, // Default language
             // Initialize the new fields
             last_track_path: None,
             last_position: None,
@@ -120,15 +129,15 @@ impl Default for App {
             playlist_being_renamed: None,
             library_cmd_tx: None,
             library_cmd_rx: None,
-            played_audio_buffer: None,
-            scope: Some(Scope::new()),
-            temp_buf: Some(vec![0.0f32; 4096]),
             quit: false,
             is_maximized: false,
             lib_config_selections: Default::default(),
             is_library_cfg_open: false,
             is_processing_ui_change: None,
             show_library_and_playlist: true,
+            library_folders_expanded: false,
+            show_about_dialog: false,
+            default_window_height: 468.0,
         }
     }
 }
@@ -146,25 +155,44 @@ impl std::fmt::Display for TempError {
 
 impl App {
     pub fn load() -> Result<Self, TempError> {
-        let config_dir = confy::get_configuration_file_path("music_player", None)
-            .map_err(|_| TempError::MissingAppState)?
-            .parent()
-            .ok_or(TempError::MissingAppState)?
-            .to_path_buf();
+        if let Ok(config) = confy::load::<App>("bird-player", None) {
+            let mut app = config;
 
-        // Create album_art directory in the config directory
-        let album_art_dir = config_dir.join("album_art");
-        fs::create_dir_all(&album_art_dir).map_err(|_| TempError::MissingAppState)?;
+            // Initialize i18n
+            i18n::init();
 
-        println!(
-            "Load configuration file {:#?}",
-            config_dir.join("music_player.yml")
-        );
-        confy::load("music_player", None).map_err(|_| TempError::MissingAppState)
+            // Set the language from the loaded config
+            i18n::set_language(app.current_language);
+
+            app.is_maximized = false;
+            app.is_library_cfg_open = false;
+            app.show_about_dialog = false;
+            app.is_processing_ui_change = None;
+            app.show_library_and_playlist = true;
+            Ok(app)
+        } else {
+            let mut app = App::default();
+
+            // Initialize i18n
+            i18n::init();
+
+            // Set the default language
+            i18n::set_language(app.current_language);
+
+            // Set properties not covered by default
+            app.is_maximized = false;
+            app.is_library_cfg_open = false;
+            app.show_about_dialog = false;
+
+            // Save the initial state
+            app.save_state();
+
+            Ok(app)
+        }
     }
 
     pub fn get_album_art_dir() -> PathBuf {
-        confy::get_configuration_file_path("music_player", None)
+        confy::get_configuration_file_path("bird-player", None)
             .map(|p| {
                 p.parent()
                     .map_or_else(|| PathBuf::from("album_art"), |path| path.join("album_art"))
@@ -174,7 +202,7 @@ impl App {
 
     pub fn save_state(&self) {
         // Update player state information before saving
-        let store_result = confy::store("music_player", None, self);
+        let store_result = confy::store("bird-player", None, self);
         match store_result {
             Ok(_) => tracing::info!("Store was successful"),
             Err(err) => tracing::error!("Failed to store the app state: {}", err),
@@ -365,5 +393,90 @@ impl App {
                 .send(LibraryCommand::AddPathId(path_id))
                 .expect("Failed to send library view");
         });
+    }
+
+    pub fn update_track_metadata(
+        &mut self,
+        track: &mut LibraryItem,
+        field: &str,
+        value: &str,
+    ) -> bool {
+        // Get the file path from the LibraryItem
+        let path = track.path();
+
+        // Try to read the existing tag
+        let mut tag = match id3::Tag::read_from_path(&path) {
+            Ok(tag) => tag,
+            Err(err) => {
+                // If there's no tag, create a new one
+                if let id3::ErrorKind::NoTag = err.kind {
+                    tracing::info!("Creating new ID3 tag for file: {:?}", path);
+                    id3::Tag::new()
+                } else {
+                    tracing::error!("Failed to read ID3 tag for file {:?}: {}", path, err);
+                    return false;
+                }
+            }
+        };
+
+        // Update the corresponding field in the tag
+        match field {
+            "title" => {
+                tag.set_title(value);
+                track.set_title(Some(value));
+            }
+            "artist" => {
+                tag.set_artist(value);
+                track.set_artist(Some(value));
+            }
+            "album" => {
+                tag.set_album(value);
+                track.set_album(Some(value));
+            }
+            "genre" => {
+                tag.set_genre(value);
+                track.set_genre(Some(value));
+            }
+            _ => return false, // Unsupported field
+        }
+
+        // Write the updated tag back to the file
+        match tag.write_to_path(&path, id3::Version::Id3v24) {
+            Ok(_) => {
+                tracing::info!(
+                    "Successfully updated {} to '{}' for file: {:?}",
+                    field,
+                    value,
+                    path
+                );
+                true
+            }
+            Err(e) => {
+                tracing::error!("Failed to write {} tag for file {:?}: {}", field, path, e);
+                false
+            }
+        }
+    }
+
+    // Add these new methods for language handling
+    pub fn set_language(&mut self, lang: i18n::Language) {
+        self.current_language = lang;
+        i18n::set_language(lang);
+        // Save state to persist language preference
+        self.save_state();
+    }
+
+    pub fn get_language(&self) -> i18n::Language {
+        self.current_language
+    }
+}
+
+// Include the version info module generated at build time
+pub mod version_info {
+    include!(concat!(env!("OUT_DIR"), "/version_info.rs"));
+
+    // Return formatted version string with commit hash
+    pub fn formatted_version() -> String {
+        format!("Version {} ({})", VERSION, GIT_HASH)
     }
 }

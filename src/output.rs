@@ -13,13 +13,7 @@ use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::units::Duration;
 
 pub trait AudioOutput {
-    //fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
-    fn write(
-        &mut self,
-        decoded: AudioBufferRef<'_>,
-        gui_ring_buf_producer: &rb::Producer<f32>,
-        volume: f32,
-    ) -> Result<()>;
+    fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()>;
     fn flush(&mut self);
 }
 
@@ -104,7 +98,7 @@ mod pulseaudio {
     }
 
     impl AudioOutput for PulseAudioOutput {
-        fn write(&mut self, decoded: AudioBufferRef<'_>, gui_ring_buf_producer: rb::Producer<f32>) -> Result<()> {
+        fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()> {
             // Do nothing if there are no audio frames.
             if decoded.frames() == 0 {
                 return Ok(());
@@ -112,6 +106,25 @@ mod pulseaudio {
 
             // Interleave samples from the audio buffer into the sample buffer.
             self.sample_buf.copy_interleaved_ref(decoded);
+
+            // Apply volume adjustment
+            if volume != 1.0 {
+                let samples = self.sample_buf.as_mut_byte_slice();
+                let sample_count = samples.len() / std::mem::size_of::<f32>();
+
+                // Convert byte slice to f32 slice for volume adjustment
+                let samples_f32 = unsafe {
+                    std::slice::from_raw_parts_mut(
+                        samples.as_mut_ptr() as *mut f32,
+                        sample_count,
+                    )
+                };
+
+                // Apply volume
+                for sample in samples_f32 {
+                    *sample *= volume;
+                }
+            }
 
             // Write interleaved samples to PulseAudio.
             match self.pa.write(self.sample_buf.as_bytes()) {
@@ -172,6 +185,148 @@ mod pulseaudio {
     }
 }
 */
+
+#[cfg(target_os = "linux")]
+mod pulseaudio {
+    use super::{AudioOutput, AudioOutputError, Result};
+
+    use symphonia::core::audio::*;
+    use symphonia::core::units::Duration;
+
+    use libpulse_binding as pulse;
+    use libpulse_simple_binding as psimple;
+
+    use log::{error, warn};
+
+    pub struct PulseAudioOutput {
+        pa: psimple::Simple,
+        sample_buf: RawSampleBuffer<f32>,
+    }
+
+    impl PulseAudioOutput {
+        pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+            // An interleaved buffer is required to send data to PulseAudio. Use a SampleBuffer to
+            // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
+            let sample_buf = RawSampleBuffer::<f32>::new(duration, spec);
+
+            // Create a PulseAudio stream specification.
+            let pa_spec = pulse::sample::Spec {
+                format: pulse::sample::Format::FLOAT32NE,
+                channels: spec.channels.count() as u8,
+                rate: spec.rate,
+            };
+
+            assert!(pa_spec.is_valid());
+
+            let pa_ch_map = map_channels_to_pa_channelmap(spec.channels);
+
+            // Create a PulseAudio connection.
+            let pa_result = psimple::Simple::new(
+                None,                               // Use default server
+                "Bird Player",                      // Application name
+                pulse::stream::Direction::Playback, // Playback stream
+                None,                               // Default playback device
+                "Music",                            // Description of the stream
+                &pa_spec,                           // Signal specification
+                pa_ch_map.as_ref(),                 // Channel map
+                None,                               // Custom buffering attributes
+            );
+
+            match pa_result {
+                Ok(pa) => Ok(Box::new(PulseAudioOutput { pa, sample_buf })),
+                Err(err) => {
+                    error!("audio output stream open error: {}", err);
+
+                    Err(AudioOutputError::OpenStreamError)
+                }
+            }
+        }
+    }
+
+    impl AudioOutput for PulseAudioOutput {
+        fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()> {
+            // Do nothing if there are no audio frames.
+            if decoded.frames() == 0 {
+                return Ok(());
+            }
+
+            // Interleave samples from the audio buffer into the sample buffer.
+            self.sample_buf.copy_interleaved_ref(decoded);
+
+            // Apply volume adjustment
+            if volume != 1.0 {
+                let samples = self.sample_buf.as_mut_byte_slice();
+                let sample_count = samples.len() / std::mem::size_of::<f32>();
+
+                // Convert byte slice to f32 slice for volume adjustment
+                let samples_f32 = unsafe {
+                    std::slice::from_raw_parts_mut(samples.as_mut_ptr() as *mut f32, sample_count)
+                };
+
+                // Apply volume
+                for sample in samples_f32 {
+                    *sample *= volume;
+                }
+            }
+
+            // Write interleaved samples to PulseAudio.
+            match self.pa.write(self.sample_buf.as_bytes()) {
+                Err(err) => {
+                    error!("audio output stream write error: {}", err);
+
+                    Err(AudioOutputError::StreamClosedError)
+                }
+                _ => Ok(()),
+            }
+        }
+
+        fn flush(&mut self) {
+            // Flush is best-effort, ignore the returned result.
+            let _ = self.pa.drain();
+        }
+    }
+
+    /// Maps a set of Symphonia `Channels` to a PulseAudio channel map.
+    fn map_channels_to_pa_channelmap(channels: Channels) -> Option<pulse::channelmap::Map> {
+        let mut map: pulse::channelmap::Map = Default::default();
+        map.init();
+        map.set_len(channels.count() as u8);
+
+        let is_mono = channels.count() == 1;
+
+        for (i, channel) in channels.iter().enumerate() {
+            map.get_mut()[i] = match channel {
+                Channels::FRONT_LEFT if is_mono => pulse::channelmap::Position::Mono,
+                Channels::FRONT_LEFT => pulse::channelmap::Position::FrontLeft,
+                Channels::FRONT_RIGHT => pulse::channelmap::Position::FrontRight,
+                Channels::FRONT_CENTRE => pulse::channelmap::Position::FrontCenter,
+                Channels::REAR_LEFT => pulse::channelmap::Position::RearLeft,
+                Channels::REAR_CENTRE => pulse::channelmap::Position::RearCenter,
+                Channels::REAR_RIGHT => pulse::channelmap::Position::RearRight,
+                Channels::LFE1 => pulse::channelmap::Position::Lfe,
+                Channels::FRONT_LEFT_CENTRE => pulse::channelmap::Position::FrontLeftOfCenter,
+                Channels::FRONT_RIGHT_CENTRE => pulse::channelmap::Position::FrontRightOfCenter,
+                Channels::SIDE_LEFT => pulse::channelmap::Position::SideLeft,
+                Channels::SIDE_RIGHT => pulse::channelmap::Position::SideRight,
+                Channels::TOP_CENTRE => pulse::channelmap::Position::TopCenter,
+                Channels::TOP_FRONT_LEFT => pulse::channelmap::Position::TopFrontLeft,
+                Channels::TOP_FRONT_CENTRE => pulse::channelmap::Position::TopFrontCenter,
+                Channels::TOP_FRONT_RIGHT => pulse::channelmap::Position::TopFrontRight,
+                Channels::TOP_REAR_LEFT => pulse::channelmap::Position::TopRearLeft,
+                Channels::TOP_REAR_CENTRE => pulse::channelmap::Position::TopRearCenter,
+                Channels::TOP_REAR_RIGHT => pulse::channelmap::Position::TopRearRight,
+                _ => {
+                    // If a Symphonia channel cannot map to a PulseAudio position then return None
+                    // because PulseAudio will not be able to open a stream with invalid channels.
+                    warn!("failed to map channel {:?} to output", channel);
+                    return None;
+                }
+            }
+        }
+
+        Some(map)
+    }
+}
 
 #[cfg(not(target_os = "linux"))]
 mod cpal {
@@ -292,7 +447,7 @@ mod cpal {
 
             // Create a ring buffer with a capacity for up-to 200ms of audio.
             // let ring_len = ((2 * config.sample_rate.0 as usize) / 1000) * num_channels;
-            let ring_len: usize = 4096;
+            let ring_len: usize = 8192; // Increased to reduce buffer underruns
 
             let ring_buf = SpscRb::new(ring_len);
             let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
@@ -353,12 +508,7 @@ mod cpal {
     where
         f32: cpal::FromSample<T>,
     {
-        fn write(
-            &mut self,
-            decoded: AudioBufferRef<'_>,
-            gui_ring_buf_producer: &rb::Producer<f32>,
-            volume: f32,
-        ) -> Result<()> {
+        fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()> {
             // Do nothing if there are no audio frames.
             if decoded.frames() == 0 {
                 return Ok(());
@@ -377,20 +527,66 @@ mod cpal {
                 self.sample_buf.samples()
             };
 
-            // Write all samples to the ring buffer.
-            let _written_count_to_scope = gui_ring_buf_producer.write(
-                &samples
-                    .iter()
-                    .map(|s| s.to_sample::<f32>())
-                    .collect::<Vec<f32>>(),
-            );
+            // Now handle audio output with volume adjustment
+            // Using a fixed-size buffer to avoid allocations in the hot path
+            // This buffer is used to batch samples with volume applied
+            const BATCH_SIZE: usize = 1024;
+            let mut volume_adjusted_samples = [T::MID; BATCH_SIZE];
 
-            // Write all samples to the ring buffer.
-            while let Some(written) = self
-                .ring_buf_producer
-                .write_blocking(&samples.iter().map(|s| s.mul(volume)).collect::<Vec<_>>())
-            {
-                samples = &samples[written..];
+            while !samples.is_empty() {
+                // Calculate how many samples to process in this batch
+                let batch_count = std::cmp::min(BATCH_SIZE, samples.len());
+
+                // Apply volume to batch
+                for i in 0..batch_count {
+                    volume_adjusted_samples[i] = samples[i].mul(volume);
+                }
+
+                // Write the volume-adjusted batch to the ring buffer
+                match self
+                    .ring_buf_producer
+                    .write_blocking(&volume_adjusted_samples[..batch_count])
+                {
+                    Some(written) => {
+                        // If not all samples were written, try again with the remaining ones
+                        if written < batch_count {
+                            // Move remaining unwritten samples to the beginning of the batch
+                            for i in 0..(batch_count - written) {
+                                volume_adjusted_samples[i] = volume_adjusted_samples[written + i];
+                            }
+
+                            // Continuously try to write the remaining samples
+                            let mut remaining = batch_count - written;
+                            while remaining > 0 {
+                                if let Some(written) = self
+                                    .ring_buf_producer
+                                    .write_blocking(&volume_adjusted_samples[..remaining])
+                                {
+                                    if written == 0 {
+                                        // If we can't write any more, break to avoid infinite loop
+                                        break;
+                                    }
+
+                                    // Move remaining samples again
+                                    for i in 0..(remaining - written) {
+                                        volume_adjusted_samples[i] =
+                                            volume_adjusted_samples[written + i];
+                                    }
+                                    remaining -= written;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Advance to the next batch of samples
+                        samples = &samples[batch_count..];
+                    }
+                    None => {
+                        // If we can't write at all, break out
+                        break;
+                    }
+                }
             }
 
             Ok(())
@@ -419,6 +615,11 @@ pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOut
     pulseaudio::PulseAudioOutput::try_open(spec, duration)
 }
 */
+
+#[cfg(target_os = "linux")]
+pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+    pulseaudio::PulseAudioOutput::try_open(spec, duration)
+}
 
 #[cfg(not(target_os = "linux"))]
 pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {

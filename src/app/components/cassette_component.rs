@@ -40,7 +40,7 @@ impl CassetteColors {
     }
 }
 
-pub struct ScopeComponent;
+pub struct CassetteComponent;
 const ALBUM_ART_SIZE: f32 = 120.0;
 const CASSETTE_WIDTH: f32 = 280.0;
 const CASSETTE_HEIGHT: f32 = 160.0;
@@ -53,7 +53,7 @@ thread_local! {
     static TAPE_PROGRESS: std::cell::RefCell<f32> = const {std::cell::RefCell::new(0.0)};
 }
 
-impl AppComponent for ScopeComponent {
+impl AppComponent for CassetteComponent {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {

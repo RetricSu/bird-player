@@ -1,6 +1,10 @@
+use super::language_selector::LanguageSelector;
 use super::AppComponent;
+use crate::app::t;
+use crate::app::version_info;
 use crate::app::App;
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, Color32, RichText, Window};
+use rfd;
 
 pub struct WindowChrome;
 
@@ -10,28 +14,98 @@ impl AppComponent for WindowChrome {
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal(|ui| {
             // Menu list
-            ui.menu_button("File", |ui| {
-                if ui.button("Open").clicked() {
-                    // TODO: Implement file open
+            ui.menu_button(t("file"), |ui| {
+                if ui.button(t("open")).clicked() {
+                    if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
+                        // Add the path to the library
+                        ctx.library.add_path(new_path);
+
+                        // Get the last added path and import it
+                        if let Some(newest_path) = ctx.library.paths().last() {
+                            if newest_path.status()
+                                == crate::app::library::LibraryPathStatus::NotImported
+                            {
+                                ctx.import_library_paths(newest_path);
+                            }
+                        }
+                    }
                     ui.close_menu();
                 }
-                if ui.button("Settings").clicked() {
-                    // TODO: Implement settings
-                    ui.close_menu();
-                }
+                let settings_label =
+                    egui::RichText::new(t("settings")).text_style(egui::TextStyle::Button);
+                ui.add_enabled_ui(false, |ui| ui.button(settings_label))
+                    .response
+                    .on_hover_text("Not implemented yet");
                 ui.separator();
-                if ui.button("Exit").clicked() {
+                if ui.button(t("exit")).clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     ui.close_menu();
                 }
             });
 
-            ui.menu_button("Help", |ui| {
-                if ui.button("About").clicked() {
-                    // TODO: Implement about dialog
+            // Add Playback menu
+            ui.menu_button(t("playback"), |ui| {
+                if let Some(player) = &mut ctx.player {
+                    if let Some(_selected_track) = &player.selected_track {
+                        if ui.button(t("play_pause")).clicked() {
+                            match player.track_state {
+                                crate::app::player::TrackState::Playing => {
+                                    player.pause();
+                                }
+                                _ => {
+                                    player.play();
+                                }
+                            }
+                            ui.close_menu();
+                        }
+                        if ui.button(t("previous")).clicked() {
+                            if let Some(current_playlist_idx) = ctx.current_playlist_idx {
+                                player.previous(&ctx.playlists[current_playlist_idx]);
+                            }
+                            ui.close_menu();
+                        }
+                        if ui.button(t("next")).clicked() {
+                            if let Some(current_playlist_idx) = ctx.current_playlist_idx {
+                                player.next(&ctx.playlists[current_playlist_idx]);
+                            }
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        // Show current play mode in the menu
+                        let mode_icon = match player.playback_mode {
+                            crate::app::player::PlaybackMode::Normal => "➡",
+                            crate::app::player::PlaybackMode::Repeat => "🔁",
+                            crate::app::player::PlaybackMode::RepeatOne => "🔂",
+                            crate::app::player::PlaybackMode::Shuffle => "🔀",
+                        };
+                        if ui
+                            .button(crate::app::tf("play_mode", &[mode_icon]))
+                            .clicked()
+                        {
+                            player.toggle_playback_mode();
+                            ui.close_menu();
+                        }
+                    } else {
+                        ui.add_enabled_ui(false, |ui| {
+                            let _ = ui.button(t("play_pause"));
+                            let _ = ui.button(t("previous"));
+                            let _ = ui.button(t("next"));
+                            ui.separator();
+                            let _ = ui.button(crate::app::tf("play_mode", &["➡"]));
+                        });
+                    }
+                }
+            });
+
+            ui.menu_button(t("help"), |ui| {
+                if ui.button(t("about")).clicked() {
+                    ctx.show_about_dialog = true;
                     ui.close_menu();
                 }
             });
+
+            // Add language selector
+            LanguageSelector::add(ctx, ui);
 
             // Take up remaining space
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -47,12 +121,12 @@ impl AppComponent for WindowChrome {
 
                 // Maximize button
                 let maximize_response = ui.add(
-                    egui::Button::new(RichText::new("[]").size(14.0))
+                    egui::Button::new(RichText::new("↗").size(14.0))
                         .min_size(button_size)
                         .fill(Color32::TRANSPARENT),
                 );
                 if maximize_response.clicked() {
-                    // Toggle maximize state
+                    // Toggle maximize
                     ui.ctx()
                         .send_viewport_cmd(egui::ViewportCommand::Maximized(!ctx.is_maximized));
                     ctx.is_maximized = !ctx.is_maximized;
@@ -78,5 +152,32 @@ impl AppComponent for WindowChrome {
                 }
             });
         });
+
+        // Show About dialog if requested
+        if ctx.show_about_dialog {
+            Window::new(t("about"))
+                .collapsible(false)
+                .resizable(false)
+                .show(ui.ctx(), |ui| {
+                    ui.vertical(|ui| {
+                        ui.add_space(20.0);
+                        ui.heading(RichText::new("Bird Player").size(24.0));
+                        ui.add_space(10.0);
+                        ui.label(RichText::new(version_info::formatted_version()).size(16.0));
+                        ui.add_space(20.0);
+                        ui.label("A music player dedicated for local music files, inspired by the things from the amazing 2000s golden age.");
+                        ui.add_space(20.0);
+                        ui.label("Features:");
+                        ui.label("• Playing music, simple and straightforward, no streaming bullshit.");
+                        ui.label("• A cassette mimic, with a focus on simplicity and clean design.");
+                        ui.label("• Local Music library with ID3 editable tag support");
+                        ui.label("• Playlist management");
+                        ui.add_space(20.0);
+                        if ui.button(t("exit")).clicked() {
+                            ctx.show_about_dialog = false;
+                        }
+                    });
+                });
+        }
     }
 }

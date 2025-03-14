@@ -1,5 +1,4 @@
 pub use crate::app::player::Player;
-pub use crate::app::scope::Scope;
 pub use crate::app::App;
 pub use crate::app::*;
 
@@ -10,7 +9,6 @@ use std::sync::Arc;
 use std::thread;
 
 use eframe::egui;
-use rb::*;
 use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
 use symphonia::core::errors::{Error, Result};
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
@@ -32,24 +30,12 @@ fn main() {
     let cursor = Arc::new(AtomicU32::new(0));
     let player = Player::new(audio_tx, ui_rx, cursor);
 
-    // Create a ring buffer with a capacity for up-to 1 second of audio.
-    // Calculation: sample_rate * channels * (bytes per sample) * duration_in_seconds
-    // Using typical values: 48000 * 2 * 4 * 1 = 384000
-    let ring_len: usize = 384000;
-
-    let gui_ring_buf = SpscRb::new(ring_len);
-    let (gui_ring_buf_producer, gui_ring_buf_consumer) =
-        (gui_ring_buf.producer(), gui_ring_buf.consumer());
-
     // App setup
     let is_processing_ui_change = Arc::new(AtomicBool::new(false));
     let mut app = App::load().unwrap_or_default();
-    app.scope = Some(Scope::new());
-    app.temp_buf = Some(vec![0.0f32; 48000]);
     app.player = Some(player);
     app.library_cmd_tx = Some(lib_cmd_tx);
     app.library_cmd_rx = Some(lib_cmd_rx);
-    app.played_audio_buffer = Some(gui_ring_buf_consumer);
     app.is_processing_ui_change = Some(is_processing_ui_change.clone());
 
     // Restore player state
@@ -76,6 +62,7 @@ fn main() {
         let mut last_ts = 0; // Track last timestamp to avoid duplicate updates
 
         loop {
+            // Process any pending commands
             process_audio_cmd(&audio_rx, &mut state, &mut volume, &is_processing_ui_change);
 
             match state {
@@ -111,9 +98,11 @@ fn main() {
                             break 'once Ok(());
                         }
 
-                        // Only send timestamp updates every second and only if the timestamp has changed
-                        if timer.elapsed() > std::time::Duration::from_secs(1)
-                            && packet.ts != last_ts
+                        // Only send timestamp updates every second and only if the timestamp has changed significantly
+                        let current_time = timer.elapsed();
+                        if current_time > std::time::Duration::from_secs(1)
+                            && (packet.ts > last_ts + 1000 || packet.ts < last_ts)
+                        // Only update if changed by more than 1 second or went backwards
                         {
                             ui_tx
                                 .send(UiCommand::CurrentTimestamp(packet.ts))
@@ -147,9 +136,7 @@ fn main() {
                                 // for the packet is >= the seeked position (0 if not seeking).
                                 if packet.ts() >= play_opts.seek_ts {
                                     if let Some(audio_output) = audio_output {
-                                        audio_output
-                                            .write(decoded, &gui_ring_buf_producer, volume)
-                                            .unwrap();
+                                        audio_output.write(decoded, volume).unwrap();
                                     }
                                 }
 
@@ -246,9 +233,16 @@ fn main() {
                     state = PlayerState::Playing;
                 }
                 PlayerState::Paused => {
-                    // don't decode AND don't flush the buffer?
+                    std::thread::sleep(std::time::Duration::from_millis(50));
                 }
-                PlayerState::Unstarted => {}
+                PlayerState::Unstarted => {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+
+            // Yield to other threads if we're not actively playing
+            if state != PlayerState::Playing {
+                std::thread::yield_now();
             }
         }
     }); // Audio Thread end
@@ -256,7 +250,8 @@ fn main() {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_decorations(false) // Hide the OS-specific "chrome" around the window
-            .with_inner_size([680.0, 468.0])
+            .with_inner_size([750.0, 468.0])
+            .with_min_inner_size([300.0, 0.0]) // Set minimum size to match initial size
             .with_transparent(true), // To have rounded corners we need transparency,
         ..Default::default()
     };
