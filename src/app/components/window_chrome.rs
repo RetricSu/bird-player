@@ -1,6 +1,7 @@
 use super::language_selector::LanguageSelector;
 use super::AppComponent;
 use crate::app::t;
+use crate::app::version_info;
 use crate::app::App;
 use eframe::egui::{self, Color32, RichText, Window};
 use rfd;
@@ -162,7 +163,7 @@ impl AppComponent for WindowChrome {
                         ui.add_space(20.0);
                         ui.heading(RichText::new("Bird Player").size(24.0));
                         ui.add_space(10.0);
-                        ui.label(RichText::new("Version 0.1.0").size(16.0));
+                        ui.label(RichText::new(version_info::formatted_version()).size(16.0));
                         ui.add_space(20.0);
                         ui.label("A simple GUI music player inspired by foobar2000");
                         ui.label("written in Rust using egui");
