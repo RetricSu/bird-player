@@ -74,7 +74,6 @@ fn main() {
         let mut current_track_path: Option<PathBuf> = None;
         let mut timer = std::time::Instant::now();
         let mut last_ts = 0; // Track last timestamp to avoid duplicate updates
-        let mut idle_sleep = std::time::Duration::from_millis(1); // Sleep duration for idle states
 
         loop {
             // Process any pending commands
@@ -82,9 +81,6 @@ fn main() {
 
             match state {
                 PlayerState::Playing => {
-                    // Reset idle sleep duration when playing
-                    idle_sleep = std::time::Duration::from_millis(1);
-
                     // decode the next packet.
                     let result: std::result::Result<(), symphonia::core::errors::Error> = 'once: {
                         if state != PlayerState::Playing {
@@ -179,9 +175,6 @@ fn main() {
                         .expect("Encountered some other error than EoF");
                 }
                 PlayerState::Stopped => {
-                    // Increase sleep duration in stopped state
-                    idle_sleep = std::time::Duration::from_millis(10);
-
                     // This is kind of a hack to get stopping to work. Flush the buffer so there is
                     // nothing left in the resampler, but the decoder needs to be reset. This is as
                     // simple as reloading the current track so the next time it plays from the
@@ -256,14 +249,10 @@ fn main() {
                     state = PlayerState::Playing;
                 }
                 PlayerState::Paused => {
-                    // Increase sleep duration in paused state
-                    idle_sleep = std::time::Duration::from_millis(50);
-                    std::thread::sleep(idle_sleep);
+                    std::thread::sleep(std::time::Duration::from_millis(50));
                 }
                 PlayerState::Unstarted => {
-                    // Maximum sleep duration in unstarted state
-                    idle_sleep = std::time::Duration::from_millis(100);
-                    std::thread::sleep(idle_sleep);
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
             }
 
