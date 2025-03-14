@@ -141,28 +141,19 @@ impl AppComponent for PlayerComponent {
                     if let Some(track) = &selected_track {
                         ui.add(
                             eframe::egui::Label::new(format!(
-                                "{} - {}",
-                                track.artist().unwrap_or("unknown artist".to_string()),
+                                "歌曲：{}",
                                 track.title().unwrap_or("unknown title".to_string())
                             ))
                             .wrap_mode(eframe::egui::TextWrapMode::Truncate),
                         )
                         .highlight();
 
-                        ui.label(format!("from {}", current_playlist_name));
+                        ui.label(format!(
+                            "艺术家：{}",
+                            track.artist().unwrap_or("unknown artist".to_string())
+                        ));
 
-                        // Display lyrics if they exist
-                        if let Some(lyrics) = track.lyrics() {
-                            ui.add_space(10.0);
-                            eframe::egui::ScrollArea::vertical()
-                                .max_height(150.0)
-                                .id_salt("lyrics_scroll")
-                                .show(ui, |ui| {
-                                    ui.label(lyrics);
-                                });
-                        } else {
-                            ui.label("No lyrics available");
-                        }
+                        ui.label(format!("播放列表：{}", current_playlist_name));
                     } else {
                         // Default display when no track is selected
                         ui.add(
@@ -257,8 +248,7 @@ impl AppComponent for PlayerComponent {
                             // small buttons
                             ui.horizontal(|ui| {
                                 // other small buttons
-                                ui.add(egui::Button::new("1.0x"))
-                                    .on_hover_text("Not implemented yet");
+                                ui.add_enabled_ui(false, |ui| ui.button("1.0x"));
 
                                 if ui.button("列表").clicked() {
                                     ctx.show_library_and_playlist = !ctx.show_library_and_playlist;
@@ -273,8 +263,7 @@ impl AppComponent for PlayerComponent {
                                     ));
                                 };
 
-                                ui.add(egui::Button::new("歌词"))
-                                    .on_hover_text("Not implemented yet");
+                                ui.add_enabled_ui(false, |ui| ui.button("歌词"));
 
                                 if ui.button("最小化").clicked() {
                                     // Hide library and playlist
