@@ -130,7 +130,11 @@ impl AppComponent for PlayerComponent {
             // Add minimum width constraint for the vertical layout
             let min_width = 200.0; // Minimum width in pixels
             let available_width = ui.available_width();
-            let panel_width = (available_width - CASSETTE_WIDTH).max(min_width);
+            let panel_width = if available_width > CASSETTE_WIDTH {
+                available_width
+            } else {
+                min_width
+            };
 
             ui.allocate_ui_with_layout(
                 vec2(panel_width, ui.available_height()),
