@@ -30,15 +30,64 @@ impl AppComponent for WindowChrome {
                 }
                 let settings_label =
                     egui::RichText::new("Settings").text_style(egui::TextStyle::Button);
-                let settings_btn = ui.button(settings_label);
-                if settings_btn.clicked() {
-                    ui.close_menu();
-                }
-                settings_btn.on_hover_text("Not implemented yet");
+                ui.add_enabled_ui(false, |ui| ui.button(settings_label))
+                    .response
+                    .on_hover_text("Not implemented yet");
                 ui.separator();
                 if ui.button("Exit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     ui.close_menu();
+                }
+            });
+
+            // Add Playback menu
+            ui.menu_button("Playback", |ui| {
+                if let Some(player) = &mut ctx.player {
+                    if let Some(_selected_track) = &player.selected_track {
+                        if ui.button("Play/Pause").clicked() {
+                            match player.track_state {
+                                crate::app::player::TrackState::Playing => {
+                                    player.pause();
+                                }
+                                _ => {
+                                    player.play();
+                                }
+                            }
+                            ui.close_menu();
+                        }
+                        if ui.button("Previous").clicked() {
+                            if let Some(current_playlist_idx) = ctx.current_playlist_idx {
+                                player.previous(&ctx.playlists[current_playlist_idx]);
+                            }
+                            ui.close_menu();
+                        }
+                        if ui.button("Next").clicked() {
+                            if let Some(current_playlist_idx) = ctx.current_playlist_idx {
+                                player.next(&ctx.playlists[current_playlist_idx]);
+                            }
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        // Show current play mode in the menu
+                        let mode_text = match player.playback_mode {
+                            crate::app::player::PlaybackMode::Normal => "Play Mode: ➡",
+                            crate::app::player::PlaybackMode::Repeat => "Play Mode: 🔁",
+                            crate::app::player::PlaybackMode::RepeatOne => "Play Mode: 🔂",
+                            crate::app::player::PlaybackMode::Shuffle => "Play Mode: 🔀",
+                        };
+                        if ui.button(mode_text).clicked() {
+                            player.toggle_playback_mode();
+                            ui.close_menu();
+                        }
+                    } else {
+                        ui.add_enabled_ui(false, |ui| {
+                            let _ = ui.button("Play/Pause");
+                            let _ = ui.button("Previous");
+                            let _ = ui.button("Next");
+                            ui.separator();
+                            let _ = ui.button("Play Mode: Normal ➡");
+                        });
+                    }
                 }
             });
 
