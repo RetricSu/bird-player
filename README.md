@@ -1,65 +1,83 @@
-# Music Player
+# Bird Player
 
-A simple GUI music player inspired by foobar2000 written in Rust using [egui](https://github.com/emilk/egui).
-The goal of this project is to learn about making gui/ native apps, audio, databases / text search.
-It is not meant to be used as a serious audio player.
+A modern music player built with [egui](https://github.com/emilk/egui) and Rust, featuring a nostalgic 2000s-inspired interface. Bird Player combines the charm of classic music players with modern technology, providing a seamless experience for managing and playing your local music collection. If you miss the golden era of desktop music players, this is for you!
 
-## Goals
+## Features
 
-- Basic music player functionality. Play, pause, stop.
-- Create a music library, which is indexed for searching.
-- Parse id3 tags from tracks for use with indexing.
-- Create playlists, which can be saved, opened, edited, reordered
-- Drag n' Drop tracks from the music library into the playlist.
-- Save last state of the app when closing.
+- 🎨 Retro-inspired UI built with egui, reminiscent of classic 2000s music players
+- 🎵 Support for MP3 audio format
+- 📁 Local music library management with familiar browsing experience
+- 🏷️ ID3 tag support for music metadata
+- ⚡ High-performance audio playback with CPAL
+- 🎚️ Real-time audio processing and resampling
+- 💾 Configuration persistence
+- 📱 Cross-platform support
+- 🌟 Nostalgic visual elements and animations
+- 🎼 Classic playlist management system
 
-## Stretch goals
+## Installation
 
-- [ ] See if I can make right-click context menus.
-- [ ] Visualizations
-- [ ] Stream audio
-- [ ] Swappable frontend so I can try other Rust cross platform gui libaries.
-- [x] Scrubbable audio. ie. Keep position in audio and arbitrarily move to any position
+### Prerequisites
 
-## Stuff to fix or implement
+- Rust 1.70 or higher
+- Cargo package manager
 
-- [x] Reference playlists by index or actual reference (not a clone...), so info is not lost when changing playlist context
-- [x] Double clicking track automatically starts to play it.
-- [x] Remove playlists.
-- [x] Un-named playlists get `(idx)` appended 
-- [x] Playlist tab section stacks playlist tabs when they don't fit.
-- [x] Add Next and Previous controls
-- [x] Pause is a toggle
-- [x] Play restarts the track
-- [x] Add volume control slider
-- [x] Implement library
-- [x] Refactor so the items parsed in the library are the primary data type passed around instead of separate library items and tracks.
-- [x] Set currently playing track as app Title
-- [x] Display playlist as a table [Playing, Track #, Artist, Album Title, etc... ]
-- [x] Add player indicators next to the track
-- [x] Improve library build performance and probably offload to a non-ui thread.
-- [x] Add toolbar with File, Properties, Help, etc...
-- [x] Save app state on close (just get it working bare min with a random file).
-- [x] Use Confy for app state load/save
-- [x] Refactor into more sensible responsibilities (think components / widgets / features).
-- [x] Investigate performance regression with a large library (this is due to sorting/grouping the view on every frame)
-- [x] Fix library view performance. Don't need to keep computing the grouping every frame - persist it in app state with a new data structure.
-- [x] Fix all egui deprecation errors... should be just one for using `CollapsingState` instead of `CollapsingHeader`
-- [ ] Fix Dark mode now that egui has made some changes in 0.18
-- [ ] Figure out error handling (anyhow, eyre, thiserror, etc...)
-- [ ] Remove tracks from playlist.
-- [ ] Reorder items in playlist.
-- [ ] Support multiple directories for library
-- [ ] Figure out how to use at least one hotkey and key event.
-- [ ] Define key events for the application
-- [ ] Selected track is highlighted.
-- [ ] Playlist plays to end after track is selected.
-- [ ] Save playlists.
-- [ ] Handle files which can't be decoded correctly into audio. 
-- [ ] Implement library search.
-- [ ] Differentiate between a selected track and the currently playing one.
-- [ ] Library display options [ album, artist, year, genre, folder structure, etc...]
-- [ ] Library Item hashable?
-- [ ] Discovery on how to make the library state smaller when saved (compression, better data structure, maybe save separate from app state, etc...)
-- [ ] Surface logs to the user in the UI
-- [ ] Stop with all the cloning... seriously. Everything is cloned.
+### Building from Source
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/bird-player.git
+cd bird-player
+```
+
+2. Build the project:
+```bash
+cargo build --release
+```
+
+The compiled binary will be available in `target/release/bird-player`.
+
+## Usage
+
+1. Launch Bird Player:
+```bash
+cargo run --release
+```
+
+2. Use the file dialog to add your music directory
+3. Browse and play your music collection
+4. Enjoy your music with high-quality audio playback
+
+## Configuration
+
+Bird Player automatically saves your configuration and library state between sessions. The configuration file is stored in the standard system configuration directory using YAML format.
+
+## Development
+
+### Project Structure
+
+- `src/main.rs`: Application entry point and main logic
+- `src/output.rs`: Audio output handling
+- `src/resampler.rs`: Audio resampling functionality
+- `src/app/`: UI components and application state management
+
+### Dependencies
+
+- `eframe`: GUI framework
+- `cpal`: Audio playback
+- `symphonia`: Audio decoding
+- `id3`: Music metadata handling
+- `serde`: Configuration serialization
+- Other utilities for file management and audio processing
+
+## License
+
+[Your chosen license]
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Acknowledgments
+
+Thanks to all the Rust crate authors whose work made this project possible.
