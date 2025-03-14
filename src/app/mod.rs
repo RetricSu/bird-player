@@ -112,10 +112,14 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
+        // Create a default playlist
+        let mut default_playlist = playlist::Playlist::new();
+        default_playlist.set_name("Default Playlist".to_string());
+
         Self {
             library: Library::new(),
-            playlists: vec![],
-            current_playlist_idx: None,
+            playlists: vec![default_playlist],
+            current_playlist_idx: Some(0), // Set the first playlist as selected
             // Initialize the new fields
             last_track_path: None,
             last_position: None,
