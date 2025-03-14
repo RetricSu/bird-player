@@ -210,7 +210,7 @@ impl App {
     }
 
     pub fn get_album_art_dir() -> PathBuf {
-        confy::get_configuration_file_path("music_player", None)
+        confy::get_configuration_file_path("bird-player", None)
             .map(|p| {
                 p.parent()
                     .map_or_else(|| PathBuf::from("album_art"), |path| path.join("album_art"))
@@ -220,7 +220,7 @@ impl App {
 
     pub fn save_state(&self) {
         // Update player state information before saving
-        let store_result = confy::store("music_player", None, self);
+        let store_result = confy::store("bird-player", None, self);
         match store_result {
             Ok(_) => tracing::info!("Store was successful"),
             Err(err) => tracing::error!("Failed to store the app state: {}", err),

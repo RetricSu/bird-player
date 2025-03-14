@@ -21,7 +21,7 @@ impl Language {
 
     pub fn name(&self) -> &'static str {
         match self {
-            Language::English => "English",
+            Language::English => "En",
             Language::Chinese => "中文",
         }
     }
@@ -81,12 +81,12 @@ pub fn init() {
         "Create a playlist to start playing music".to_string(),
     );
     en.insert("remove_song".to_string(), "Remove Song".to_string());
-    en.insert("minimize".to_string(), "Minimize".to_string());
+    en.insert("mini".to_string(), "Mini".to_string());
     en.insert("playlist_btn".to_string(), "Playlist".to_string());
     en.insert("lyrics".to_string(), "Lyrics".to_string());
 
     // Library component
-    en.insert("music_files".to_string(), "Music Files".to_string());
+    en.insert("music_files".to_string(), "Music Library".to_string());
     en.insert("expand_all".to_string(), "Expand all folders".to_string());
     en.insert(
         "collapse_all".to_string(),
@@ -171,12 +171,12 @@ pub fn init() {
         "创建播放列表开始播放音乐".to_string(),
     );
     zh.insert("remove_song".to_string(), "移除歌曲".to_string());
-    zh.insert("minimize".to_string(), "最小化".to_string());
+    zh.insert("mini".to_string(), "迷你".to_string());
     zh.insert("playlist_btn".to_string(), "列表".to_string());
     zh.insert("lyrics".to_string(), "歌词".to_string());
 
     // Library component
-    zh.insert("music_files".to_string(), "音乐文件".to_string());
+    zh.insert("music_files".to_string(), "音乐库".to_string());
     zh.insert("expand_all".to_string(), "展开所有文件夹".to_string());
     zh.insert("collapse_all".to_string(), "折叠所有文件夹".to_string());
     zh.insert("resync_all".to_string(), "重新同步所有文件夹".to_string());

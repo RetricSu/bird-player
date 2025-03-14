@@ -268,7 +268,7 @@ impl AppComponent for PlayerComponent {
 
                                 ui.add_enabled_ui(false, |ui| ui.button(t("lyrics")));
 
-                                if ui.button(t("minimize")).clicked() {
+                                if ui.button(t("mini")).clicked() {
                                     // Hide library and playlist
                                     ctx.show_library_and_playlist = false;
 

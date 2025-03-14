@@ -12,7 +12,7 @@ impl AppComponent for LanguageSelector {
             for lang in Language::all() {
                 let is_selected = ctx.get_language() == lang;
                 let lang_text = if is_selected {
-                    egui::RichText::new(format!("✓ {}", lang.name())).strong()
+                    egui::RichText::new(format!("- {}", lang.name())).strong()
                 } else {
                     egui::RichText::new(lang.name())
                 };
