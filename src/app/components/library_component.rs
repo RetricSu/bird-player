@@ -1,4 +1,5 @@
 use super::AppComponent;
+use crate::app::t;
 use crate::app::{App, LibraryItem, LibraryPathId};
 use eframe::egui::{CollapsingHeader, Label, RichText, Sense, TextWrapMode};
 use std::collections::HashMap;
@@ -15,12 +16,13 @@ impl AppComponent for LibraryComponent {
         eframe::egui::ScrollArea::both().show(ui, |ui| {
             ui.horizontal(|ui| {
                 // Create a clickable label for "Music Files" with context menu
-                let music_label =
-                    ui.add(Label::new(RichText::new("Music Files").strong()).sense(Sense::click()));
+                let music_label = ui.add(
+                    Label::new(RichText::new(t("music_files")).strong()).sense(Sense::click()),
+                );
 
                 // Add context menu with expand/collapse options
                 music_label.context_menu(|ui| {
-                    if ui.button("Expand all folders").clicked() {
+                    if ui.button(t("expand_all")).clicked() {
                         // Set all folders to expanded
                         ctx.library_folders_expanded = true;
 
@@ -32,7 +34,7 @@ impl AppComponent for LibraryComponent {
                         ui.close_menu();
                     }
 
-                    if ui.button("Collapse all folders").clicked() {
+                    if ui.button(t("collapse_all")).clicked() {
                         // Set all folders to collapsed
                         ctx.library_folders_expanded = false;
 
@@ -44,7 +46,7 @@ impl AppComponent for LibraryComponent {
                         ui.close_menu();
                     }
 
-                    if ui.button("Re-sync all folders").clicked() {
+                    if ui.button(t("resync_all")).clicked() {
                         // First, collect all the paths that need to be reimported
                         let paths_to_reimport: Vec<_> = ctx
                             .library
@@ -92,7 +94,11 @@ impl AppComponent for LibraryComponent {
                 ui.add_space(5.0); // Add a small space between label and buttons
 
                 // Add a button to select and import a folder
-                if ui.button("+").on_hover_text("Add music folder").clicked() {
+                if ui
+                    .button("+")
+                    .on_hover_text(t("add_music_folder"))
+                    .clicked()
+                {
                     if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
                         // Add the path to the library
                         ctx.library.add_path(new_path);
@@ -154,9 +160,9 @@ impl AppComponent for LibraryComponent {
                                     }
                                     (Some(title), None) => title,
                                     (None, Some(artist)) => {
-                                        format!("Unknown Title - {}", artist)
+                                        format!("{} - {}", t("unknown_title"), artist)
                                     }
-                                    (None, None) => "Unknown Track".to_string(),
+                                    (None, None) => t("unknown_track"),
                                 };
 
                                 // Create a clickable label for each track
@@ -183,7 +189,7 @@ impl AppComponent for LibraryComponent {
 
                                 // Add context menu for individual tracks
                                 item_label.context_menu(|ui| {
-                                    if ui.button("Add to playlist").clicked() {
+                                    if ui.button(t("add_to_playlist")).clicked() {
                                         if let Some(current_playlist_idx) =
                                             &ctx.current_playlist_idx
                                         {
@@ -203,7 +209,7 @@ impl AppComponent for LibraryComponent {
                     // Add context menu to the header response
                     section.header_response.context_menu(|ui| {
                         // Add context menu for the folder header
-                        if ui.button("Add all to playlist").clicked() {
+                        if ui.button(t("add_all_to_playlist")).clicked() {
                             if let Some(current_playlist_idx) = &ctx.current_playlist_idx {
                                 let current_playlist = &mut ctx.playlists[*current_playlist_idx];
 
@@ -219,7 +225,7 @@ impl AppComponent for LibraryComponent {
                             }
                         }
 
-                        if ui.button("Remove from library").clicked() {
+                        if ui.button(t("remove_from_library")).clicked() {
                             // Mark this path for removal after the loop
                             path_to_remove = Some(path_id);
                             ui.close_menu();

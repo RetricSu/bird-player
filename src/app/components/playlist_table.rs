@@ -1,4 +1,5 @@
 use super::AppComponent;
+use crate::app::t;
 use crate::app::App;
 use eframe::egui;
 
@@ -95,35 +96,35 @@ impl AppComponent for PlaylistTable {
                             ui.scope(|ui| {
                                 let col_width = available_width * column_proportions[0];
                                 ui.set_min_width(col_width);
-                                ui.strong("#");
+                                ui.strong(t("column_number"));
                             });
 
                             // Title column
                             ui.scope(|ui| {
                                 let col_width = available_width * column_proportions[1];
                                 ui.set_min_width(col_width);
-                                ui.strong("Title");
+                                ui.strong(t("column_title"));
                             });
 
                             // Artist column
                             ui.scope(|ui| {
                                 let col_width = available_width * column_proportions[2];
                                 ui.set_min_width(col_width);
-                                ui.strong("Artist");
+                                ui.strong(t("column_artist"));
                             });
 
                             // Album column
                             ui.scope(|ui| {
                                 let col_width = available_width * column_proportions[3];
                                 ui.set_min_width(col_width);
-                                ui.strong("Album");
+                                ui.strong(t("column_album"));
                             });
 
                             // Genre column
                             ui.scope(|ui| {
                                 let col_width = available_width * column_proportions[4];
                                 ui.set_min_width(col_width);
-                                ui.strong("Genre");
+                                ui.strong(t("column_genre"));
                             });
 
                             ui.end_row();
@@ -153,13 +154,13 @@ impl AppComponent for PlaylistTable {
                                 // Get the track for this row
                                 let track = &ctx.playlists[current_playlist_idx].tracks[idx];
                                 let track_title =
-                                    track.title().unwrap_or("unknown title".to_string());
+                                    track.title().unwrap_or_else(|| t("unknown_title"));
                                 let track_artist =
-                                    track.artist().unwrap_or("unknown artist".to_string());
+                                    track.artist().unwrap_or_else(|| t("unknown_artist"));
                                 let track_album =
-                                    track.album().unwrap_or("unknown album".to_string());
+                                    track.album().unwrap_or_else(|| t("unknown_album"));
                                 let track_genre =
-                                    track.genre().unwrap_or("unknown genre".to_string());
+                                    track.genre().unwrap_or_else(|| t("unknown_genre"));
 
                                 // First column - Drag handle + playing indicator
                                 let drag_handle_text = (idx + 1).to_string();
@@ -277,7 +278,7 @@ impl AppComponent for PlaylistTable {
 
                                         // Add context menu for the title
                                         title_response.context_menu(|ui| {
-                                            if ui.button("Edit title").clicked() {
+                                            if ui.button(t("edit_title")).clicked() {
                                                 // Start editing title
                                                 ui.ctx().memory_mut(|mem| {
                                                     mem.data.insert_temp(
@@ -294,7 +295,7 @@ impl AppComponent for PlaylistTable {
                                                 ui.close_menu();
                                             }
 
-                                            if ui.button("Remove from playlist").clicked() {
+                                            if ui.button(t("remove_from_playlist")).clicked() {
                                                 track_to_remove = Some(idx);
                                                 ui.close_menu();
                                             }
@@ -697,7 +698,7 @@ impl AppComponent for PlaylistTable {
                     // Show track title in the floating indicator
                     let drag_text = track
                         .title()
-                        .unwrap_or("unknown title".to_string())
+                        .unwrap_or_else(|| t("unknown_title"))
                         .to_string();
                     ui.painter().text(
                         drag_rect.center(),

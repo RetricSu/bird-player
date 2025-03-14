@@ -4,6 +4,7 @@ use std::time::Instant;
 use super::scope_component::ScopeComponent;
 use super::AppComponent;
 use crate::app::style::{ButtonExt, SliderExt};
+use crate::app::t;
 use crate::egui::style::HandleShape;
 use crate::{app::App, UiCommand};
 
@@ -141,7 +142,8 @@ impl AppComponent for PlayerComponent {
                     if let Some(track) = &selected_track {
                         ui.add(
                             eframe::egui::Label::new(format!(
-                                "歌曲：{}",
+                                "{}{}",
+                                t("song"),
                                 track.title().unwrap_or("unknown title".to_string())
                             ))
                             .wrap_mode(eframe::egui::TextWrapMode::Truncate),
@@ -149,24 +151,25 @@ impl AppComponent for PlayerComponent {
                         .highlight();
 
                         ui.label(format!(
-                            "艺术家：{}",
+                            "{}{}",
+                            t("artist"),
                             track.artist().unwrap_or("unknown artist".to_string())
                         ));
 
-                        ui.label(format!("播放列表：{}", current_playlist_name));
+                        ui.label(format!("{}{}", t("playlist"), current_playlist_name));
                     } else {
                         // Default display when no track is selected
                         ui.add(
-                            eframe::egui::Label::new("No track selected")
+                            eframe::egui::Label::new(t("no_track"))
                                 .wrap_mode(eframe::egui::TextWrapMode::Truncate),
                         );
 
                         if has_tracks_in_playlist {
-                            ui.label("Select a track from the playlist to play");
+                            ui.label(t("select_track"));
                         } else if current_playlist_idx.is_some() {
-                            ui.label("Add tracks to your playlist to start playing");
+                            ui.label(t("add_tracks"));
                         } else {
-                            ui.label("Create a playlist to start playing music");
+                            ui.label(t("create_playlist"));
                         }
                     }
 
@@ -250,7 +253,7 @@ impl AppComponent for PlayerComponent {
                                 // other small buttons
                                 ui.add_enabled_ui(false, |ui| ui.button("1.0x"));
 
-                                if ui.button("列表").clicked() {
+                                if ui.button(t("playlist_btn")).clicked() {
                                     ctx.show_library_and_playlist = !ctx.show_library_and_playlist;
                                     // Adjust window height based on visibility
                                     let new_height = if ctx.show_library_and_playlist {
@@ -263,9 +266,9 @@ impl AppComponent for PlayerComponent {
                                     ));
                                 };
 
-                                ui.add_enabled_ui(false, |ui| ui.button("歌词"));
+                                ui.add_enabled_ui(false, |ui| ui.button(t("lyrics")));
 
-                                if ui.button("最小化").clicked() {
+                                if ui.button(t("minimize")).clicked() {
                                     // Hide library and playlist
                                     ctx.show_library_and_playlist = false;
 
@@ -280,7 +283,10 @@ impl AppComponent for PlayerComponent {
 
                                 // Only enable the remove button if there's a selected track
                                 if ui
-                                    .add_enabled(has_selected_track, egui::Button::new("移除歌曲"))
+                                    .add_enabled(
+                                        has_selected_track,
+                                        egui::Button::new(t("remove_song")),
+                                    )
                                     .clicked()
                                 {
                                     if let Some(track) = &selected_track {

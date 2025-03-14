@@ -1,4 +1,5 @@
 use super::AppComponent;
+use crate::app::t;
 use crate::app::{App, Playlist};
 use eframe::egui;
 
@@ -20,7 +21,7 @@ impl AppComponent for PlaylistTabs {
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut name)
                             .desired_width(120.0)
-                            .hint_text("Enter name..."),
+                            .hint_text(t("enter_name")),
                     );
 
                     if response.changed() {
@@ -53,11 +54,11 @@ impl AppComponent for PlaylistTabs {
 
                     // Show context menu on right-click
                     tab_response.context_menu(|ui| {
-                        if ui.button("Rename").clicked() {
+                        if ui.button(t("rename")).clicked() {
                             ctx.playlist_being_renamed = Some(idx);
                             ui.close_menu();
                         }
-                        if ui.button("Delete").clicked() {
+                        if ui.button(t("delete")).clicked() {
                             ctx.playlist_idx_to_remove = Some(idx);
                             ui.close_menu();
                         }
@@ -70,7 +71,7 @@ impl AppComponent for PlaylistTabs {
 
             if create_btn.clicked() {
                 let mut new_playlist = Playlist::new();
-                new_playlist.set_name("New Playlist".to_string()); // Set a default name
+                new_playlist.set_name(t("new_playlist")); // Set a default name
                 ctx.playlists.push(new_playlist);
                 let new_idx = ctx.playlists.len() - 1;
                 ctx.current_playlist_idx = Some(new_idx);

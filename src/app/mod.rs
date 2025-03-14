@@ -20,11 +20,16 @@ use std::path::PathBuf;
 
 mod app_impl;
 mod components;
+pub mod i18n;
 mod library;
 pub mod player;
 mod playlist;
 pub mod scope;
 mod style;
+
+// Re-export the i18n functions for convenience
+pub use i18n::{get_language, set_language, t, tf, Language};
+
 pub enum AudioCommand {
     Stop,
     Play,
@@ -54,6 +59,9 @@ pub struct App {
     pub playlists: Vec<Playlist>,
 
     pub current_playlist_idx: Option<usize>,
+
+    // Language setting
+    pub current_language: i18n::Language,
 
     // New fields for player state persistence
     pub last_track_path: Option<PathBuf>,
@@ -120,6 +128,7 @@ impl Default for App {
             library: Library::new(),
             playlists: vec![default_playlist],
             current_playlist_idx: Some(0), // Set the first playlist as selected
+            current_language: i18n::Language::English, // Default language
             // Initialize the new fields
             last_track_path: None,
             last_position: None,
@@ -140,7 +149,7 @@ impl Default for App {
             is_library_cfg_open: false,
             is_processing_ui_change: None,
             show_library_and_playlist: true,
-            library_folders_expanded: true,
+            library_folders_expanded: false,
             show_about_dialog: false,
             default_window_height: 468.0,
         }
@@ -160,21 +169,44 @@ impl std::fmt::Display for TempError {
 
 impl App {
     pub fn load() -> Result<Self, TempError> {
-        let config_dir = confy::get_configuration_file_path("music_player", None)
-            .map_err(|_| TempError::MissingAppState)?
-            .parent()
-            .ok_or(TempError::MissingAppState)?
-            .to_path_buf();
+        if let Ok(config) = confy::load::<App>("bird-player", None) {
+            let mut app = config;
 
-        // Create album_art directory in the config directory
-        let album_art_dir = config_dir.join("album_art");
-        fs::create_dir_all(&album_art_dir).map_err(|_| TempError::MissingAppState)?;
+            // Initialize i18n
+            i18n::init();
 
-        println!(
-            "Load configuration file {:#?}",
-            config_dir.join("music_player.yml")
-        );
-        confy::load("music_player", None).map_err(|_| TempError::MissingAppState)
+            // Set the language from the loaded config
+            i18n::set_language(app.current_language);
+
+            // Set up scope
+            app.scope = Some(Scope::new());
+            app.temp_buf = Some(vec![0.0f32; 4096]);
+
+            app.is_maximized = false;
+            app.is_library_cfg_open = false;
+            app.show_about_dialog = false;
+            app.is_processing_ui_change = None;
+            app.show_library_and_playlist = true;
+            Ok(app)
+        } else {
+            let mut app = App::default();
+
+            // Initialize i18n
+            i18n::init();
+
+            // Set the default language
+            i18n::set_language(app.current_language);
+
+            // Set properties not covered by default
+            app.is_maximized = false;
+            app.is_library_cfg_open = false;
+            app.show_about_dialog = false;
+
+            // Save the initial state
+            app.save_state();
+
+            Ok(app)
+        }
     }
 
     pub fn get_album_art_dir() -> PathBuf {
@@ -442,5 +474,17 @@ impl App {
                 false
             }
         }
+    }
+
+    // Add these new methods for language handling
+    pub fn set_language(&mut self, lang: i18n::Language) {
+        self.current_language = lang;
+        i18n::set_language(lang);
+        // Save state to persist language preference
+        self.save_state();
+    }
+
+    pub fn get_language(&self) -> i18n::Language {
+        self.current_language
     }
 }

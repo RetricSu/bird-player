@@ -510,6 +510,7 @@ dependencies = [
  "id3",
  "image 0.24.9",
  "itertools",
+ "lazy_static",
  "log",
  "rand",
  "rayon",
