@@ -165,15 +165,13 @@ impl AppComponent for WindowChrome {
                         ui.add_space(10.0);
                         ui.label(RichText::new(version_info::formatted_version()).size(16.0));
                         ui.add_space(20.0);
-                        ui.label("A simple GUI music player inspired by foobar2000");
-                        ui.label("written in Rust using egui");
+                        ui.label("A music player dedicated for local music files, inspired by the things from the amazing 2000s golden age.");
                         ui.add_space(20.0);
                         ui.label("Features:");
-                        ui.label("• Basic music player functionality (play, pause, stop)");
-                        ui.label("• Music library with ID3 tag support");
+                        ui.label("• Playing music, simple and straightforward, no streaming bullshit.");
+                        ui.label("• A cassette mimic, with a focus on simplicity and clean design.");
+                        ui.label("• Local Music library with ID3 editable tag support");
                         ui.label("• Playlist management");
-                        ui.label("• Drag and drop support");
-                        ui.label("• State persistence");
                         ui.add_space(20.0);
                         if ui.button(t("exit")).clicked() {
                             ctx.show_about_dialog = false;
