@@ -42,7 +42,7 @@ jobs:
         run: echo "${{ matrix.TARGET }}"
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install musl-gcc if needed
         if: ${{ matrix.os == 'ubuntu-latest' }}
