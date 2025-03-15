@@ -6,8 +6,22 @@ authors = ["RetricSu <inneverland2013@gmail.com>"]
 edition = "2021"
 
 [package.metadata.bundle]
-name = "bird-player"
+name = "Bird Player"
 identifier = "bird.player.app"
+icon = ["assets/icons/icon.png"]
+version = "0.1.0"
+copyright = "© 2024 RetricSu"
+category = "Audio"
+short_description = "A music player for local music files"
+long_description = """
+A modern music player built with egui and Rust, featuring a nostalgic 2000s-inspired interface.
+Bird Player combines the charm of classic music players with modern technology,
+providing a seamless experience for managing and playing your local music collection.
+"""
+osx_minimum_system_version = "10.14"
+osx_frameworks = ["CoreServices", "CoreAudio", "AudioToolbox"]
+windows_subsystem = "windows"
+deb_depends = ["libasound2", "libpulse0", "libgtk-3-0"]
 
 [dependencies]
 cpal = "0.15"

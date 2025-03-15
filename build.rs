@@ -7,6 +7,12 @@ fn main() {
     // Make cargo track changes to Cargo.toml
     println!("cargo:rerun-if-changed=Cargo.toml");
 
+    // Configure Windows to use the windows subsystem (no console window)
+    if env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "windows" {
+        println!("cargo:rustc-link-arg=/SUBSYSTEM:WINDOWS");
+        println!("cargo:rustc-link-arg=/ENTRY:mainCRTStartup");
+    }
+
     // Get version from Cargo.toml
     let version = env!("CARGO_PKG_VERSION");
 
