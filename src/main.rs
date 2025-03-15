@@ -60,6 +60,7 @@ fn main() {
         let mut current_track_path: Option<PathBuf> = None;
         let mut timer = std::time::Instant::now();
         let mut last_ts = 0; // Track last timestamp to avoid duplicate updates
+        let mut sleep_duration = std::time::Duration::from_millis(10); // Adaptive sleep time
 
         loop {
             // Process any pending commands
@@ -77,6 +78,7 @@ fn main() {
                         let reader = audio_engine_state.reader.as_mut().unwrap();
                         let play_opts = audio_engine_state.track_info.unwrap();
                         let audio_output = &mut audio_engine_state.audio_output;
+
                         // Get the next packet from the format reader.
                         let packet = match reader.next_packet() {
                             Ok(packet) => packet,
@@ -136,8 +138,30 @@ fn main() {
                                 // for the packet is >= the seeked position (0 if not seeking).
                                 if packet.ts() >= play_opts.seek_ts {
                                     if let Some(audio_output) = audio_output {
-                                        audio_output.write(decoded, volume).unwrap();
+                                        // First, check if we should even try to write - if writing fails consistently,
+                                        // we might be processing packets too quickly
+                                        let write_result = audio_output.write(decoded, volume);
+
+                                        // Track successful writes vs failures to adaptively adjust sleep time
+                                        if write_result.is_ok() {
+                                            // Gradually reduce sleep time for successful writes, but don't go below a minimum
+                                            // This approach reduces CPU usage while ensuring smooth playback
+                                            if sleep_duration > std::time::Duration::from_millis(1)
+                                            {
+                                                sleep_duration = sleep_duration.saturating_sub(
+                                                    std::time::Duration::from_micros(100),
+                                                );
+                                            }
+                                        } else {
+                                            // If we had an error, increase sleep time to avoid overrunning the buffer
+                                            sleep_duration = std::time::Duration::from_millis(10);
+                                        }
                                     }
+                                }
+
+                                // Adaptively sleep based on our buffer state and past success/failure
+                                if sleep_duration > std::time::Duration::from_micros(0) {
+                                    std::thread::sleep(sleep_duration);
                                 }
 
                                 Ok(())
@@ -150,8 +174,6 @@ fn main() {
                             }
                             Err(err) => break 'once Err(err),
                         }
-
-                        //Ok(())
                     };
 
                     // Return if a fatal error occured.
@@ -188,6 +210,9 @@ fn main() {
 
                         state = PlayerState::Unstarted;
                     }
+
+                    // Use longer sleep in stopped state to save energy
+                    std::thread::sleep(std::time::Duration::from_millis(50));
                 }
                 PlayerState::SeekTo(seek_timestamp) => {
                     tracing::info!("AudioThread Seeking");
@@ -231,11 +256,16 @@ fn main() {
                         .expect("Failed to send play to audio thread");
 
                     state = PlayerState::Playing;
+
+                    // Reset sleep duration when loading a new file
+                    sleep_duration = std::time::Duration::from_millis(5);
                 }
                 PlayerState::Paused => {
+                    // Use longer sleeps in paused state to significantly reduce CPU usage
                     std::thread::sleep(std::time::Duration::from_millis(50));
                 }
                 PlayerState::Unstarted => {
+                    // Use longer sleeps in unstarted state to significantly reduce CPU usage
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
             }

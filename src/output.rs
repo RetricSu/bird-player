@@ -28,7 +28,6 @@ pub enum AudioOutputError {
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
-/*
 #[cfg(target_os = "linux")]
 mod pulseaudio {
     use super::{AudioOutput, AudioOutputError, Result};
@@ -78,152 +77,6 @@ mod pulseaudio {
             let pa_result = psimple::Simple::new(
                 None,                               // Use default server
                 "Symphonia Player",                 // Application name
-                pulse::stream::Direction::Playback, // Playback stream
-                None,                               // Default playback device
-                "Music",                            // Description of the stream
-                &pa_spec,                           // Signal specification
-                pa_ch_map.as_ref(),                 // Channel map
-                None,                               // Custom buffering attributes
-            );
-
-            match pa_result {
-                Ok(pa) => Ok(Box::new(PulseAudioOutput { pa, sample_buf })),
-                Err(err) => {
-                    error!("audio output stream open error: {}", err);
-
-                    Err(AudioOutputError::OpenStreamError)
-                }
-            }
-        }
-    }
-
-    impl AudioOutput for PulseAudioOutput {
-        fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()> {
-            // Do nothing if there are no audio frames.
-            if decoded.frames() == 0 {
-                return Ok(());
-            }
-
-            // Interleave samples from the audio buffer into the sample buffer.
-            self.sample_buf.copy_interleaved_ref(decoded);
-
-            // Apply volume adjustment
-            if volume != 1.0 {
-                let samples = self.sample_buf.as_mut_byte_slice();
-                let sample_count = samples.len() / std::mem::size_of::<f32>();
-
-                // Convert byte slice to f32 slice for volume adjustment
-                let samples_f32 = unsafe {
-                    std::slice::from_raw_parts_mut(
-                        samples.as_mut_ptr() as *mut f32,
-                        sample_count,
-                    )
-                };
-
-                // Apply volume
-                for sample in samples_f32 {
-                    *sample *= volume;
-                }
-            }
-
-            // Write interleaved samples to PulseAudio.
-            match self.pa.write(self.sample_buf.as_bytes()) {
-                Err(err) => {
-                    error!("audio output stream write error: {}", err);
-
-                    Err(AudioOutputError::StreamClosedError)
-                }
-                _ => Ok(()),
-            }
-        }
-
-        fn flush(&mut self) {
-            // Flush is best-effort, ignore the returned result.
-            let _ = self.pa.drain();
-        }
-    }
-
-    /// Maps a set of Symphonia `Channels` to a PulseAudio channel map.
-    fn map_channels_to_pa_channelmap(channels: Channels) -> Option<pulse::channelmap::Map> {
-        let mut map: pulse::channelmap::Map = Default::default();
-        map.init();
-        map.set_len(channels.count() as u8);
-
-        let is_mono = channels.count() == 1;
-
-        for (i, channel) in channels.iter().enumerate() {
-            map.get_mut()[i] = match channel {
-                Channels::FRONT_LEFT if is_mono => pulse::channelmap::Position::Mono,
-                Channels::FRONT_LEFT => pulse::channelmap::Position::FrontLeft,
-                Channels::FRONT_RIGHT => pulse::channelmap::Position::FrontRight,
-                Channels::FRONT_CENTRE => pulse::channelmap::Position::FrontCenter,
-                Channels::REAR_LEFT => pulse::channelmap::Position::RearLeft,
-                Channels::REAR_CENTRE => pulse::channelmap::Position::RearCenter,
-                Channels::REAR_RIGHT => pulse::channelmap::Position::RearRight,
-                Channels::LFE1 => pulse::channelmap::Position::Lfe,
-                Channels::FRONT_LEFT_CENTRE => pulse::channelmap::Position::FrontLeftOfCenter,
-                Channels::FRONT_RIGHT_CENTRE => pulse::channelmap::Position::FrontRightOfCenter,
-                Channels::SIDE_LEFT => pulse::channelmap::Position::SideLeft,
-                Channels::SIDE_RIGHT => pulse::channelmap::Position::SideRight,
-                Channels::TOP_CENTRE => pulse::channelmap::Position::TopCenter,
-                Channels::TOP_FRONT_LEFT => pulse::channelmap::Position::TopFrontLeft,
-                Channels::TOP_FRONT_CENTRE => pulse::channelmap::Position::TopFrontCenter,
-                Channels::TOP_FRONT_RIGHT => pulse::channelmap::Position::TopFrontRight,
-                Channels::TOP_REAR_LEFT => pulse::channelmap::Position::TopRearLeft,
-                Channels::TOP_REAR_CENTRE => pulse::channelmap::Position::TopRearCenter,
-                Channels::TOP_REAR_RIGHT => pulse::channelmap::Position::TopRearRight,
-                _ => {
-                    // If a Symphonia channel cannot map to a PulseAudio position then return None
-                    // because PulseAudio will not be able to open a stream with invalid channels.
-                    warn!("failed to map channel {:?} to output", channel);
-                    return None;
-                }
-            }
-        }
-
-        Some(map)
-    }
-}
-*/
-
-#[cfg(target_os = "linux")]
-mod pulseaudio {
-    use super::{AudioOutput, AudioOutputError, Result};
-
-    use symphonia::core::audio::*;
-    use symphonia::core::units::Duration;
-
-    use libpulse_binding as pulse;
-    use libpulse_simple_binding as psimple;
-
-    use log::{error, warn};
-
-    pub struct PulseAudioOutput {
-        pa: psimple::Simple,
-        sample_buf: RawSampleBuffer<f32>,
-    }
-
-    impl PulseAudioOutput {
-        pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-            // An interleaved buffer is required to send data to PulseAudio. Use a SampleBuffer to
-            // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
-            let sample_buf = RawSampleBuffer::<f32>::new(duration, spec);
-
-            // Create a PulseAudio stream specification.
-            let pa_spec = pulse::sample::Spec {
-                format: pulse::sample::Format::FLOAT32NE,
-                channels: spec.channels.count() as u8,
-                rate: spec.rate,
-            };
-
-            assert!(pa_spec.is_valid());
-
-            let pa_ch_map = map_channels_to_pa_channelmap(spec.channels);
-
-            // Create a PulseAudio connection.
-            let pa_result = psimple::Simple::new(
-                None,                               // Use default server
-                "Bird Player",                      // Application name
                 pulse::stream::Direction::Playback, // Playback stream
                 None,                               // Default playback device
                 "Music",                            // Description of the stream
@@ -328,6 +181,11 @@ mod pulseaudio {
     }
 }
 
+#[cfg(target_os = "linux")]
+pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+    pulseaudio::PulseAudioOutput::try_open(spec, duration)
+}
+
 #[cfg(not(target_os = "linux"))]
 mod cpal {
     use crate::resampler::Resampler;
@@ -342,6 +200,9 @@ mod cpal {
     use rb::*;
 
     use log::{error, info};
+    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    use std::sync::Arc;
+    use std::time::Instant;
 
     pub struct CpalAudioOutput;
 
@@ -352,23 +213,35 @@ mod cpal {
     }
 
     impl AudioOutputSample for f32 {
+        #[inline(always)]
         fn mul(&self, n: f32) -> Self {
             self * n
         }
     }
 
-    // TODO - I don't think this will actually work as intended due to truncation?
     impl AudioOutputSample for i16 {
+        #[inline(always)]
         fn mul(&self, n: f32) -> Self {
-            (*self as f32 * n) as i16
+            ((*self as f32) * n) as i16
         }
     }
 
-    // TODO - I don't think this will actually work as intended due to truncation?
     impl AudioOutputSample for u16 {
+        #[inline(always)]
         fn mul(&self, n: f32) -> Self {
-            (*self as f32 * n) as u16
+            ((*self as f32) * n) as u16
         }
+    }
+
+    // Convert between f32 and u32 for atomic storage
+    #[inline(always)]
+    fn f32_to_u32(f: f32) -> u32 {
+        f.to_bits()
+    }
+
+    #[inline(always)]
+    fn u32_to_f32(u: u32) -> f32 {
+        f32::from_bits(u)
     }
 
     impl CpalAudioOutput {
@@ -417,12 +290,46 @@ mod cpal {
         sample_buf: SampleBuffer<T>,
         stream: cpal::Stream,
         resampler: Option<Resampler<T>>,
+        volume: Arc<AtomicU32>,
+        buffer_full: Arc<AtomicBool>,
+        last_buffer_warning: Instant,
     }
 
     impl<T: cpal::SizedSample + AudioOutputSample> CpalAudioOutputImpl<T>
     where
         f32: cpal::FromSample<T>,
     {
+        // Helper function to determine appropriate ring buffer size based on system capabilities
+        fn determine_buffer_size(sample_rate: u32, num_channels: usize) -> usize {
+            // Default to 2 seconds of audio
+            let mut buffer_seconds = 2.0;
+
+            // On macOS we can be more aggressive with buffer sizes because it has good audio
+            // scheduling compared to other platforms
+            #[cfg(target_os = "macos")]
+            {
+                // Detect if we're running on a Mac with Apple Silicon
+                // (M1/M2/etc. has better audio performance)
+                if std::env::consts::ARCH == "aarch64" {
+                    // For Apple Silicon, use a smaller buffer to reduce latency
+                    buffer_seconds = 1.5;
+                }
+            }
+
+            // For higher sample rates, we need larger buffers
+            if sample_rate > 48000 {
+                buffer_seconds *= 1.5;
+            }
+
+            // For more channels, we need larger buffers
+            if num_channels > 2 {
+                buffer_seconds *= 1.25;
+            }
+
+            // Calculate final buffer size
+            (sample_rate as f64 * buffer_seconds * num_channels as f64) as usize
+        }
+
         pub fn try_open(
             spec: SignalSpec,
             duration: Duration,
@@ -445,23 +352,59 @@ mod cpal {
                     .config()
             };
 
-            // Create a ring buffer with a capacity for up-to 200ms of audio.
-            // let ring_len = ((2 * config.sample_rate.0 as usize) / 1000) * num_channels;
-            let ring_len: usize = 8192; // Increased to reduce buffer underruns
+            // Dynamically determine optimal ring buffer size
+            let ring_len = Self::determine_buffer_size(config.sample_rate.0, num_channels);
+
+            // Log the buffer size so we can see it in diagnostic output
+            info!(
+                "Using audio ring buffer size of {} samples ({:.2} seconds)",
+                ring_len,
+                ring_len as f64 / (config.sample_rate.0 as f64 * num_channels as f64)
+            );
 
             let ring_buf = SpscRb::new(ring_len);
             let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
 
+            // Create atomic flags for status tracking
+            let volume = Arc::new(AtomicU32::new(f32_to_u32(1.0)));
+            let volume_for_callback = volume.clone();
+
+            // Add buffer state tracking
+            let buffer_full = Arc::new(AtomicBool::new(false));
+            let buffer_full_for_callback = buffer_full.clone();
+
             let stream_result = device.build_output_stream(
                 &config,
                 move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                    // let volume = 1.0f32;
-                    // Write out as many samples as possible from the ring buffer to the audio
-                    // output.
+                    // Get current volume - only read once per callback to reduce synchronization overhead
+                    let current_volume = u32_to_f32(volume_for_callback.load(Ordering::Relaxed));
+
+                    // Write out as many samples as possible from the ring buffer to the audio output
                     let written = ring_buf_consumer.read(data).unwrap_or(0);
 
+                    // Update buffer status based on how full the buffer is
+                    // If we couldn't fill the entire requested buffer, the ring buffer is getting low
+                    if written < data.len() {
+                        buffer_full_for_callback.store(false, Ordering::Relaxed);
+                    } else {
+                        // If we filled the entire buffer, consider the buffer state
+                        // We don't have a direct way to check how many samples are left,
+                        // so we'll use the fact that we could fill the entire requested buffer
+                        // as an indication that we likely have enough data
+                        buffer_full_for_callback.store(true, Ordering::Relaxed);
+                    }
+
+                    // Apply volume in the audio callback if needed
+                    if current_volume != 1.0 && written > 0 {
+                        for s in data[..written].iter_mut() {
+                            *s = s.mul(current_volume);
+                        }
+                    }
+
                     // Mute any remaining samples.
-                    data[written..].iter_mut().for_each(|s| *s = T::MID);
+                    if written < data.len() {
+                        data[written..].iter_mut().for_each(|s| *s = T::MID);
+                    }
                 },
                 move |err| error!("audio output error: {}", err),
                 None,
@@ -469,7 +412,6 @@ mod cpal {
 
             if let Err(err) = stream_result {
                 error!("audio output stream open error: {}", err);
-
                 return Err(AudioOutputError::OpenStreamError);
             }
 
@@ -478,7 +420,6 @@ mod cpal {
             // Start the output stream.
             if let Err(err) = stream.play() {
                 error!("audio output stream play error: {}", err);
-
                 return Err(AudioOutputError::PlayStreamError);
             }
 
@@ -500,6 +441,9 @@ mod cpal {
                 sample_buf,
                 stream,
                 resampler,
+                volume,
+                buffer_full,
+                last_buffer_warning: Instant::now(),
             }))
         }
     }
@@ -514,9 +458,17 @@ mod cpal {
                 return Ok(());
             }
 
-            let mut samples = if let Some(resampler) = &mut self.resampler {
-                // Resampling is required. The resampler will return interleaved samples in the
-                // correct sample format.
+            // Update the volume atomically for the audio callback to use
+            self.volume.store(f32_to_u32(volume), Ordering::Relaxed);
+
+            // Check if the buffer is full - if so, we should wait before decoding more
+            if self.buffer_full.load(Ordering::Relaxed) {
+                // Buffer is full, let's wait a bit to allow the audio callback to consume more data
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+
+            let samples = if let Some(resampler) = &mut self.resampler {
+                // Resampling is required. The resampler will return interleaved samples.
                 match resampler.resample(decoded) {
                     Some(resampled) => resampled,
                     None => return Ok(()),
@@ -527,65 +479,49 @@ mod cpal {
                 self.sample_buf.samples()
             };
 
-            // Now handle audio output with volume adjustment
-            // Using a fixed-size buffer to avoid allocations in the hot path
-            // This buffer is used to batch samples with volume applied
-            const BATCH_SIZE: usize = 1024;
-            let mut volume_adjusted_samples = [T::MID; BATCH_SIZE];
+            // Implement a backoff strategy for writing to the buffer if it's getting full
+            let mut retry_count = 0;
+            let samples_len = samples.len();
+            let mut samples_written = 0;
 
-            while !samples.is_empty() {
-                // Calculate how many samples to process in this batch
-                let batch_count = std::cmp::min(BATCH_SIZE, samples.len());
-
-                // Apply volume to batch
-                for i in 0..batch_count {
-                    volume_adjusted_samples[i] = samples[i].mul(volume);
-                }
-
-                // Write the volume-adjusted batch to the ring buffer
+            // Try multiple times to write all samples
+            while samples_written < samples_len && retry_count < 5 {
+                // Use write_blocking with a slice into the samples array
                 match self
                     .ring_buf_producer
-                    .write_blocking(&volume_adjusted_samples[..batch_count])
+                    .write_blocking(&samples[samples_written..])
                 {
                     Some(written) => {
-                        // If not all samples were written, try again with the remaining ones
-                        if written < batch_count {
-                            // Move remaining unwritten samples to the beginning of the batch
-                            for i in 0..(batch_count - written) {
-                                volume_adjusted_samples[i] = volume_adjusted_samples[written + i];
-                            }
+                        // Update how many samples we've written so far
+                        samples_written += written;
 
-                            // Continuously try to write the remaining samples
-                            let mut remaining = batch_count - written;
-                            while remaining > 0 {
-                                if let Some(written) = self
-                                    .ring_buf_producer
-                                    .write_blocking(&volume_adjusted_samples[..remaining])
-                                {
-                                    if written == 0 {
-                                        // If we can't write any more, break to avoid infinite loop
-                                        break;
-                                    }
+                        // If we haven't written all samples, wait a moment and try again
+                        if samples_written < samples_len {
+                            retry_count += 1;
 
-                                    // Move remaining samples again
-                                    for i in 0..(remaining - written) {
-                                        volume_adjusted_samples[i] =
-                                            volume_adjusted_samples[written + i];
-                                    }
-                                    remaining -= written;
-                                } else {
-                                    break;
-                                }
-                            }
+                            // Small pause to let the audio thread consume some data
+                            std::thread::sleep(std::time::Duration::from_micros(500));
                         }
-
-                        // Advance to the next batch of samples
-                        samples = &samples[batch_count..];
                     }
                     None => {
-                        // If we can't write at all, break out
-                        break;
+                        // Buffer is likely full, wait a bit longer
+                        retry_count += 1;
+                        std::thread::sleep(std::time::Duration::from_millis(5));
                     }
+                }
+            }
+
+            // If we couldn't write all samples, log it (but not too frequently)
+            if samples_written < samples_len {
+                let now = Instant::now();
+                if now.duration_since(self.last_buffer_warning).as_millis() > 500 {
+                    // Only log warnings at most every 500ms to avoid log spam
+                    error!(
+                        "Audio buffer overflow: dropped {} samples after {} retries",
+                        samples_len - samples_written,
+                        retry_count
+                    );
+                    self.last_buffer_warning = now;
                 }
             }
 
@@ -593,13 +529,10 @@ mod cpal {
         }
 
         fn flush(&mut self) {
-            // If there is a resampler, then it may need to be flushed
-            // depending on the number of samples it has.
+            // If there is a resampler, flush it
             if let Some(resampler) = &mut self.resampler {
-                let mut remaining_samples = resampler.flush().unwrap_or_default();
-
-                while let Some(written) = self.ring_buf_producer.write_blocking(remaining_samples) {
-                    remaining_samples = &remaining_samples[written..];
+                if let Some(remaining_samples) = resampler.flush() {
+                    let _ = self.ring_buf_producer.write_blocking(remaining_samples);
                 }
             }
 
@@ -607,18 +540,6 @@ mod cpal {
             let _ = self.stream.pause();
         }
     }
-}
-
-/*
-#[cfg(target_os = "linux")]
-pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-    pulseaudio::PulseAudioOutput::try_open(spec, duration)
-}
-*/
-
-#[cfg(target_os = "linux")]
-pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-    pulseaudio::PulseAudioOutput::try_open(spec, duration)
 }
 
 #[cfg(not(target_os = "linux"))]
