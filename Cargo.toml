@@ -11,7 +11,7 @@ identifier = "bird.player.app"
 icon = ["assets/icons/icon.png"]
 version = "0.1.0"
 copyright = "© 2024 RetricSu"
-category = "Audio"
+category = "Music"
 short_description = "A music player for local music files"
 long_description = """
 A modern music player built with egui and Rust, featuring a nostalgic 2000s-inspired interface.

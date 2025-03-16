@@ -38,6 +38,11 @@ fn main() {
     app.library_cmd_rx = Some(lib_cmd_rx);
     app.is_processing_ui_change = Some(is_processing_ui_change.clone());
 
+    let icon = image::open("./assets/icons/icon.png")
+        .expect("Failed to open icon path")
+        .to_rgba8();
+    let (icon_width, icon_height) = icon.dimensions();
+
     // Restore player state
     restore_player_state(&mut app);
 
@@ -277,17 +282,23 @@ fn main() {
         }
     }); // Audio Thread end
 
+    // Create the native options with viewport settings
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_icon(eframe::egui::IconData {
+                rgba: icon.into_raw(),
+                width: icon_width,
+                height: icon_height,
+            })
             .with_decorations(false) // Hide the OS-specific "chrome" around the window
             .with_inner_size([750.0, 468.0])
             .with_min_inner_size([300.0, 0.0]) // Set minimum size to match initial size
-            .with_transparent(true), // To have rounded corners we need transparency,
+            .with_transparent(true), // To have rounded corners we need transparency
         ..Default::default()
     };
 
     eframe::run_native(
-        "Music Player",
+        "Bird Player",
         native_options,
         Box::new(|cc| {
             // Initialize image loaders
