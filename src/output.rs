@@ -28,8 +28,7 @@ pub enum AudioOutputError {
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
-/*
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "pulseaudio"))]
 mod pulseaudio {
     use super::{AudioOutput, AudioOutputError, Result};
 
@@ -184,7 +183,6 @@ mod pulseaudio {
         Some(map)
     }
 }
-*/
 
 #[cfg(target_os = "linux")]
 mod pulseaudio {
@@ -328,7 +326,12 @@ mod pulseaudio {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(target_os = "linux", feature = "pulseaudio"))]
+pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+    pulseaudio::PulseAudioOutput::try_open(spec, duration)
+}
+
+#[cfg(any(not(target_os = "linux"), not(feature = "pulseaudio")))]
 mod cpal {
     use crate::resampler::Resampler;
 
@@ -609,19 +612,7 @@ mod cpal {
     }
 }
 
-/*
-#[cfg(target_os = "linux")]
-pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-    pulseaudio::PulseAudioOutput::try_open(spec, duration)
-}
-*/
-
-#[cfg(target_os = "linux")]
-pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-    pulseaudio::PulseAudioOutput::try_open(spec, duration)
-}
-
-#[cfg(not(target_os = "linux"))]
+#[cfg(any(not(target_os = "linux"), not(feature = "pulseaudio")))]
 pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
     cpal::CpalAudioOutput::try_open(spec, duration)
 }

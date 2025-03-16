@@ -72,14 +72,26 @@ jobs:
           cargo install cargo-wix
 
       - name: Cargo bundle
-        if: ${{ matrix.BUNDLE == true }}
+        if: ${{ matrix.BUNDLE == true && matrix.os != 'ubuntu-latest' }}
         run: cargo bundle --release --target=${{ matrix.TARGET }}
         env:
           CARGO_TERM_COLOR: always
 
-      - name: Cargo build
-        if: ${{ matrix.BUNDLE == false }}
+      - name: Cargo bundle (Linux with PulseAudio)
+        if: ${{ matrix.BUNDLE == true && matrix.os == 'ubuntu-latest' }}
+        run: cargo bundle --release --target=${{ matrix.TARGET }} --features pulseaudio
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Cargo build (non-Linux)
+        if: ${{ matrix.BUNDLE == false && matrix.os != 'ubuntu-latest' }}
         run: cargo build --release --target=${{ matrix.TARGET }}
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Cargo build (Linux with PulseAudio)
+        if: ${{ matrix.BUNDLE == false && matrix.os == 'ubuntu-latest' }}
+        run: cargo build --release --target=${{ matrix.TARGET }} --features pulseaudio
         env:
           CARGO_TERM_COLOR: always
 
