@@ -78,25 +78,24 @@ where
         // Interleave the planar samples from Rubato.
         let num_channels = self.output.len();
         let output_frames = self.output[0].len();
-        let total_samples = num_channels * output_frames;
 
-        // Ensure our pre-allocated buffer is large enough - only resize if necessary
-        if self.interleaved.len() < total_samples {
-            self.interleaved.resize(total_samples, T::MID);
+        // Ensure our pre-allocated buffer is large enough
+        if self.interleaved.len() < num_channels * output_frames {
+            self.interleaved
+                .resize(num_channels * output_frames, T::MID);
         }
 
         // Interleave the samples from planar to interleaved format
-        // Use a more cache-friendly approach
-        for ch in 0..num_channels {
-            let channel_data = &self.output[ch];
-            let mut idx = ch;
-            for &sample in channel_data.iter().take(output_frames) {
-                self.interleaved[idx] = sample.into_sample();
-                idx += num_channels;
+        for (i, frame) in self.interleaved[..num_channels * output_frames]
+            .chunks_exact_mut(num_channels)
+            .enumerate()
+        {
+            for (ch, s) in frame.iter_mut().enumerate() {
+                *s = self.output[ch][i].into_sample();
             }
         }
 
-        &self.interleaved[..total_samples]
+        &self.interleaved[..num_channels * output_frames]
     }
 }
 
@@ -115,22 +114,15 @@ where
             * ((to_sample_rate as f64) / (from_sample_rate as f64))
             * 1.1) as usize;
 
-        // Choose resampler type based on resampling ratio and CPU considerations
-        // Use linear resampling more aggressively to save CPU
-        // Only use FFT for major quality-critical resampling operations
+        // Choose resampler type based on resampling ratio
+        // For minor resampling (less than 10% difference), use linear
+        // For major resampling, use FFT for better quality
         let ratio_diff =
             ((to_sample_rate as f64) - (from_sample_rate as f64)).abs() / (from_sample_rate as f64);
-        let resampler_type = if ratio_diff < 0.2 {
-            // Increased threshold from 0.1 to 0.2
+        let resampler_type = if ratio_diff < 0.1 {
             ResamplerType::Linear
         } else {
-            // For extreme resampling (e.g. 44.1kHz to 192kHz or vice versa), the quality difference matters more
-            if to_sample_rate < 48000 && from_sample_rate < 48000 {
-                // For consumer audio rates, linear is usually sufficient
-                ResamplerType::Linear
-            } else {
-                ResamplerType::HighQuality
-            }
+            ResamplerType::HighQuality
         };
 
         // Create appropriate resampler based on type
@@ -140,7 +132,7 @@ where
                     from_sample_rate,
                     to_sample_rate,
                     duration,
-                    2, // Use minimal sinc quality to save CPU
+                    2,
                     num_channels,
                 )
                 .unwrap();
@@ -148,14 +140,14 @@ where
                 (Some(resampler), None, output)
             }
             ResamplerType::Linear => {
-                // Use simpler SincFixedIn with fewer parameters and faster settings
+                // Use simpler SincFixedIn with fewer parameters
                 let resampler = rubato::SincFixedIn::<f32>::new(
                     from_sample_rate as f64 / to_sample_rate as f64,
                     0.95,
                     rubato::InterpolationParameters {
-                        sinc_len: 128, // Reduced from 256 to save CPU
+                        sinc_len: 256,
                         f_cutoff: 0.95,
-                        oversampling_factor: 64, // Reduced from 128 to save CPU
+                        oversampling_factor: 128,
                         interpolation: rubato::InterpolationType::Linear,
                         window: rubato::WindowFunction::BlackmanHarris2,
                     },
@@ -168,8 +160,9 @@ where
             }
         };
 
-        // Pre-allocate all buffers to avoid reallocations during playback
-        let input = vec![Vec::with_capacity(duration * 2); num_channels]; // Larger capacity to reduce reallocations
+        let input = vec![Vec::with_capacity(duration); num_channels];
+
+        // Pre-allocate interleaved buffer with maximum expected size to avoid reallocations
         let interleaved = vec![T::MID; num_channels * max_output_frames];
 
         Self {
