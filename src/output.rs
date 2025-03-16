@@ -112,12 +112,10 @@ mod pulseaudio {
                 let samples_ptr = self.sample_buf.samples().as_mut_ptr() as *mut u8;
                 let sample_count = self.sample_buf.samples().len();
                 let byte_len = sample_count * std::mem::size_of::<f32>();
-                
+
                 // Create a byte slice from the raw pointer
-                let samples = unsafe {
-                    std::slice::from_raw_parts_mut(samples_ptr, byte_len)
-                };
-                
+                let samples = unsafe { std::slice::from_raw_parts_mut(samples_ptr, byte_len) };
+
                 // Convert byte slice to f32 slice for volume adjustment
                 let samples_f32 = unsafe {
                     std::slice::from_raw_parts_mut(
@@ -267,7 +265,7 @@ mod pulseaudio {
                 let samples_f32 = unsafe {
                     std::slice::from_raw_parts_mut(samples.as_mut_ptr() as *mut f32, sample_count)
                 };
-                
+
                 // Apply volume
                 for sample in samples_f32 {
                     *sample *= volume;
