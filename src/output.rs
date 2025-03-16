@@ -108,22 +108,31 @@ mod pulseaudio {
 
             // Apply volume adjustment
             if volume != 1.0 {
-                // Get access to samples as a byte slice
-                let samples_ptr = self.sample_buf.as_bytes().as_mut_ptr() as *mut u8;
-                let sample_count = self.sample_buf.as_bytes().len() / std::mem::size_of::<f32>();
-                let byte_len = sample_count * std::mem::size_of::<f32>();
-
-                // Create a byte slice from the raw pointer
-                let samples = unsafe { std::slice::from_raw_parts_mut(samples_ptr, byte_len) };
-
-                // Convert byte slice to f32 slice for volume adjustment
+                // Use a temporary buffer to apply volume
+                let buf_bytes = self.sample_buf.as_bytes();
+                let sample_count = buf_bytes.len() / std::mem::size_of::<f32>();
+                
+                // Create a buffer with the samples
+                let mut volume_adjusted = Vec::with_capacity(buf_bytes.len());
+                volume_adjusted.extend_from_slice(buf_bytes);
+                
+                // Convert the buffer to f32 samples and apply volume
                 let samples_f32 = unsafe {
-                    std::slice::from_raw_parts_mut(samples.as_mut_ptr() as *mut f32, sample_count)
+                    std::slice::from_raw_parts_mut(volume_adjusted.as_mut_ptr() as *mut f32, sample_count)
                 };
-
+                
                 // Apply volume
                 for sample in samples_f32 {
                     *sample *= volume;
+                }
+                
+                // Write the volume-adjusted buffer to PulseAudio
+                match self.pa.write(&volume_adjusted) {
+                    Err(err) => {
+                        error!("audio output stream write error: {}", err);
+                        return Err(AudioOutputError::StreamClosedError);
+                    }
+                    _ => return Ok(()),
                 }
             }
 
