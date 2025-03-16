@@ -46,13 +46,15 @@ jobs:
 
       - name: Install musl-gcc if needed
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: sudo apt-get install -y musl-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev pkg-config
 
       - name: Install system dependencies
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libglib2.0-dev libasound2-dev
+          sudo apt-get install -y libasound2-dev libglib2.0-dev
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -69,19 +71,78 @@ jobs:
       - name: Install Windows tools
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          cargo install cargo-wix
+          # Commenting out the cargo-wix install since it's causing issues
+          # cargo install cargo-wix
 
       - name: Cargo bundle
-        if: ${{ matrix.BUNDLE == true }}
+        if: ${{ matrix.BUNDLE == true && matrix.os != 'ubuntu-latest' && matrix.os != 'windows-latest' }}
         run: cargo bundle --release --target=${{ matrix.TARGET }}
         env:
           CARGO_TERM_COLOR: always
 
-      - name: Cargo build
-        if: ${{ matrix.BUNDLE == false }}
+      - name: Cargo build (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
         run: cargo build --release --target=${{ matrix.TARGET }}
         env:
           CARGO_TERM_COLOR: always
+
+      - name: Cargo bundle (Linux with PulseAudio)
+        if: ${{ matrix.BUNDLE == true && matrix.os == 'ubuntu-latest' }}
+        run: cargo bundle --release --target=${{ matrix.TARGET }} --features pulseaudio
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Cargo build (non-Linux)
+        if: ${{ matrix.BUNDLE == false && matrix.os != 'ubuntu-latest' && matrix.os != 'windows-latest' }}
+        run: cargo build --release --target=${{ matrix.TARGET }}
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Cargo build (Linux with musl)
+        if: ${{ matrix.BUNDLE == false && matrix.os == 'ubuntu-latest' }}
+        run: |
+          # Configure pkg-config for cross-compilation
+          echo '#!/bin/sh
+          export PKG_CONFIG_ALLOW_CROSS=1
+          export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig
+          exec pkg-config "$@"
+          ' | sudo tee /usr/local/bin/musl-pkg-config
+          sudo chmod +x /usr/local/bin/musl-pkg-config
+          
+          # Create output directory for the binary
+          mkdir -p target/${{ matrix.TARGET }}/release
+          
+          # Build with cross-compilation friendly settings
+          # Explicitly disable features that require system libraries that are hard to cross-compile
+          PKG_CONFIG=/usr/local/bin/musl-pkg-config \
+          PKG_CONFIG_ALLOW_CROSS=1 \
+          PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig \
+          cargo build --release --target=${{ matrix.TARGET }} --no-default-features --features "cpal-backend"
+        env:
+          CARGO_TERM_COLOR: always
+          RUSTFLAGS: "-C target-feature=+crt-static"
+          
+      # Create Linux package
+      - name: Create Linux Package
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          # Create a simple README file with instructions for users
+          mkdir -p linux-package
+          echo "=== IMPORTANT - HOW TO OPEN THE APP ===" > linux-package/README.txt
+          echo "" >> linux-package/README.txt
+          echo "This application is a static binary compiled with musl." >> linux-package/README.txt
+          echo "To run it:" >> linux-package/README.txt
+          echo "1. Extract all files" >> linux-package/README.txt
+          echo "2. Make the binary executable: chmod +x bird-player" >> linux-package/README.txt
+          echo "3. Run it: ./bird-player" >> linux-package/README.txt
+          
+          # Copy the binary and assets
+          cp target/${{ matrix.TARGET }}/release/bird-player linux-package/
+          mkdir -p linux-package/assets
+          cp -r assets/* linux-package/assets/
+          
+          # Create a tar.gz archive
+          tar -czvf Bird-Player-${{ matrix.TARGET }}.tar.gz -C linux-package .
 
       # macOS code signing and notarization
       - name: Create macOS DMG
@@ -120,33 +181,54 @@ jobs:
       # Windows packaging - simple zip instead of installer
       - name: Create Windows Package
         if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
         run: |
           # Create a simple README file with instructions for users
-          echo "=== IMPORTANT - HOW TO OPEN THE APP ===" > target/${{ matrix.TARGET }}/release/README.txt
-          echo "" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "This app is designed to be run as a normal Windows application." >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "1. Extract all contents to a folder" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "2. Double-click bird-player.exe to run" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "If you get SmartScreen warnings:" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "- Click 'More info'" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "- Click 'Run anyway'" >> target/${{ matrix.TARGET }}/release/README.txt
-
-          # Zip the application with README
-          powershell Compress-Archive -Path "target/${{ matrix.TARGET }}/release/bird-player.exe", "target/${{ matrix.TARGET }}/release/README.txt" -DestinationPath "Bird-Player-${{ matrix.TARGET }}.zip"
+          Set-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "=== IMPORTANT - HOW TO OPEN THE APP ==="
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value ""
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "This app is designed to be run as a normal Windows application."
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "1. Extract all contents to a folder"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "2. Double-click bird-player.exe to run"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value ""
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "If you get SmartScreen warnings:"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "- Click 'More info'"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "- Click 'Run anyway'"
+          
+          # Ensure assets directory exists in release folder
+          $assetsDir = "target\${{ matrix.TARGET }}\release\assets"
+          if (-Not (Test-Path $assetsDir)) {
+            New-Item -Path $assetsDir -ItemType Directory -Force
+          }
+          
+          # Copy assets folder if it exists
+          if (Test-Path -Path "assets") {
+            Copy-Item -Path "assets\*" -Destination $assetsDir -Recurse -Force
+            Write-Host "Assets copied successfully."
+          } else {
+            Write-Host "Warning: Assets directory not found. Created an empty assets directory."
+          }
+          
+          # Create the ZIP file with all necessary components
+          $items = @(
+            "target\${{ matrix.TARGET }}\release\bird-player.exe",
+            "target\${{ matrix.TARGET }}\release\README.txt",
+            "target\${{ matrix.TARGET }}\release\assets"
+          )
+          Compress-Archive -Path $items -DestinationPath "Bird-Player-${{ matrix.TARGET }}.zip" -Force
+          Write-Host "ZIP file created successfully."
 
       - uses: actions/upload-artifact@master
         with:
-          name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
-          path: ./Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
+          path: ./Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
 
       - uses: svenstaro/upload-release-action@v2
         name: Upload binaries to release
         if: ${{ github.event_name == 'push' }}
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
-          asset_name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          file: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
+          asset_name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
           tag: ${{ github.ref }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           overwrite: true

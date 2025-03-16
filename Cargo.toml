@@ -45,8 +45,16 @@ arrayvec = "0.7.4"
 rb = "0.4.1"
 image = "0.24"
 font-kit = "0.14.2"
-libpulse-binding = "2.27.1"
-libpulse-simple-binding = "2.27.1"
+libpulse-binding = { version = "2.27.1", optional = true }
+libpulse-simple-binding = { version = "2.27.1", optional = true }
+
+[features]
+default = []
+pulseaudio = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+
+# Linux-specific dependencies without feature conditions
+[target.'cfg(target_os = "linux")'.dependencies]
+# No unconditional dependencies here - they're all controlled by features
 
 [dependencies.confy]
 version = "0.6.1"

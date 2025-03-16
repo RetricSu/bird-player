@@ -10,6 +10,7 @@ use symphonia::core::conv::{FromSample, IntoSample};
 use symphonia::core::sample::Sample;
 
 /// Resampling algorithm type
+#[allow(dead_code)]
 pub enum ResamplerType {
     /// High quality FFT-based resampling (higher CPU usage)
     HighQuality,
@@ -17,6 +18,7 @@ pub enum ResamplerType {
     Linear,
 }
 
+#[allow(dead_code)]
 pub struct Resampler<T> {
     resampler_type: ResamplerType,
     fft_resampler: Option<rubato::FftFixedIn<f32>>,
@@ -31,6 +33,7 @@ impl<T> Resampler<T>
 where
     T: Sample + FromSample<f32> + IntoSample<f32>,
 {
+    #[allow(dead_code)]
     fn resample_inner(&mut self) -> &[T] {
         // Process with either FFT or linear resampler
         {
@@ -103,6 +106,7 @@ impl<T> Resampler<T>
 where
     T: Sample + FromSample<f32> + IntoSample<f32>,
 {
+    #[allow(dead_code)]
     pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self {
         let duration = duration as usize;
         let num_channels = spec.channels.count();
@@ -179,6 +183,7 @@ where
     /// Resamples a planar/non-interleaved input.
     ///
     /// Returns the resampled samples in an interleaved format.
+    #[allow(dead_code)]
     pub fn resample(&mut self, input: AudioBufferRef<'_>) -> Option<&[T]> {
         // Copy and convert samples into input buffer.
         convert_samples_any(&input, &mut self.input);
@@ -192,6 +197,7 @@ where
     }
 
     /// Resample any remaining samples in the resample buffer.
+    #[allow(dead_code)]
     pub fn flush(&mut self) -> Option<&[T]> {
         let len = self.input[0].len();
 
@@ -213,6 +219,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 fn convert_samples_any(input: &AudioBufferRef<'_>, output: &mut [Vec<f32>]) {
     match input {
         AudioBufferRef::U8(input) => convert_samples(input, output),
@@ -228,6 +235,7 @@ fn convert_samples_any(input: &AudioBufferRef<'_>, output: &mut [Vec<f32>]) {
     }
 }
 
+#[allow(dead_code)]
 fn convert_samples<S>(input: &AudioBuffer<S>, output: &mut [Vec<f32>])
 where
     S: Sample + IntoSample<f32>,
