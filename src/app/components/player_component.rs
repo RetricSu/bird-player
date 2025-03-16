@@ -73,6 +73,19 @@ impl AppComponent for PlayerComponent {
                             }
                         }
                     }
+                    UiCommand::PlaybackStateChanged(is_playing) => {
+                        tracing::info!(
+                            "Playback state changed to: {}",
+                            if is_playing { "Playing" } else { "Paused" }
+                        );
+                        if let Some(player) = &mut ctx.player {
+                            if is_playing {
+                                player.track_state = crate::app::player::TrackState::Playing;
+                            } else {
+                                player.track_state = crate::app::player::TrackState::Paused;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -205,11 +218,23 @@ impl AppComponent for PlayerComponent {
                                 .handle_shape(HandleShape::Rect { aspect_ratio: 0.5 }),
                         );
 
-                        // Only allow seeking if there's a track selected
-                        if time_slider.drag_stopped() && has_selected_track {
+                        // Update in real-time while dragging (just the timestamp, not seeking the audio)
+                        if time_slider.dragged() && has_selected_track {
                             if let Some(player) = &mut ctx.player {
                                 player.set_seek_to_timestamp(current_seek);
+                            }
+                        }
+
+                        // Only perform the actual seek when drag is stopped
+                        if time_slider.drag_stopped() && has_selected_track {
+                            if let Some(player) = &mut ctx.player {
+                                // We already updated seek_to_timestamp during dragging,
+                                // now actually seek the audio playback
                                 player.seek_to(current_seek);
+
+                                // When seeking, make sure the track state is set to Playing
+                                // This ensures the UI buttons match the actual state
+                                player.track_state = crate::app::player::TrackState::Playing;
                             }
                         }
 

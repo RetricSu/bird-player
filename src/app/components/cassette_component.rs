@@ -50,7 +50,6 @@ thread_local! {
     static LAST_UPDATE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
     static IMAGE_CACHE: std::cell::RefCell<HashMap<PathBuf, TextureHandle>> = std::cell::RefCell::new(HashMap::new());
     static ROTATION_ANGLE: std::cell::RefCell<f32> = const {std::cell::RefCell::new(0.0)};
-    static TAPE_PROGRESS: std::cell::RefCell<f32> = const {std::cell::RefCell::new(0.0)};
 }
 
 impl AppComponent for CassetteComponent {
@@ -170,22 +169,14 @@ impl AppComponent for CassetteComponent {
                 }));
             }
 
-            let (current_angle, _tape_progress) = update_animation(ctx);
-
-            let current_timestamp = ctx.player.as_ref().unwrap().seek_to_timestamp as f32;
-            let duration = ctx.player.as_ref().unwrap().duration as f32;
-            let playback_progress = if duration > 0.0 {
-                current_timestamp / duration
-            } else {
-                0.0
-            };
+            let (current_angle, tape_progress) = update_animation(ctx);
 
             draw_tape(
                 ui,
                 left_reel_center,
                 right_reel_center,
                 center_rect,
-                playback_progress,
+                tape_progress,
                 &colors,
             );
 
@@ -194,7 +185,7 @@ impl AppComponent for CassetteComponent {
                 left_reel_center,
                 current_angle,
                 colors.reel_stroke,
-                1.0 - playback_progress,
+                1.0 - tape_progress,
                 &colors,
             );
 
@@ -203,7 +194,7 @@ impl AppComponent for CassetteComponent {
                 right_reel_center,
                 -current_angle,
                 colors.reel_stroke,
-                playback_progress,
+                tape_progress,
                 &colors,
             );
 
@@ -307,17 +298,14 @@ fn update_animation(ctx: &mut App) -> (f32, f32) {
         *angle.borrow()
     });
 
-    let tape_progress = TAPE_PROGRESS.with(|progress| {
-        if ctx.player.as_ref().unwrap().track_state.to_string() == "Playing" {
-            let current_timestamp = ctx.player.as_ref().unwrap().seek_to_timestamp as f32;
-            let duration = ctx.player.as_ref().unwrap().duration as f32;
-
-            if duration > 0.0 {
-                *progress.borrow_mut() = current_timestamp / duration;
-            }
-        }
-        *progress.borrow()
-    });
+    // Calculate the current progress directly
+    let current_timestamp = ctx.player.as_ref().unwrap().seek_to_timestamp as f32;
+    let duration = ctx.player.as_ref().unwrap().duration as f32;
+    let tape_progress = if duration > 0.0 {
+        current_timestamp / duration
+    } else {
+        0.0
+    };
 
     (current_angle, tape_progress)
 }
