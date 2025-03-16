@@ -50,11 +50,11 @@ libpulse-simple-binding = { version = "2.27.1", optional = true }
 
 [features]
 default = []
-pulseaudio = ["libpulse-binding", "libpulse-simple-binding"]
+pulseaudio = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
 
+# Linux-specific dependencies without feature conditions
 [target.'cfg(target_os = "linux")'.dependencies]
-libpulse-binding = "2.27.1"
-libpulse-simple-binding = "2.27.1"
+# No unconditional dependencies here - they're all controlled by features
 
 [dependencies.confy]
 version = "0.6.1"

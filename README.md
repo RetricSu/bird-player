@@ -21,6 +21,7 @@ A modern music player built with [egui](https://github.com/emilk/egui) and Rust,
 
 - Rust 1.70 or higher
 - Cargo package manager
+- Audio system libraries (see [Audio Backends](#audio-backends) below)
 
 ### Building from Source
 
@@ -32,10 +33,24 @@ cd bird-player
 
 2. Build the project:
 ```bash
+# With PulseAudio support (recommended for Linux)
+cargo build --release --features pulseaudio
+
+# Without PulseAudio (using CPAL directly)
 cargo build --release
 ```
 
 The compiled binary will be available in `target/release/bird-player`.
+
+## Audio Backends
+
+Bird Player supports different audio backends depending on your platform:
+
+- **Linux:** PulseAudio (recommended) or CPAL with ALSA
+- **macOS:** CoreAudio via CPAL
+- **Windows:** Windows Audio Session API via CPAL
+
+For detailed dependency requirements and troubleshooting, see [AUDIO_BACKENDS.md](AUDIO_BACKENDS.md).
 
 ## Usage
 
