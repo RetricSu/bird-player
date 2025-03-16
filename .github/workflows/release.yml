@@ -46,13 +46,15 @@ jobs:
 
       - name: Install musl-gcc if needed
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: sudo apt-get install -y musl-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev pkg-config
 
       - name: Install system dependencies
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libglib2.0-dev libasound2-dev
+          sudo apt-get install -y libasound2-dev
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -96,11 +98,49 @@ jobs:
         env:
           CARGO_TERM_COLOR: always
 
-      - name: Cargo build (Linux with PulseAudio)
+      - name: Cargo build (Linux with musl)
         if: ${{ matrix.BUNDLE == false && matrix.os == 'ubuntu-latest' }}
-        run: cargo build --release --target=${{ matrix.TARGET }} --features pulseaudio
+        run: |
+          # Configure pkg-config for cross-compilation
+          echo '#!/bin/sh
+          export PKG_CONFIG_ALLOW_CROSS=1
+          exec pkg-config "$@"
+          ' | sudo tee /usr/local/bin/musl-pkg-config
+          sudo chmod +x /usr/local/bin/musl-pkg-config
+          
+          # Create output directory for the binary
+          mkdir -p target/${{ matrix.TARGET }}/release
+          
+          # Build with cross-compilation friendly settings and without PulseAudio
+          # This uses the CPAL backend instead of PulseAudio
+          PKG_CONFIG=/usr/local/bin/musl-pkg-config \
+          PKG_CONFIG_ALLOW_CROSS=1 \
+          cargo build --release --target=${{ matrix.TARGET }} --no-default-features
         env:
           CARGO_TERM_COLOR: always
+          RUSTFLAGS: "-C target-feature=+crt-static"
+          
+      # Create Linux package
+      - name: Create Linux Package
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          # Create a simple README file with instructions for users
+          mkdir -p linux-package
+          echo "=== IMPORTANT - HOW TO OPEN THE APP ===" > linux-package/README.txt
+          echo "" >> linux-package/README.txt
+          echo "This application is a static binary compiled with musl." >> linux-package/README.txt
+          echo "To run it:" >> linux-package/README.txt
+          echo "1. Extract all files" >> linux-package/README.txt
+          echo "2. Make the binary executable: chmod +x bird-player" >> linux-package/README.txt
+          echo "3. Run it: ./bird-player" >> linux-package/README.txt
+          
+          # Copy the binary and assets
+          cp target/${{ matrix.TARGET }}/release/bird-player linux-package/
+          mkdir -p linux-package/assets
+          cp -r assets/* linux-package/assets/
+          
+          # Create a tar.gz archive
+          tar -czvf Bird-Player-${{ matrix.TARGET }}.tar.gz -C linux-package .
 
       # macOS code signing and notarization
       - name: Create macOS DMG
@@ -177,16 +217,16 @@ jobs:
 
       - uses: actions/upload-artifact@master
         with:
-          name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
-          path: ./Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
+          path: ./Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
 
       - uses: svenstaro/upload-release-action@v2
         name: Upload binaries to release
         if: ${{ github.event_name == 'push' }}
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
-          asset_name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          file: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
+          asset_name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION || '.tar.gz' }}
           tag: ${{ github.ref }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           overwrite: true
