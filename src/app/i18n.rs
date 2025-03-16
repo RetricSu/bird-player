@@ -215,6 +215,9 @@ pub fn init() {
     zh.insert("unknown_album".to_string(), "未知专辑".to_string());
     zh.insert("unknown_genre".to_string(), "未知类型".to_string());
 
+    // Add about window translations
+    init_about_translations(&mut en, &mut zh);
+
     // Add translations to the global map
     translations.insert(Language::English, en);
     translations.insert(Language::Chinese, zh);
@@ -222,6 +225,51 @@ pub fn init() {
     // Store translations
     let mut global_translations = TRANSLATIONS.write().unwrap();
     *global_translations = translations;
+}
+
+// Add about window translations
+fn init_about_translations(en: &mut HashMap<String, String>, zh: &mut HashMap<String, String>) {
+    // About window - English
+    en.insert("app_name".to_string(), "Bird Player".to_string());
+    en.insert(
+        "app_description".to_string(),
+        "A music player dedicated for local MP3 files, inspired by the things from the amazing 2000s golden age.".to_string(),
+    );
+    en.insert("features".to_string(), "Features:".to_string());
+    en.insert(
+        "feature_1".to_string(),
+        "• Playing music, simple and straightforward, no streaming bullshit.".to_string(),
+    );
+    en.insert(
+        "feature_2".to_string(),
+        "• A cassette mimic, with a focus on simplicity and clean design.".to_string(),
+    );
+    en.insert(
+        "feature_3".to_string(),
+        "• Local Music library with ID3 editable tag support".to_string(),
+    );
+    en.insert("feature_4".to_string(), "• Playlist management".to_string());
+
+    // About window - Chinese
+    zh.insert("app_name".to_string(), "小鸟播放器".to_string());
+    zh.insert(
+        "app_description".to_string(),
+        "一款专为本地 MP3 文件设计的音乐播放器，灵感来源于2000年代的黄金时代。".to_string(),
+    );
+    zh.insert("features".to_string(), "特点：".to_string());
+    zh.insert(
+        "feature_1".to_string(),
+        "• 播放音乐，简单直接，拒绝狗屁流媒体。".to_string(),
+    );
+    zh.insert(
+        "feature_2".to_string(),
+        "• 模拟磁带播放器，注重简约和清晰的设计。".to_string(),
+    );
+    zh.insert(
+        "feature_3".to_string(),
+        "• 本地音乐库，支持ID3标签编辑".to_string(),
+    );
+    zh.insert("feature_4".to_string(), "• 播放列表管理".to_string());
 }
 
 // Set the current language
