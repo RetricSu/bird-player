@@ -109,8 +109,8 @@ mod pulseaudio {
             // Apply volume adjustment
             if volume != 1.0 {
                 // Get access to samples as a byte slice
-                let samples_ptr = self.sample_buf.samples().as_mut_ptr() as *mut u8;
-                let sample_count = self.sample_buf.samples().len();
+                let samples_ptr = self.sample_buf.as_bytes().as_mut_ptr() as *mut u8;
+                let sample_count = self.sample_buf.as_bytes().len() / std::mem::size_of::<f32>();
                 let byte_len = sample_count * std::mem::size_of::<f32>();
 
                 // Create a byte slice from the raw pointer
