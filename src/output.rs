@@ -111,21 +111,24 @@ mod pulseaudio {
                 // Use a temporary buffer to apply volume
                 let buf_bytes = self.sample_buf.as_bytes();
                 let sample_count = buf_bytes.len() / std::mem::size_of::<f32>();
-                
+
                 // Create a buffer with the samples
                 let mut volume_adjusted = Vec::with_capacity(buf_bytes.len());
                 volume_adjusted.extend_from_slice(buf_bytes);
-                
+
                 // Convert the buffer to f32 samples and apply volume
                 let samples_f32 = unsafe {
-                    std::slice::from_raw_parts_mut(volume_adjusted.as_mut_ptr() as *mut f32, sample_count)
+                    std::slice::from_raw_parts_mut(
+                        volume_adjusted.as_mut_ptr() as *mut f32,
+                        sample_count,
+                    )
                 };
-                
+
                 // Apply volume
                 for sample in samples_f32 {
                     *sample *= volume;
                 }
-                
+
                 // Write the volume-adjusted buffer to PulseAudio
                 match self.pa.write(&volume_adjusted) {
                     Err(err) => {
