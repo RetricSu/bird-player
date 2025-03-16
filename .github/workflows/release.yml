@@ -20,12 +20,12 @@ jobs:
           - os: macos-latest
             TARGET: aarch64-apple-darwin
             BUNDLE: true
-            EXTENSION: .zip
+            EXTENSION: .dmg
 
           - os: macos-latest
             TARGET: x86_64-apple-darwin
             BUNDLE: true
-            EXTENSION: .zip
+            EXTENSION: .dmg
 
           - os: ubuntu-latest
             TARGET: x86_64-unknown-linux-musl
@@ -33,8 +33,8 @@ jobs:
 
           - os: windows-latest
             TARGET: x86_64-pc-windows-msvc
-            BUNDLE: false
-            EXTENSION: .exe
+            BUNDLE: true
+            EXTENSION: .zip
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -65,6 +65,12 @@ jobs:
         if: ${{ matrix.BUNDLE == true }}
         run: cargo install cargo-bundle
 
+      # Windows specific tools installation
+      - name: Install Windows tools
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          cargo install cargo-wix
+
       - name: Cargo bundle
         if: ${{ matrix.BUNDLE == true }}
         run: cargo bundle --release --target=${{ matrix.TARGET }}
@@ -77,27 +83,70 @@ jobs:
         env:
           CARGO_TERM_COLOR: always
 
-      - name: Package macOS bundle
-        if: ${{ matrix.BUNDLE == true }}
+      # macOS code signing and notarization
+      - name: Create macOS DMG
+        if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew install zip
-          zip -r target/${{ matrix.TARGET }}/release/bird-player${{ matrix.EXTENSION }} target/${{ matrix.TARGET }}/release/bundle/osx/bird-player.app
+          brew install create-dmg
+          
+          # Create a simple README file with instructions for users
+          cat > target/${{ matrix.TARGET }}/release/bundle/osx/README.txt << 'EOL'
+          === IMPORTANT - HOW TO OPEN THE APP ===
+          
+          Since this app is not signed with an Apple Developer certificate, you might see a warning saying the app is damaged or can't be opened.
+          
+          To open the app:
+          1. Right-click (or Control+click) on the app icon
+          2. Select "Open" from the menu
+          3. Click "Open" when prompted
+          
+          You only need to do this the first time you open the app.
+          EOL
+          
+          # Create the DMG with both the app and README
+          create-dmg \
+            --volname "Bird Player" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon "Bird Player.app" 200 190 \
+            --text-size 12 \
+            --icon "README.txt" 500 190 \
+            --no-internet-enable \
+            "Bird-Player-${{ matrix.TARGET }}.dmg" \
+            "target/${{ matrix.TARGET }}/release/bundle/osx/"
 
-      - name: Rename
-        run: cp target/${{ matrix.TARGET }}/release/bird-player${{ matrix.EXTENSION }} bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+      # Remove Apple notarization steps that require paid accounts
+      
+      # Windows packaging - simple zip instead of installer
+      - name: Create Windows Package
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          # Create a simple README file with instructions for users
+          echo "=== IMPORTANT - HOW TO OPEN THE APP ===" > target/${{ matrix.TARGET }}/release/README.txt
+          echo "" >> target/${{ matrix.TARGET }}/release/README.txt
+          echo "This app is designed to be run as a normal Windows application." >> target/${{ matrix.TARGET }}/release/README.txt
+          echo "1. Extract all contents to a folder" >> target/${{ matrix.TARGET }}/release/README.txt
+          echo "2. Double-click bird-player.exe to run" >> target/${{ matrix.TARGET }}/release/README.txt
+          echo "" >> target/${{ matrix.TARGET }}/release/README.txt
+          echo "If you get SmartScreen warnings:" >> target/${{ matrix.TARGET }}/release/README.txt
+          echo "- Click 'More info'" >> target/${{ matrix.TARGET }}/release/README.txt
+          echo "- Click 'Run anyway'" >> target/${{ matrix.TARGET }}/release/README.txt
+
+          # Zip the application with README
+          powershell Compress-Archive -Path "target/${{ matrix.TARGET }}/release/bird-player.exe", "target/${{ matrix.TARGET }}/release/README.txt" -DestinationPath "Bird-Player-${{ matrix.TARGET }}.zip"
 
       - uses: actions/upload-artifact@master
         with:
-          name: bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
-          path: ./target/${{ matrix.TARGET }}/release/bird-player${{ matrix.EXTENSION }}
+          name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          path: ./Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
 
       - uses: svenstaro/upload-release-action@v2
         name: Upload binaries to release
         if: ${{ github.event_name == 'push' }}
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
-          asset_name: bird-player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          file: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
+          asset_name: Bird-Player-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
           tag: ${{ github.ref }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           overwrite: true

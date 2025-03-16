@@ -161,17 +161,17 @@ impl AppComponent for WindowChrome {
                 .show(ui.ctx(), |ui| {
                     ui.vertical(|ui| {
                         ui.add_space(20.0);
-                        ui.heading(RichText::new("Bird Player").size(24.0));
+                        ui.heading(RichText::new(t("app_name")).size(24.0));
                         ui.add_space(10.0);
                         ui.label(RichText::new(version_info::formatted_version()).size(16.0));
                         ui.add_space(20.0);
-                        ui.label("A music player dedicated for local music files, inspired by the things from the amazing 2000s golden age.");
+                        ui.label(t("app_description"));
                         ui.add_space(20.0);
-                        ui.label("Features:");
-                        ui.label("• Playing music, simple and straightforward, no streaming bullshit.");
-                        ui.label("• A cassette mimic, with a focus on simplicity and clean design.");
-                        ui.label("• Local Music library with ID3 editable tag support");
-                        ui.label("• Playlist management");
+                        ui.label(t("features"));
+                        ui.label(t("feature_1"));
+                        ui.label(t("feature_2"));
+                        ui.label(t("feature_3"));
+                        ui.label(t("feature_4"));
                         ui.add_space(20.0);
                         if ui.button(t("exit")).clicked() {
                             ctx.show_about_dialog = false;
