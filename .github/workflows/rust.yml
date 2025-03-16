@@ -29,3 +29,5 @@ jobs:
         run: cargo clippy --features pulseaudio -- -D warnings
       - name: Cargo build
         run: cargo build --verbose --features pulseaudio
+      - name: Cargo test
+        run: cargo test --verbose --features pulseaudio
