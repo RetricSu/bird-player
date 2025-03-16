@@ -173,6 +173,8 @@ impl AppComponent for WindowChrome {
                         ui.label(t("feature_3"));
                         ui.label(t("feature_4"));
                         ui.add_space(20.0);
+                        ui.label(t("contact_email"));
+                        ui.add_space(20.0);
                         if ui.button(t("exit")).clicked() {
                             ctx.show_about_dialog = false;
                         }

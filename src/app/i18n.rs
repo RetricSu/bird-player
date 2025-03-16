@@ -249,6 +249,10 @@ fn init_about_translations(en: &mut HashMap<String, String>, zh: &mut HashMap<St
         "• Local Music library with ID3 editable tag support".to_string(),
     );
     en.insert("feature_4".to_string(), "• Playlist management".to_string());
+    en.insert(
+        "contact_email".to_string(),
+        "Contact: digimonkey@protonmail.com".to_string(),
+    );
 
     // About window - Chinese
     zh.insert("app_name".to_string(), "小鸟播放器".to_string());
@@ -270,6 +274,10 @@ fn init_about_translations(en: &mut HashMap<String, String>, zh: &mut HashMap<St
         "• 本地音乐库，支持ID3标签编辑".to_string(),
     );
     zh.insert("feature_4".to_string(), "• 播放列表管理".to_string());
+    zh.insert(
+        "contact_email".to_string(),
+        "联系邮箱: digimonkey@protonmail.com".to_string(),
+    );
 }
 
 // Set the current language
