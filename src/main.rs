@@ -293,7 +293,8 @@ fn main() {
             .with_decorations(false) // Hide the OS-specific "chrome" around the window
             .with_inner_size([750.0, 468.0])
             .with_min_inner_size([300.0, 0.0]) // Set minimum size to match initial size
-            .with_transparent(true), // To have rounded corners we need transparency
+            .with_transparent(true) // To have rounded corners we need transparency
+            .with_resizable(true), // Explicitly enable resizing for cross-platform compatibility
         ..Default::default()
     };
 
