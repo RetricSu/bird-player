@@ -42,6 +42,7 @@ pub enum UiCommand {
     AudioFinished,
     TotalTrackDuration(u64),
     CurrentTimestamp(u64),
+    PlaybackStateChanged(bool), // true = playing, false = paused
 }
 
 pub enum LibraryCommand {

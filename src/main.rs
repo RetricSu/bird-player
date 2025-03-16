@@ -211,6 +211,11 @@ fn main() {
                             seek_timestamp,
                         );
                         state = PlayerState::Playing;
+
+                        // Update UI with playing state to ensure synchronization
+                        ui_tx
+                            .send(UiCommand::PlaybackStateChanged(true))
+                            .expect("Failed to send playback state to ui thread");
                     }
                 }
                 PlayerState::LoadFile(ref path) => {
