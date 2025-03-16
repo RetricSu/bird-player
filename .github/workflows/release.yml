@@ -54,7 +54,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev
+          sudo apt-get install -y libasound2-dev libglib2.0-dev
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -104,6 +104,7 @@ jobs:
           # Configure pkg-config for cross-compilation
           echo '#!/bin/sh
           export PKG_CONFIG_ALLOW_CROSS=1
+          export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig
           exec pkg-config "$@"
           ' | sudo tee /usr/local/bin/musl-pkg-config
           sudo chmod +x /usr/local/bin/musl-pkg-config
@@ -111,11 +112,12 @@ jobs:
           # Create output directory for the binary
           mkdir -p target/${{ matrix.TARGET }}/release
           
-          # Build with cross-compilation friendly settings and without PulseAudio
-          # This uses the CPAL backend instead of PulseAudio
+          # Build with cross-compilation friendly settings
+          # Explicitly disable features that require system libraries that are hard to cross-compile
           PKG_CONFIG=/usr/local/bin/musl-pkg-config \
           PKG_CONFIG_ALLOW_CROSS=1 \
-          cargo build --release --target=${{ matrix.TARGET }} --no-default-features
+          PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig \
+          cargo build --release --target=${{ matrix.TARGET }} --no-default-features --features "cpal-backend"
         env:
           CARGO_TERM_COLOR: always
           RUSTFLAGS: "-C target-feature=+crt-static"
