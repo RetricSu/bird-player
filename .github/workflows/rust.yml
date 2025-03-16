@@ -26,6 +26,6 @@ jobs:
       - name: Cargo fmt
         run: cargo fmt --all -- --check
       - name: Cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --features pulseaudio -- -D warnings
       - name: Cargo build
-        run: cargo build --verbose
+        run: cargo build --verbose --features pulseaudio
