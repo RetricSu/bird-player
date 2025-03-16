@@ -69,11 +69,18 @@ jobs:
       - name: Install Windows tools
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          cargo install cargo-wix
+          # Commenting out the cargo-wix install since it's causing issues
+          # cargo install cargo-wix
 
       - name: Cargo bundle
-        if: ${{ matrix.BUNDLE == true && matrix.os != 'ubuntu-latest' }}
+        if: ${{ matrix.BUNDLE == true && matrix.os != 'ubuntu-latest' && matrix.os != 'windows-latest' }}
         run: cargo bundle --release --target=${{ matrix.TARGET }}
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Cargo build (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: cargo build --release --target=${{ matrix.TARGET }}
         env:
           CARGO_TERM_COLOR: always
 
@@ -84,7 +91,7 @@ jobs:
           CARGO_TERM_COLOR: always
 
       - name: Cargo build (non-Linux)
-        if: ${{ matrix.BUNDLE == false && matrix.os != 'ubuntu-latest' }}
+        if: ${{ matrix.BUNDLE == false && matrix.os != 'ubuntu-latest' && matrix.os != 'windows-latest' }}
         run: cargo build --release --target=${{ matrix.TARGET }}
         env:
           CARGO_TERM_COLOR: always
@@ -132,20 +139,41 @@ jobs:
       # Windows packaging - simple zip instead of installer
       - name: Create Windows Package
         if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
         run: |
           # Create a simple README file with instructions for users
-          echo "=== IMPORTANT - HOW TO OPEN THE APP ===" > target/${{ matrix.TARGET }}/release/README.txt
-          echo "" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "This app is designed to be run as a normal Windows application." >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "1. Extract all contents to a folder" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "2. Double-click bird-player.exe to run" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "If you get SmartScreen warnings:" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "- Click 'More info'" >> target/${{ matrix.TARGET }}/release/README.txt
-          echo "- Click 'Run anyway'" >> target/${{ matrix.TARGET }}/release/README.txt
-
-          # Zip the application with README
-          powershell Compress-Archive -Path "target/${{ matrix.TARGET }}/release/bird-player.exe", "target/${{ matrix.TARGET }}/release/README.txt" -DestinationPath "Bird-Player-${{ matrix.TARGET }}.zip"
+          Set-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "=== IMPORTANT - HOW TO OPEN THE APP ==="
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value ""
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "This app is designed to be run as a normal Windows application."
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "1. Extract all contents to a folder"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "2. Double-click bird-player.exe to run"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value ""
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "If you get SmartScreen warnings:"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "- Click 'More info'"
+          Add-Content -Path "target\${{ matrix.TARGET }}\release\README.txt" -Value "- Click 'Run anyway'"
+          
+          # Ensure assets directory exists in release folder
+          $assetsDir = "target\${{ matrix.TARGET }}\release\assets"
+          if (-Not (Test-Path $assetsDir)) {
+            New-Item -Path $assetsDir -ItemType Directory -Force
+          }
+          
+          # Copy assets folder if it exists
+          if (Test-Path -Path "assets") {
+            Copy-Item -Path "assets\*" -Destination $assetsDir -Recurse -Force
+            Write-Host "Assets copied successfully."
+          } else {
+            Write-Host "Warning: Assets directory not found. Created an empty assets directory."
+          }
+          
+          # Create the ZIP file with all necessary components
+          $items = @(
+            "target\${{ matrix.TARGET }}\release\bird-player.exe",
+            "target\${{ matrix.TARGET }}\release\README.txt",
+            "target\${{ matrix.TARGET }}\release\assets"
+          )
+          Compress-Archive -Path $items -DestinationPath "Bird-Player-${{ matrix.TARGET }}.zip" -Force
+          Write-Host "ZIP file created successfully."
 
       - uses: actions/upload-artifact@master
         with:
