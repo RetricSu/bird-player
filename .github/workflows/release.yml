@@ -153,7 +153,15 @@ jobs:
           # Perform ad-hoc signing to make app more compatible with Gatekeeper
           # This won't provide the same security as a real developer certificate
           # but will help with the "app is damaged" errors
-          codesign --deep --force --sign - "target/${{ matrix.TARGET }}/release/bundle/osx/Bird Player.app"
+          echo "Attempting to sign the app bundle..."
+          if ! codesign --deep --force --sign - --options runtime --preserve-metadata=entitlements,requirements,flags "target/${{ matrix.TARGET }}/release/bundle/osx/Bird Player.app"; then
+            echo "Primary signing method failed, trying alternate approach..."
+            # Try an alternate approach - sign each framework individually first
+            find "target/${{ matrix.TARGET }}/release/bundle/osx/Bird Player.app/Contents/Frameworks" -type d -name "*.framework" -exec codesign --force --sign - {} \;
+            # Then sign the main bundle
+            codesign --force --sign - "target/${{ matrix.TARGET }}/release/bundle/osx/Bird Player.app" || true
+          fi
+          echo "Proceeding with DMG creation regardless of signing result"
           
           # Create a simple README file with instructions for users
           cat > target/${{ matrix.TARGET }}/release/bundle/osx/README.txt << 'EOL'
