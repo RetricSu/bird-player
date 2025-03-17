@@ -20,6 +20,32 @@ mod app;
 mod output;
 mod resampler;
 
+// New function to load the app icon from multiple possible locations
+fn get_app_icon() -> Option<egui::IconData> {
+    // Try different potential paths for both development and bundled app
+    let icon_paths = [
+        "./assets/icons/icon.png",            // Development path
+        "../assets/icons/icon.png",           // Relative to release dir
+        "../Resources/assets/icons/icon.png", // Relative to app bundle
+    ];
+
+    for path in icon_paths {
+        if let Ok(icon) = image::open(path) {
+            let icon = icon.to_rgba8();
+            let (width, height) = icon.dimensions();
+            return Some(egui::IconData {
+                rgba: icon.into_raw(),
+                width,
+                height,
+            });
+        }
+    }
+
+    // If all paths failed, log it but continue without an icon
+    tracing::warn!("Could not load app icon from any path");
+    None
+}
+
 fn main() {
     tracing_subscriber::fmt::init();
     tracing::info!("App booting...");
@@ -38,10 +64,29 @@ fn main() {
     app.library_cmd_rx = Some(lib_cmd_rx);
     app.is_processing_ui_change = Some(is_processing_ui_change.clone());
 
-    let icon = image::open("./assets/icons/icon.png")
-        .expect("Failed to open icon path")
-        .to_rgba8();
-    let (icon_width, icon_height) = icon.dimensions();
+    // Try multiple possible icon paths for both development and bundled app scenarios
+    let icon_result = get_app_icon();
+
+    // Create the native options with viewport settings
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([750.0, 468.0])
+            .with_min_inner_size([300.0, 0.0])
+            .with_decorations(false)
+            .with_transparent(true)
+            .with_resizable(true),
+        ..Default::default()
+    };
+
+    // Apply the icon if available
+    let native_options = if let Some(icon) = icon_result {
+        eframe::NativeOptions {
+            viewport: native_options.viewport.with_icon(icon),
+            ..native_options
+        }
+    } else {
+        native_options
+    };
 
     // Restore player state
     restore_player_state(&mut app);
@@ -256,22 +301,6 @@ fn main() {
             }
         }
     }); // Audio Thread end
-
-    // Create the native options with viewport settings
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_icon(eframe::egui::IconData {
-                rgba: icon.into_raw(),
-                width: icon_width,
-                height: icon_height,
-            })
-            .with_decorations(false) // Hide the OS-specific "chrome" around the window
-            .with_inner_size([750.0, 468.0])
-            .with_min_inner_size([300.0, 0.0]) // Set minimum size to match initial size
-            .with_transparent(true) // To have rounded corners we need transparency
-            .with_resizable(true), // Explicitly enable resizing for cross-platform compatibility
-        ..Default::default()
-    };
 
     eframe::run_native(
         "Bird Player",

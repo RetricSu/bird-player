@@ -150,16 +150,33 @@ jobs:
         run: |
           brew install create-dmg
           
+          # Perform ad-hoc signing to make app more compatible with Gatekeeper
+          # This won't provide the same security as a real developer certificate
+          # but will help with the "app is damaged" errors
+          echo "Attempting to sign the app bundle..."
+          if ! codesign --deep --force --sign - --options runtime --preserve-metadata=entitlements,requirements,flags "target/${{ matrix.TARGET }}/release/bundle/osx/Bird Player.app"; then
+            echo "Primary signing method failed, trying alternate approach..."
+            # Try an alternate approach - sign each framework individually first
+            find "target/${{ matrix.TARGET }}/release/bundle/osx/Bird Player.app/Contents/Frameworks" -type d -name "*.framework" -exec codesign --force --sign - {} \;
+            # Then sign the main bundle
+            codesign --force --sign - "target/${{ matrix.TARGET }}/release/bundle/osx/Bird Player.app" || true
+          fi
+          echo "Proceeding with DMG creation regardless of signing result"
+          
           # Create a simple README file with instructions for users
           cat > target/${{ matrix.TARGET }}/release/bundle/osx/README.txt << 'EOL'
           === IMPORTANT - HOW TO OPEN THE APP ===
           
-          Since this app is not signed with an Apple Developer certificate, you might see a warning saying the app is damaged or can't be opened.
+          Since this app is not signed with an Apple Developer certificate, macOS security (Gatekeeper) may prevent it from opening.
           
-          To open the app:
-          1. Right-click (or Control+click) on the app icon
-          2. Select "Open" from the menu
-          3. Click "Open" when prompted
+          Method 1: If right-click > Open doesn't work:
+          1. Open System Preferences > Security & Privacy
+          2. Look for a message about "Bird Player was blocked" and click "Open Anyway"
+          
+          Method 2: Using Terminal:
+          1. Open Terminal 
+          2. Run this command: xattr -dr com.apple.quarantine "/Volumes/Bird Player/Bird Player.app"
+          3. Then try opening the app
           
           You only need to do this the first time you open the app.
           EOL

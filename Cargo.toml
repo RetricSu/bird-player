@@ -19,7 +19,6 @@ Bird Player combines the charm of classic music players with modern technology,
 providing a seamless experience for managing and playing your local music collection.
 """
 osx_minimum_system_version = "10.14"
-osx_frameworks = ["CoreServices", "CoreAudio", "AudioToolbox"]
 windows_subsystem = "windows"
 deb_depends = ["libasound2", "libpulse0", "libgtk-3-0"]
 
