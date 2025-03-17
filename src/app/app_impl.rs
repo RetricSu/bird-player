@@ -76,8 +76,12 @@ impl eframe::App for App {
 
             egui::CentralPanel::default().show(ctx, |ui| {
                 if let Some(_current_playlist_idx) = &mut self.current_playlist_idx {
+                    // Create a scroll area with a fixed ID for tracking scroll position
+                    let scroll_area_id = ui.id().with("playlist_scroll_area");
                     egui::ScrollArea::both().show(ui, |ui| {
-                        PlaylistTable::add(self, ui);
+                        ui.push_id(scroll_area_id, |ui| {
+                            PlaylistTable::add(self, ui);
+                        });
                     });
                 }
             });
