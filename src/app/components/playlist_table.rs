@@ -2,6 +2,10 @@ use super::AppComponent;
 use crate::app::t;
 use crate::app::App;
 use eframe::egui;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+// Static variable to track the last played track
+static LAST_PLAYED_TRACK: AtomicUsize = AtomicUsize::new(0);
 
 pub struct PlaylistTable;
 
@@ -41,6 +45,23 @@ impl AppComponent for PlaylistTable {
             let is_dragging = ui
                 .memory_mut(|mem| mem.data.get_temp::<bool>(is_dragging_id))
                 .unwrap_or(false);
+
+            // Track current playing track position for auto-scrolling
+            let current_track_idx = if let Some(player) = &ctx.player {
+                if let Some(selected_track) = &player.selected_track {
+                    ctx.playlists[current_playlist_idx].get_pos(selected_track)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // Get the last played track index
+            let last_played_track = LAST_PLAYED_TRACK.load(Ordering::Relaxed);
+
+            // Get the scroll area ID for tracking scroll position
+            ui.id().with("playlist_scroll_area");
 
             // Disable text selection when dragging
             if is_dragging {
@@ -624,6 +645,25 @@ impl AppComponent for PlaylistTable {
                 if idx < ctx.playlists[current_playlist_idx].tracks.len() {
                     ctx.playlists[current_playlist_idx].tracks.remove(idx);
                 }
+            }
+
+            // Auto-scroll to current track if it exists and has changed
+            if let Some(current_idx) = current_track_idx {
+                if last_played_track != current_idx {
+                    // Get the row rect for the current track
+                    if let Some((_, row_rect)) =
+                        row_rects.iter().find(|(idx, _)| *idx == current_idx)
+                    {
+                        // Use egui's built-in scroll-to-rect functionality
+                        ui.scroll_to_rect(*row_rect, Some(egui::Align::Center));
+                    }
+
+                    // Update the last played track
+                    LAST_PLAYED_TRACK.store(current_idx, Ordering::Relaxed);
+                }
+            } else {
+                // Reset the last played track if no track is currently playing
+                LAST_PLAYED_TRACK.store(0, Ordering::Relaxed);
             }
 
             // Draw drag indicator and drop line if dragging
