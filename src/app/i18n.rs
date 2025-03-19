@@ -58,6 +58,7 @@ pub fn init() {
     en.insert("previous".to_string(), "Previous".to_string());
     en.insert("next".to_string(), "Next".to_string());
     en.insert("play_mode".to_string(), "Play Mode: {}".to_string());
+    en.insert("restore_window".to_string(), "Restore Window".to_string());
 
     // Help menu
     en.insert("help".to_string(), "Help".to_string());
@@ -148,7 +149,7 @@ pub fn init() {
     zh.insert("previous".to_string(), "上一首".to_string());
     zh.insert("next".to_string(), "下一首".to_string());
     zh.insert("play_mode".to_string(), "播放模式: {}".to_string());
-
+    zh.insert("restore_window".to_string(), "复原窗口".to_string());
     // Help menu
     zh.insert("help".to_string(), "帮助".to_string());
     zh.insert("about".to_string(), "关于".to_string());

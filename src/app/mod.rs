@@ -17,6 +17,10 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
+// Window size constants
+pub const DEFAULT_WINDOW_WIDTH: f32 = 750.0;
+pub const DEFAULT_WINDOW_HEIGHT: f32 = 468.0;
+
 mod app_impl;
 mod components;
 pub mod i18n;
@@ -138,7 +142,7 @@ impl Default for App {
             show_library_and_playlist: true,
             library_folders_expanded: false,
             show_about_dialog: false,
-            default_window_height: 468.0,
+            default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
         }
     }
 }
