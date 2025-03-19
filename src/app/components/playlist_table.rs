@@ -348,8 +348,27 @@ impl AppComponent for PlaylistTable {
                                             }
                                         });
 
+                                        // Check for double-click to start editing
+                                        if title_response.double_clicked() && !is_dragging {
+                                            // Start editing title
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_field_id,
+                                                    Some("title".to_string()),
+                                                );
+                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    track_title.clone(),
+                                                );
+                                            });
+                                        }
+
                                         // Handle click to play/stop track (don't respond to clicks during dragging)
-                                        if title_response.clicked() && !is_dragging {
+                                        if title_response.clicked()
+                                            && !title_response.double_clicked()
+                                            && !is_dragging
+                                        {
                                             // Handle Ctrl+click for selection
                                             if ctrl_pressed {
                                                 toggle_selection = Some(idx);
@@ -447,8 +466,27 @@ impl AppComponent for PlaylistTable {
                                             }
                                         });
 
+                                        // Check for double-click to start editing
+                                        if artist_response.double_clicked() && !is_dragging {
+                                            // Start editing artist
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_field_id,
+                                                    Some("artist".to_string()),
+                                                );
+                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    track_artist.clone(),
+                                                );
+                                            });
+                                        }
+
                                         // Handle Ctrl+click for selection
-                                        if artist_response.clicked() && !is_dragging && ctrl_pressed
+                                        if artist_response.clicked()
+                                            && !artist_response.double_clicked()
+                                            && !is_dragging
+                                            && ctrl_pressed
                                         {
                                             toggle_selection = Some(idx);
                                         }
@@ -532,8 +570,27 @@ impl AppComponent for PlaylistTable {
                                             }
                                         });
 
+                                        // Check for double-click to start editing
+                                        if album_response.double_clicked() && !is_dragging {
+                                            // Start editing album
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_field_id,
+                                                    Some("album".to_string()),
+                                                );
+                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    track_album.clone(),
+                                                );
+                                            });
+                                        }
+
                                         // Handle Ctrl+click for selection
-                                        if album_response.clicked() && !is_dragging && ctrl_pressed
+                                        if album_response.clicked()
+                                            && !album_response.double_clicked()
+                                            && !is_dragging
+                                            && ctrl_pressed
                                         {
                                             toggle_selection = Some(idx);
                                         }
@@ -617,8 +674,27 @@ impl AppComponent for PlaylistTable {
                                             }
                                         });
 
+                                        // Check for double-click to start editing
+                                        if genre_response.double_clicked() && !is_dragging {
+                                            // Start editing genre
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_field_id,
+                                                    Some("genre".to_string()),
+                                                );
+                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    track_genre.clone(),
+                                                );
+                                            });
+                                        }
+
                                         // Handle Ctrl+click for selection
-                                        if genre_response.clicked() && !is_dragging && ctrl_pressed
+                                        if genre_response.clicked()
+                                            && !genre_response.double_clicked()
+                                            && !is_dragging
+                                            && ctrl_pressed
                                         {
                                             toggle_selection = Some(idx);
                                         }
