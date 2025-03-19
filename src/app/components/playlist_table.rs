@@ -87,11 +87,17 @@ impl AppComponent for PlaylistTable {
             // Get playlist length once
             let playlist_len = ctx.playlists[current_playlist_idx].tracks.len();
 
+            // Check for Ctrl key being pressed for multi-selection
+            let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
+
             // Prepare a list of tracks to update after rendering
             let mut tracks_to_update: Vec<(usize, String, String)> = Vec::new();
 
             // Track which track to play/stop
             let mut track_to_play: Option<usize> = None;
+
+            // Track indices to toggle selection
+            let mut toggle_selection: Option<usize> = None;
 
             // Get available width for the table
             let available_width = ui.available_width();
@@ -113,6 +119,7 @@ impl AppComponent for PlaylistTable {
                         .spacing([5.0, 5.0])
                         .num_columns(num_columns)
                         .show(ui, |ui| {
+                            // Table header row
                             // Track #/handle column
                             ui.scope(|ui| {
                                 let col_width = available_width * column_proportions[0];
@@ -171,6 +178,20 @@ impl AppComponent for PlaylistTable {
                                 // Get the row's rect before we draw anything
                                 let row_rect = ui.available_rect_before_wrap();
                                 row_rects.push((idx, row_rect));
+
+                                // Check if track is selected in the selection list
+                                let is_selected =
+                                    ctx.playlists[current_playlist_idx].is_selected(idx);
+
+                                // Apply background for selected tracks
+                                if is_selected {
+                                    // Make the selection more visible with higher alpha
+                                    let highlight_color =
+                                        egui::Color32::from_rgba_premultiplied(100, 150, 255, 200);
+
+                                    // Fill the background
+                                    ui.painter().rect_filled(row_rect, 0.0, highlight_color);
+                                }
 
                                 // Get the track for this row
                                 let track = &ctx.playlists[current_playlist_idx].tracks[idx];
@@ -236,6 +257,11 @@ impl AppComponent for PlaylistTable {
                                             mem.data.insert_temp(is_dragging_id, true);
                                         });
                                     }
+
+                                    // Toggle selection when clicking on handle with Ctrl
+                                    if drag_handle_response.clicked() && ctrl_pressed {
+                                        toggle_selection = Some(idx);
+                                    }
                                 });
 
                                 // Title column
@@ -265,10 +291,10 @@ impl AppComponent for PlaylistTable {
                                         // Check if Enter was pressed or focus was lost
                                         let enter_pressed =
                                             ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                        if response.lost_focus() || enter_pressed {
-                                            // Only update if value has changed
+
+                                        if enter_pressed || response.lost_focus() {
+                                            // Store the final value
                                             if current_value != track_title {
-                                                // Queue the update for after the grid rendering
                                                 tracks_to_update.push((
                                                     idx,
                                                     "title".to_string(),
@@ -276,7 +302,7 @@ impl AppComponent for PlaylistTable {
                                                 ));
                                             }
 
-                                            // Clear editing state
+                                            // Clear the editing state
                                             ui.memory_mut(|mem| {
                                                 mem.data.insert_temp(edit_field_id, None::<String>);
                                                 mem.data
@@ -322,18 +348,42 @@ impl AppComponent for PlaylistTable {
                                             }
                                         });
 
-                                        // Handle click to play/stop track (don't respond to clicks during dragging)
-                                        if title_response.clicked() && !is_dragging {
-                                            let is_selected = ctx
-                                                .player
-                                                .as_ref()
-                                                .unwrap()
-                                                .selected_track
-                                                .as_ref()
-                                                == Some(track);
+                                        // Check for double-click to start editing
+                                        if title_response.double_clicked() && !is_dragging {
+                                            // Start editing title
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_field_id,
+                                                    Some("title".to_string()),
+                                                );
+                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    track_title.clone(),
+                                                );
+                                            });
+                                        }
 
-                                            if !is_selected {
-                                                track_to_play = Some(idx);
+                                        // Handle click to play/stop track (don't respond to clicks during dragging)
+                                        if title_response.clicked()
+                                            && !title_response.double_clicked()
+                                            && !is_dragging
+                                        {
+                                            // Handle Ctrl+click for selection
+                                            if ctrl_pressed {
+                                                toggle_selection = Some(idx);
+                                            } else {
+                                                let is_selected = ctx
+                                                    .player
+                                                    .as_ref()
+                                                    .unwrap()
+                                                    .selected_track
+                                                    .as_ref()
+                                                    == Some(track);
+
+                                                if !is_selected {
+                                                    track_to_play = Some(idx);
+                                                }
                                             }
                                         }
                                     }
@@ -385,13 +435,40 @@ impl AppComponent for PlaylistTable {
                                             });
                                         }
                                     } else {
+                                        // Regular artist display
                                         let artist_response = ui.add(
                                             egui::Label::new(artist_text)
                                                 .sense(egui::Sense::click()),
                                         );
 
-                                        if artist_response.clicked() && !is_dragging {
-                                            // Start editing
+                                        // Add context menu for the artist
+                                        artist_response.context_menu(|ui| {
+                                            if ui.button(t("edit_artist")).clicked() {
+                                                // Start editing artist
+                                                ui.ctx().memory_mut(|mem| {
+                                                    mem.data.insert_temp(
+                                                        edit_field_id,
+                                                        Some("artist".to_string()),
+                                                    );
+                                                    mem.data
+                                                        .insert_temp(edit_track_idx_id, Some(idx));
+                                                    mem.data.insert_temp(
+                                                        edit_value_id,
+                                                        track_artist.clone(),
+                                                    );
+                                                });
+                                                ui.close_menu();
+                                            }
+
+                                            if ui.button(t("remove_from_playlist")).clicked() {
+                                                track_to_remove = Some(idx);
+                                                ui.close_menu();
+                                            }
+                                        });
+
+                                        // Check for double-click to start editing
+                                        if artist_response.double_clicked() && !is_dragging {
+                                            // Start editing artist
                                             ui.memory_mut(|mem| {
                                                 mem.data.insert_temp(
                                                     edit_field_id,
@@ -405,28 +482,13 @@ impl AppComponent for PlaylistTable {
                                             });
                                         }
 
-                                        // Show edit indicator on hover
-                                        if artist_response.hovered() {
-                                            ui.output_mut(|o| {
-                                                o.cursor_icon = egui::CursorIcon::Text
-                                            });
-                                            let artist_rect = artist_response.rect;
-                                            ui.painter().line_segment(
-                                                [
-                                                    egui::pos2(
-                                                        artist_rect.left(),
-                                                        artist_rect.bottom() + 1.0,
-                                                    ),
-                                                    egui::pos2(
-                                                        artist_rect.right(),
-                                                        artist_rect.bottom() + 1.0,
-                                                    ),
-                                                ],
-                                                egui::Stroke::new(
-                                                    1.0,
-                                                    egui::Color32::from_rgb(120, 120, 180),
-                                                ),
-                                            );
+                                        // Handle Ctrl+click for selection
+                                        if artist_response.clicked()
+                                            && !artist_response.double_clicked()
+                                            && !is_dragging
+                                            && ctrl_pressed
+                                        {
+                                            toggle_selection = Some(idx);
                                         }
                                     }
                                 });
@@ -477,13 +539,40 @@ impl AppComponent for PlaylistTable {
                                             });
                                         }
                                     } else {
+                                        // Regular album display
                                         let album_response = ui.add(
                                             egui::Label::new(album_text)
                                                 .sense(egui::Sense::click()),
                                         );
 
-                                        if album_response.clicked() && !is_dragging {
-                                            // Start editing
+                                        // Add context menu for the album
+                                        album_response.context_menu(|ui| {
+                                            if ui.button(t("edit_album")).clicked() {
+                                                // Start editing album
+                                                ui.ctx().memory_mut(|mem| {
+                                                    mem.data.insert_temp(
+                                                        edit_field_id,
+                                                        Some("album".to_string()),
+                                                    );
+                                                    mem.data
+                                                        .insert_temp(edit_track_idx_id, Some(idx));
+                                                    mem.data.insert_temp(
+                                                        edit_value_id,
+                                                        track_album.clone(),
+                                                    );
+                                                });
+                                                ui.close_menu();
+                                            }
+
+                                            if ui.button(t("remove_from_playlist")).clicked() {
+                                                track_to_remove = Some(idx);
+                                                ui.close_menu();
+                                            }
+                                        });
+
+                                        // Check for double-click to start editing
+                                        if album_response.double_clicked() && !is_dragging {
+                                            // Start editing album
                                             ui.memory_mut(|mem| {
                                                 mem.data.insert_temp(
                                                     edit_field_id,
@@ -497,28 +586,13 @@ impl AppComponent for PlaylistTable {
                                             });
                                         }
 
-                                        // Show edit indicator on hover
-                                        if album_response.hovered() {
-                                            ui.output_mut(|o| {
-                                                o.cursor_icon = egui::CursorIcon::Text
-                                            });
-                                            let album_rect = album_response.rect;
-                                            ui.painter().line_segment(
-                                                [
-                                                    egui::pos2(
-                                                        album_rect.left(),
-                                                        album_rect.bottom() + 1.0,
-                                                    ),
-                                                    egui::pos2(
-                                                        album_rect.right(),
-                                                        album_rect.bottom() + 1.0,
-                                                    ),
-                                                ],
-                                                egui::Stroke::new(
-                                                    1.0,
-                                                    egui::Color32::from_rgb(120, 120, 180),
-                                                ),
-                                            );
+                                        // Handle Ctrl+click for selection
+                                        if album_response.clicked()
+                                            && !album_response.double_clicked()
+                                            && !is_dragging
+                                            && ctrl_pressed
+                                        {
+                                            toggle_selection = Some(idx);
                                         }
                                     }
                                 });
@@ -569,13 +643,40 @@ impl AppComponent for PlaylistTable {
                                             });
                                         }
                                     } else {
+                                        // Regular genre display
                                         let genre_response = ui.add(
                                             egui::Label::new(genre_text)
                                                 .sense(egui::Sense::click()),
                                         );
 
-                                        if genre_response.clicked() && !is_dragging {
-                                            // Start editing
+                                        // Add context menu for the genre
+                                        genre_response.context_menu(|ui| {
+                                            if ui.button(t("edit_genre")).clicked() {
+                                                // Start editing genre
+                                                ui.ctx().memory_mut(|mem| {
+                                                    mem.data.insert_temp(
+                                                        edit_field_id,
+                                                        Some("genre".to_string()),
+                                                    );
+                                                    mem.data
+                                                        .insert_temp(edit_track_idx_id, Some(idx));
+                                                    mem.data.insert_temp(
+                                                        edit_value_id,
+                                                        track_genre.clone(),
+                                                    );
+                                                });
+                                                ui.close_menu();
+                                            }
+
+                                            if ui.button(t("remove_from_playlist")).clicked() {
+                                                track_to_remove = Some(idx);
+                                                ui.close_menu();
+                                            }
+                                        });
+
+                                        // Check for double-click to start editing
+                                        if genre_response.double_clicked() && !is_dragging {
+                                            // Start editing genre
                                             ui.memory_mut(|mem| {
                                                 mem.data.insert_temp(
                                                     edit_field_id,
@@ -589,28 +690,13 @@ impl AppComponent for PlaylistTable {
                                             });
                                         }
 
-                                        // Show edit indicator on hover
-                                        if genre_response.hovered() {
-                                            ui.output_mut(|o| {
-                                                o.cursor_icon = egui::CursorIcon::Text
-                                            });
-                                            let genre_rect = genre_response.rect;
-                                            ui.painter().line_segment(
-                                                [
-                                                    egui::pos2(
-                                                        genre_rect.left(),
-                                                        genre_rect.bottom() + 1.0,
-                                                    ),
-                                                    egui::pos2(
-                                                        genre_rect.right(),
-                                                        genre_rect.bottom() + 1.0,
-                                                    ),
-                                                ],
-                                                egui::Stroke::new(
-                                                    1.0,
-                                                    egui::Color32::from_rgb(120, 120, 180),
-                                                ),
-                                            );
+                                        // Handle Ctrl+click for selection
+                                        if genre_response.clicked()
+                                            && !genre_response.double_clicked()
+                                            && !is_dragging
+                                            && ctrl_pressed
+                                        {
+                                            toggle_selection = Some(idx);
                                         }
                                     }
                                 });
@@ -619,6 +705,11 @@ impl AppComponent for PlaylistTable {
                             }
                         });
                 });
+
+            // Toggle selection for track if needed
+            if let Some(idx) = toggle_selection {
+                ctx.playlists[current_playlist_idx].toggle_selection(idx);
+            }
 
             // Process track updates after the grid rendering
             for (idx, field, value) in tracks_to_update {
@@ -664,6 +755,22 @@ impl AppComponent for PlaylistTable {
             } else {
                 // Reset the last played track if no track is currently playing
                 LAST_PLAYED_TRACK.store(0, Ordering::Relaxed);
+            }
+
+            // Check if we need to scroll to a specific track (from search results)
+            let scroll_to_idx_id = ui.id().with("scroll_to_idx");
+            if let Some(idx) = ui.memory_mut(|mem| mem.data.get_temp::<usize>(scroll_to_idx_id)) {
+                // Only scroll if the index is valid
+                if idx < playlist_len {
+                    // Get the row rect for the track
+                    if let Some((_, row_rect)) = row_rects.iter().find(|(i, _)| *i == idx) {
+                        // Use egui's built-in scroll-to-rect functionality
+                        ui.scroll_to_rect(*row_rect, Some(egui::Align::Center));
+
+                        // Clear the stored idx so we don't scroll again next frame
+                        ui.memory_mut(|mem| mem.data.remove::<usize>(scroll_to_idx_id));
+                    }
+                }
             }
 
             // Draw drag indicator and drop line if dragging

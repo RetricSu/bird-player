@@ -1,6 +1,7 @@
 use crate::app::LibraryItem;
 use crate::AudioCommand;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8,6 +9,8 @@ pub struct Playlist {
     name: Option<String>,
     pub tracks: Vec<LibraryItem>,
     pub selected: Option<LibraryItem>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub selected_indices: HashSet<usize>,
 }
 
 impl Default for Playlist {
@@ -22,6 +25,7 @@ impl Playlist {
             name: None,
             tracks: vec![],
             selected: None,
+            selected_indices: HashSet::new(),
         }
     }
 
@@ -40,12 +44,51 @@ impl Playlist {
     // TODO - should probably return a Result
     pub fn remove(&mut self, idx: usize) {
         self.tracks.remove(idx);
+        self.selected_indices.remove(&idx);
+
+        // Update indices greater than the removed index
+        let mut to_remove = Vec::new();
+        let mut to_add = Vec::new();
+
+        for &i in &self.selected_indices {
+            if i > idx {
+                to_remove.push(i);
+                to_add.push(i - 1);
+            }
+        }
+
+        for i in to_remove {
+            self.selected_indices.remove(&i);
+        }
+
+        for i in to_add {
+            self.selected_indices.insert(i);
+        }
     }
 
     // TODO - should probably return a Result
     pub fn reorder(&mut self, current_pos: usize, destination_pos: usize) {
         let track = self.tracks.remove(current_pos);
         self.tracks.insert(destination_pos, track);
+
+        // Update selected indices after reordering
+        let mut new_selected = HashSet::new();
+
+        for &idx in &self.selected_indices {
+            if idx == current_pos {
+                new_selected.insert(destination_pos);
+            } else if (idx < current_pos && idx < destination_pos)
+                || (idx > current_pos && idx > destination_pos)
+            {
+                new_selected.insert(idx);
+            } else if idx < current_pos && idx >= destination_pos {
+                new_selected.insert(idx + 1);
+            } else if idx > current_pos && idx <= destination_pos {
+                new_selected.insert(idx - 1);
+            }
+        }
+
+        self.selected_indices = new_selected;
     }
 
     // TODO - should probably return a Result
@@ -62,6 +105,29 @@ impl Playlist {
 
     pub fn get_pos(&self, track: &LibraryItem) -> Option<usize> {
         self.tracks.iter().position(|t| t == track)
+    }
+
+    pub fn select_all(&mut self) {
+        self.selected_indices.clear();
+        for i in 0..self.tracks.len() {
+            self.selected_indices.insert(i);
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected_indices.clear();
+    }
+
+    pub fn toggle_selection(&mut self, idx: usize) {
+        if self.selected_indices.contains(&idx) {
+            self.selected_indices.remove(&idx);
+        } else {
+            self.selected_indices.insert(idx);
+        }
+    }
+
+    pub fn is_selected(&self, idx: usize) -> bool {
+        self.selected_indices.contains(&idx)
     }
 }
 
@@ -115,6 +181,7 @@ mod tests {
                 LibraryItem::new(path3.clone(), LibraryPathId::new(2)),
             ],
             selected: None,
+            selected_indices: HashSet::new(),
         };
 
         assert_eq!(playlist.tracks.len(), 3);
@@ -140,6 +207,7 @@ mod tests {
                 LibraryItem::new(path3.clone(), LibraryPathId::new(2)),
             ],
             selected: None,
+            selected_indices: HashSet::new(),
         };
 
         assert_eq!(playlist.tracks.len(), 3);
