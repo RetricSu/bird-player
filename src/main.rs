@@ -73,7 +73,7 @@ fn main() {
     // Create the native options with viewport settings
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([750.0, 468.0])
+            .with_inner_size([DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT])
             .with_min_inner_size([300.0, 0.0])
             .with_decorations(false)
             .with_transparent(true)

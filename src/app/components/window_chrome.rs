@@ -3,6 +3,7 @@ use super::AppComponent;
 use crate::app::t;
 use crate::app::version_info;
 use crate::app::App;
+use crate::app::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 use eframe::egui::{self, Color32, RichText, Window};
 use rfd;
 
@@ -83,6 +84,13 @@ impl AppComponent for WindowChrome {
                             .clicked()
                         {
                             player.toggle_playback_mode();
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.button(t("restore_window")).clicked() {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                                egui::Vec2::new(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
+                            ));
                             ui.close_menu();
                         }
                     } else {

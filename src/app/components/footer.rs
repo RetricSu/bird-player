@@ -141,7 +141,7 @@ impl AppComponent for Footer {
                             }
 
                             // Close button to exit search mode
-                            if ui.button("✗").clicked() {
+                            if ui.button("x").clicked() {
                                 search_active = false;
                                 search_text.clear();
                                 ui.memory_mut(|mem| {
@@ -253,14 +253,14 @@ impl AppComponent for Footer {
                 ui.memory_mut(|mem| mem.data.insert_temp(search_active_id, search_active));
 
                 // Select All button
-                if ui.button("✓ Select All").clicked() && has_tracks {
+                if ui.button("- Select All").clicked() && has_tracks {
                     playlist.select_all();
                 }
 
                 // Clear Selection button (disabled if no selection)
                 let clear_btn = ui.add_enabled(
                     selection_count > 0,
-                    eframe::egui::Button::new("✗ Clear Selection"),
+                    eframe::egui::Button::new("x Clear Selection"),
                 );
                 if clear_btn.clicked() {
                     playlist.clear_selection();
