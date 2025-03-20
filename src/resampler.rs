@@ -35,20 +35,24 @@ where
 {
     #[allow(dead_code)]
     fn resample_inner(&mut self) -> &[T] {
-        // Process with either FFT or linear resampler
+        let duration = self.duration;
+        
+        // First, process the resampling
         {
-            let mut input: arrayvec::ArrayVec<&[f32], 32> = Default::default();
-
-            for channel in self.input.iter() {
-                input.push(&channel[..self.duration]);
+            // Create input without using self.input directly to avoid borrowing issues
+            let mut input_slices: Vec<&[f32]> = Vec::with_capacity(self.input.len());
+            for channel in &self.input {
+                input_slices.push(&channel[..duration]);
             }
-
+            
+            // Convert to arrayvec for rubato
+            let mut input: arrayvec::ArrayVec<&[f32], 32> = Default::default();
+            for &slice in &input_slices {
+                input.push(slice);
+            }
+            
             // Resample using the selected algorithm
-            match (
-                &mut self.fft_resampler,
-                &mut self.linear_resampler,
-                &self.resampler_type,
-            ) {
+            match (&mut self.fft_resampler, &mut self.linear_resampler, &self.resampler_type) {
                 (Some(resampler), _, ResamplerType::HighQuality) => {
                     // Use FFT resampler
                     rubato::Resampler::process_into_buffer(
@@ -72,22 +76,23 @@ where
                 _ => panic!("No resampler available for the selected type"),
             }
         }
-
-        // Remove consumed samples from the input buffer.
-        for channel in self.input.iter_mut() {
-            channel.drain(0..self.duration);
+        
+        // Now we can safely modify the input buffer
+        for channel in &mut self.input {
+            channel.drain(0..duration);
         }
-
-        // Interleave the planar samples from Rubato.
+        
+        // Process output
         let num_channels = self.output.len();
         let output_frames = self.output[0].len();
-
+        
         // Ensure our pre-allocated buffer is large enough
         if self.interleaved.len() < num_channels * output_frames {
-            self.interleaved
-                .resize(num_channels * output_frames, T::MID);
+            // Only resize when absolutely necessary
+            let new_size = (num_channels * output_frames).next_power_of_two();
+            self.interleaved.resize(new_size, T::MID);
         }
-
+        
         // Interleave the samples from planar to interleaved format
         for (i, frame) in self.interleaved[..num_channels * output_frames]
             .chunks_exact_mut(num_channels)
@@ -97,7 +102,7 @@ where
                 *s = self.output[ch][i].into_sample();
             }
         }
-
+        
         &self.interleaved[..num_channels * output_frames]
     }
 }
@@ -123,7 +128,8 @@ where
         // For major resampling, use FFT for better quality
         let ratio_diff =
             ((to_sample_rate as f64) - (from_sample_rate as f64)).abs() / (from_sample_rate as f64);
-        let resampler_type = if ratio_diff < 0.1 {
+        let resampler_type = if ratio_diff < 0.25 {
+            // Increased threshold from 0.1 to 0.25 to use Linear more often
             ResamplerType::Linear
         } else {
             ResamplerType::HighQuality
@@ -136,7 +142,7 @@ where
                     from_sample_rate,
                     to_sample_rate,
                     duration,
-                    2,
+                    1, // Reduced from 2 to 1 for better performance with slight quality trade-off
                     num_channels,
                 )
                 .unwrap();
@@ -144,14 +150,14 @@ where
                 (Some(resampler), None, output)
             }
             ResamplerType::Linear => {
-                // Use simpler SincFixedIn with fewer parameters
+                // Use simpler SincFixedIn with optimized parameters
                 let resampler = rubato::SincFixedIn::<f32>::new(
                     from_sample_rate as f64 / to_sample_rate as f64,
                     0.95,
                     rubato::InterpolationParameters {
-                        sinc_len: 256,
+                        sinc_len: 128, // Reduced from 256 to 128
                         f_cutoff: 0.95,
-                        oversampling_factor: 128,
+                        oversampling_factor: 64, // Reduced from 128 to 64
                         interpolation: rubato::InterpolationType::Linear,
                         window: rubato::WindowFunction::BlackmanHarris2,
                     },
@@ -186,6 +192,18 @@ where
     #[allow(dead_code)]
     pub fn resample(&mut self, input: AudioBufferRef<'_>) -> Option<&[T]> {
         // Copy and convert samples into input buffer.
+        // Preallocate capacity to avoid reallocations during conversion
+        let expected_samples = input.frames();
+        for (i, channel) in self.input.iter_mut().enumerate() {
+            // Ensure we have enough capacity to avoid reallocations
+            if channel.capacity() < channel.len() + expected_samples {
+                // Add 10% margin to reduce future reallocations 
+                let new_capacity = ((channel.len() + expected_samples) as f32 * 1.1) as usize;
+                channel.reserve(new_capacity - channel.capacity());
+            }
+        }
+        
+        // Now convert the samples
         convert_samples_any(&input, &mut self.input);
 
         // Check if more samples are required.
@@ -240,8 +258,28 @@ fn convert_samples<S>(input: &AudioBuffer<S>, output: &mut [Vec<f32>])
 where
     S: Sample + IntoSample<f32>,
 {
+    // Pre-calculate the number of samples to add to avoid reallocations
+    let frames = input.frames();
+    
     for (c, dst) in output.iter_mut().enumerate() {
+        // Get slice to source channel
         let src = input.chan(c);
-        dst.extend(src.iter().map(|&s| s.into_sample()));
+        
+        // Perform a single extension operation instead of iterative appends
+        let start_idx = dst.len();
+        let additional = frames;
+        
+        // Ensure we have enough capacity
+        if dst.capacity() < start_idx + additional {
+            dst.reserve(additional);
+        }
+        
+        // Extend the destination with source samples all at once
+        dst.resize(start_idx + additional, 0.0);
+        
+        // Convert samples directly into the destination buffer
+        for (i, &sample) in src.iter().enumerate() {
+            dst[start_idx + i] = sample.into_sample();
+        }
     }
 }
