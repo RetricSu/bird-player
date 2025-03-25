@@ -530,7 +530,7 @@ impl App {
             }
         };
 
-        // Update the corresponding field in the tag
+        // Update the corresponding field in the tag and track
         match field {
             "title" => {
                 tag.set_title(value);
@@ -552,7 +552,7 @@ impl App {
         }
 
         // Write the updated tag back to the file
-        match tag.write_to_path(&path, id3::Version::Id3v24) {
+        let file_update_success = match tag.write_to_path(&path, id3::Version::Id3v24) {
             Ok(_) => {
                 tracing::info!(
                     "Successfully updated {} to '{}' for file: {:?}",
@@ -566,6 +566,81 @@ impl App {
                 tracing::error!("Failed to write {} tag for file {:?}: {}", field, path, e);
                 false
             }
+        };
+
+        // Update the database if file update was successful
+        if file_update_success {
+            if let Some(ref db) = self.database {
+                let conn = db.connection();
+                let result = {
+                    let mut conn_guard = conn.lock().unwrap();
+                    let tx = conn_guard.transaction().ok();
+
+                    if let Some(tx) = tx {
+                        let update_result = tx.execute(
+                            &format!("UPDATE library_items SET {} = ?1 WHERE key = ?2", field),
+                            rusqlite::params![value, track.key().to_string()],
+                        );
+
+                        match update_result.and_then(|_| tx.commit()) {
+                            Ok(_) => {
+                                tracing::info!(
+                                    "Successfully updated {} in database for track {}",
+                                    field,
+                                    track.key()
+                                );
+                                true
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to update {} in database for track {}: {}",
+                                    field,
+                                    track.key(),
+                                    e
+                                );
+                                false
+                            }
+                        }
+                    } else {
+                        tracing::error!("Failed to start database transaction for metadata update");
+                        false
+                    }
+                };
+
+                // If database update was successful, update all instances of this track
+                if result {
+                    // Update all instances of this track in all playlists
+                    for playlist in &mut self.playlists {
+                        for playlist_track in playlist.tracks.iter_mut() {
+                            if playlist_track.key() == track.key() {
+                                let updated_track = match field {
+                                    "title" => playlist_track.set_title(Some(value)),
+                                    "artist" => playlist_track.set_artist(Some(value)),
+                                    "album" => playlist_track.set_album(Some(value)),
+                                    "genre" => playlist_track.set_genre(Some(value)),
+                                    _ => playlist_track.clone(),
+                                };
+                                *playlist_track = updated_track;
+                            }
+                        }
+                    }
+
+                    // Reload the library from the database to get updated metadata
+                    if let Ok(updated_library) = library::Library::load_from_db(&db.connection()) {
+                        self.library = updated_library;
+                    }
+
+                    // Save the updated state to ensure persistence
+                    self.save_state();
+                }
+
+                result
+            } else {
+                tracing::warn!("No database connection available for metadata update");
+                file_update_success
+            }
+        } else {
+            false
         }
     }
 
