@@ -36,7 +36,7 @@ where
     #[allow(dead_code)]
     fn resample_inner(&mut self) -> &[T] {
         let duration = self.duration;
-        
+
         // First, process the resampling
         {
             // Create input without using self.input directly to avoid borrowing issues
@@ -44,15 +44,19 @@ where
             for channel in &self.input {
                 input_slices.push(&channel[..duration]);
             }
-            
+
             // Convert to arrayvec for rubato
             let mut input: arrayvec::ArrayVec<&[f32], 32> = Default::default();
             for &slice in &input_slices {
                 input.push(slice);
             }
-            
+
             // Resample using the selected algorithm
-            match (&mut self.fft_resampler, &mut self.linear_resampler, &self.resampler_type) {
+            match (
+                &mut self.fft_resampler,
+                &mut self.linear_resampler,
+                &self.resampler_type,
+            ) {
                 (Some(resampler), _, ResamplerType::HighQuality) => {
                     // Use FFT resampler
                     rubato::Resampler::process_into_buffer(
@@ -76,23 +80,23 @@ where
                 _ => panic!("No resampler available for the selected type"),
             }
         }
-        
+
         // Now we can safely modify the input buffer
         for channel in &mut self.input {
             channel.drain(0..duration);
         }
-        
+
         // Process output
         let num_channels = self.output.len();
         let output_frames = self.output[0].len();
-        
+
         // Ensure our pre-allocated buffer is large enough
         if self.interleaved.len() < num_channels * output_frames {
             // Only resize when absolutely necessary
             let new_size = (num_channels * output_frames).next_power_of_two();
             self.interleaved.resize(new_size, T::MID);
         }
-        
+
         // Interleave the samples from planar to interleaved format
         for (i, frame) in self.interleaved[..num_channels * output_frames]
             .chunks_exact_mut(num_channels)
@@ -102,7 +106,7 @@ where
                 *s = self.output[ch][i].into_sample();
             }
         }
-        
+
         &self.interleaved[..num_channels * output_frames]
     }
 }
@@ -194,15 +198,15 @@ where
         // Copy and convert samples into input buffer.
         // Preallocate capacity to avoid reallocations during conversion
         let expected_samples = input.frames();
-        for (i, channel) in self.input.iter_mut().enumerate() {
+        for channel in self.input.iter_mut() {
             // Ensure we have enough capacity to avoid reallocations
             if channel.capacity() < channel.len() + expected_samples {
-                // Add 10% margin to reduce future reallocations 
+                // Add 10% margin to reduce future reallocations
                 let new_capacity = ((channel.len() + expected_samples) as f32 * 1.1) as usize;
                 channel.reserve(new_capacity - channel.capacity());
             }
         }
-        
+
         // Now convert the samples
         convert_samples_any(&input, &mut self.input);
 
@@ -260,23 +264,23 @@ where
 {
     // Pre-calculate the number of samples to add to avoid reallocations
     let frames = input.frames();
-    
+
     for (c, dst) in output.iter_mut().enumerate() {
         // Get slice to source channel
         let src = input.chan(c);
-        
+
         // Perform a single extension operation instead of iterative appends
         let start_idx = dst.len();
         let additional = frames;
-        
+
         // Ensure we have enough capacity
         if dst.capacity() < start_idx + additional {
             dst.reserve(additional);
         }
-        
+
         // Extend the destination with source samples all at once
         dst.resize(start_idx + additional, 0.0);
-        
+
         // Convert samples directly into the destination buffer
         for (i, &sample) in src.iter().enumerate() {
             dst[start_idx + i] = sample.into_sample();

@@ -113,14 +113,15 @@ fn main() {
         let mut current_track_path: Option<PathBuf> = None;
         let mut timer = std::time::Instant::now();
         let mut last_ts = 0; // Track last timestamp to avoid duplicate updates
-        
+
         // Add adaptive sleep time to reduce CPU usage based on buffer fullness
         let mut sleep_duration = std::time::Duration::from_millis(1);
         let mut consecutive_empty_reads = 0;
 
         loop {
             // Process any pending commands with higher priority
-            let had_command = process_audio_cmd(&audio_rx, &mut state, &mut volume, &is_processing_ui_change);
+            let had_command =
+                process_audio_cmd(&audio_rx, &mut state, &mut volume, &is_processing_ui_change);
 
             match state {
                 PlayerState::Playing => {
@@ -197,7 +198,7 @@ fn main() {
                                 if packet.ts() >= play_opts.seek_ts {
                                     if let Some(audio_output) = audio_output {
                                         let write_result = audio_output.write(decoded, volume);
-                                        
+
                                         // Adaptive sleep based on buffer state
                                         match write_result {
                                             Ok(()) => {
@@ -205,21 +206,29 @@ fn main() {
                                                 consecutive_empty_reads = 0;
                                                 // Gradually decrease sleep time for smoother playback
                                                 if sleep_duration.as_millis() > 1 {
-                                                    sleep_duration = std::time::Duration::from_millis(
-                                                        (sleep_duration.as_millis() as u64).saturating_sub(1)
-                                                    );
+                                                    sleep_duration =
+                                                        std::time::Duration::from_millis(
+                                                            (sleep_duration.as_millis() as u64)
+                                                                .saturating_sub(1),
+                                                        );
                                                 }
-                                            },
+                                            }
                                             Err(output::AudioOutputError::StreamClosedError) => {
                                                 // Buffer might be full, increase sleep time
                                                 consecutive_empty_reads += 1;
                                                 if consecutive_empty_reads > 3 {
                                                     // Exponential backoff with a cap at 20ms
-                                                    let new_sleep = std::cmp::min(sleep_duration.as_millis() * 2, 20);
-                                                    sleep_duration = std::time::Duration::from_millis(new_sleep as u64);
+                                                    let new_sleep = std::cmp::min(
+                                                        sleep_duration.as_millis() * 2,
+                                                        20,
+                                                    );
+                                                    sleep_duration =
+                                                        std::time::Duration::from_millis(
+                                                            new_sleep as u64,
+                                                        );
                                                 }
                                                 break 'once Ok(());
-                                            },
+                                            }
                                             Err(err) => {
                                                 tracing::warn!("Audio output error: {:?}", err);
                                                 break 'once Ok(());
@@ -245,7 +254,7 @@ fn main() {
                     // Return if a fatal error occured.
                     ignore_end_of_stream_error(result)
                         .expect("Encountered some other error than EoF");
-                    
+
                     // Sleep based on adaptive duration to reduce CPU usage during playback
                     if sleep_duration.as_millis() > 0 {
                         std::thread::sleep(sleep_duration);
@@ -488,7 +497,7 @@ fn process_audio_cmd(
             true
         }
         Err(_) => false, // When no commands are sent, this will evaluate. aka - it is the
-                      // common case. No need to print anything
+                         // common case. No need to print anything
     }
 }
 
