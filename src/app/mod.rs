@@ -55,6 +55,50 @@ pub enum LibraryCommand {
     AddPathId(LibraryPathId),
 }
 
+// Struct for storing basic settings in confy
+#[derive(Serialize, Deserialize)]
+pub struct AppSettings {
+    // Language setting
+    pub current_language: i18n::Language,
+
+    // Player state persistence
+    pub last_track_path: Option<PathBuf>,
+    pub last_position: Option<u64>,
+    pub last_playback_mode: Option<player::PlaybackMode>,
+    pub last_volume: Option<f32>,
+    pub was_playing: Option<bool>,
+
+    // UI state
+    pub library_folders_expanded: bool,
+    pub default_window_height: f64,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            current_language: i18n::Language::English,
+            last_track_path: None,
+            last_position: None,
+            last_playback_mode: None,
+            last_volume: None,
+            was_playing: None,
+            library_folders_expanded: false,
+            default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TempError {
+    MissingAppState,
+}
+
+impl std::fmt::Display for TempError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Couldn't load app state")
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct App {
     pub library: Library,
@@ -87,6 +131,9 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub library_cmd_rx: Option<Receiver<LibraryCommand>>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub database: Option<Arc<crate::db::Database>>,
 
     pub quit: bool,
 
@@ -134,6 +181,7 @@ impl Default for App {
             playlist_being_renamed: None,
             library_cmd_tx: None,
             library_cmd_rx: None,
+            database: None,
             quit: false,
             is_maximized: false,
             lib_config_selections: Default::default(),
@@ -147,53 +195,84 @@ impl Default for App {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum TempError {
-    MissingAppState,
-}
-
-impl std::fmt::Display for TempError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Couldn't load app state")
-    }
-}
-
 impl App {
     pub fn load() -> Result<Self, TempError> {
-        if let Ok(config) = confy::load::<App>("bird-player", None) {
-            let mut app = config;
+        // Still use confy for app settings
+        let config_result = confy::load::<AppSettings>("bird-player", None);
 
-            // Initialize i18n
-            i18n::init();
+        // Create a new default app - this doesn't have a database set yet
+        let mut app = App::default();
 
-            // Set the language from the loaded config
-            i18n::set_language(app.current_language);
+        // Initialize i18n
+        i18n::init();
 
-            app.is_maximized = false;
-            app.is_library_cfg_open = false;
-            app.show_about_dialog = false;
-            app.is_processing_ui_change = None;
-            app.show_library_and_playlist = true;
-            Ok(app)
-        } else {
-            let mut app = App::default();
-
-            // Initialize i18n
-            i18n::init();
-
-            // Set the default language
-            i18n::set_language(app.current_language);
-
-            // Set properties not covered by default
-            app.is_maximized = false;
-            app.is_library_cfg_open = false;
-            app.show_about_dialog = false;
-
-            // Save the initial state
-            app.save_state();
-
-            Ok(app)
+        if let Ok(settings) = config_result {
+            // Apply settings from confy
+            app.current_language = settings.current_language;
+            app.last_track_path = settings.last_track_path;
+            app.last_position = settings.last_position;
+            app.last_playback_mode = settings.last_playback_mode;
+            app.last_volume = settings.last_volume;
+            app.was_playing = settings.was_playing;
+            app.library_folders_expanded = settings.library_folders_expanded;
+            app.default_window_height = settings.default_window_height;
         }
+
+        // Set the language from the loaded config
+        i18n::set_language(app.current_language);
+
+        // Initialize database if it's not already set
+        if app.database.is_none() {
+            match crate::db::Database::new() {
+                Ok(db) => {
+                    app.database = Some(Arc::new(db));
+                    tracing::info!("Database created during App::load()");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to create database during App::load(): {}", e);
+                }
+            }
+        }
+
+        // Try to load library and playlists if we have a database
+        if let Some(ref db) = app.database {
+            // Try to load library from database
+            match Library::load_from_db(&db.connection()) {
+                Ok(library) => {
+                    app.library = library;
+                    tracing::info!("Successfully loaded library from database");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load library from database: {}", e);
+                    // Keep the default empty library
+                }
+            }
+
+            // Try to load playlists from database
+            match playlist::Playlist::load_all_from_db(&db.connection()) {
+                Ok(playlists) => {
+                    if !playlists.is_empty() {
+                        app.playlists = playlists;
+                        app.current_playlist_idx = Some(0);
+                        tracing::info!("Successfully loaded playlists from database");
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load playlists from database: {}", e);
+                    // Keep the default playlist
+                }
+            }
+        } else {
+            tracing::warn!("No database connection available when loading app state");
+        }
+
+        app.is_maximized = false;
+        app.is_library_cfg_open = false;
+        app.show_about_dialog = false;
+        app.is_processing_ui_change = None;
+        app.show_library_and_playlist = true;
+
+        Ok(app)
     }
 
     pub fn get_album_art_dir() -> PathBuf {
@@ -206,11 +285,38 @@ impl App {
     }
 
     pub fn save_state(&self) {
-        // Update player state information before saving
-        let store_result = confy::store("bird-player", None, self);
+        // Split app state - settings go to confy, library and playlists go to SQLite
+        let settings = AppSettings {
+            current_language: self.current_language,
+            last_track_path: self.last_track_path.clone(),
+            last_position: self.last_position,
+            last_playback_mode: self.last_playback_mode,
+            last_volume: self.last_volume,
+            was_playing: self.was_playing,
+            library_folders_expanded: self.library_folders_expanded,
+            default_window_height: self.default_window_height,
+        };
+
+        // Save app settings to confy
+        let store_result = confy::store("bird-player", None, &settings);
         match store_result {
-            Ok(_) => tracing::info!("Store was successful"),
-            Err(err) => tracing::error!("Failed to store the app state: {}", err),
+            Ok(_) => tracing::info!("Settings stored successfully"),
+            Err(err) => tracing::error!("Failed to store app settings: {}", err),
+        }
+
+        // Save library and playlists to SQLite if database is available
+        if let Some(ref db) = &self.database {
+            // Save library
+            if let Err(e) = self.library.save_to_db(&db.connection()) {
+                tracing::error!("Failed to save library to database: {}", e);
+            }
+
+            // Save playlists
+            for playlist in &self.playlists {
+                if let Err(e) = playlist.save_to_db(&db.connection()) {
+                    tracing::error!("Failed to save playlist to database: {}", e);
+                }
+            }
         }
     }
 
