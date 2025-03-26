@@ -1,5 +1,7 @@
+use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Library {
@@ -85,6 +87,14 @@ impl Library {
         }
     }
 
+    pub fn set_path_to_not_imported(&mut self, id: LibraryPathId) {
+        for path in self.paths.iter_mut() {
+            if path.id() == id {
+                path.set_status(LibraryPathStatus::NotImported);
+            }
+        }
+    }
+
     pub fn items(&self) -> &Vec<LibraryItem> {
         self.items.as_ref()
     }
@@ -94,13 +104,238 @@ impl Library {
     }
 
     pub fn add_item(&mut self, library_item: LibraryItem) {
-        self.items.push(library_item);
+        // Check if an item with this path already exists
+        if let Some(idx) = self
+            .items
+            .iter()
+            .position(|item| item.path() == library_item.path())
+        {
+            // Update the existing item but preserve its key
+            let existing_key = self.items[idx].key();
+            let mut updated_item = library_item;
+            updated_item.set_key(existing_key);
+            self.items[idx] = updated_item;
+        } else {
+            // Add as a new item
+            self.items.push(library_item);
+        }
     }
 
     pub fn add_view(&mut self, library_view: LibraryView) {
         let mut new = library_view.containers.clone();
 
         self.library_view.containers.append(&mut new);
+    }
+
+    // Database methods
+
+    pub fn save_to_db(&self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
+        let mut conn_guard = conn.lock().unwrap();
+
+        // Start a transaction
+        let tx = conn_guard.transaction()?;
+
+        // Save all library paths
+        for path in &self.paths {
+            let status_value = match path.status() {
+                LibraryPathStatus::NotImported => 0,
+                LibraryPathStatus::Imported => 1,
+            };
+
+            tx.execute(
+                "INSERT OR REPLACE INTO library_paths (id, path, status, display_name) 
+                 VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    path.id().0 as i64,
+                    path.path().to_string_lossy().to_string(),
+                    status_value,
+                    path.display_name()
+                ],
+            )?;
+        }
+
+        // Save all library items
+        for item in &self.items {
+            tx.execute(
+                "INSERT OR REPLACE INTO library_items 
+                 (key, library_path_id, path, title, artist, album, year, genre, track_number, lyrics) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                rusqlite::params![
+                    item.key().to_string(),
+                    item.library_id().0 as i64,
+                    item.path().to_string_lossy().to_string(),
+                    item.title(),
+                    item.artist(),
+                    item.album(),
+                    item.year(),
+                    item.genre(),
+                    item.track_number(),
+                    item.lyrics(),
+                ],
+            )?;
+
+            // Save pictures for this item
+            for picture in item.pictures() {
+                tx.execute(
+                    "INSERT OR REPLACE INTO pictures 
+                     (library_item_id, mime_type, picture_type, description, file_path) 
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![
+                        item.key().to_string(),
+                        picture.mime_type,
+                        picture.picture_type,
+                        picture.description,
+                        picture.file_path.to_string_lossy().to_string(),
+                    ],
+                )?;
+            }
+        }
+
+        // Commit the transaction
+        tx.commit()?;
+
+        Ok(())
+    }
+
+    pub fn load_from_db(conn: &Arc<Mutex<Connection>>) -> SqlResult<Self> {
+        let conn_guard = conn.lock().unwrap();
+
+        let mut library = Library::new();
+
+        // Load library paths
+        let mut path_stmt =
+            conn_guard.prepare("SELECT id, path, status, display_name FROM library_paths")?;
+
+        let path_rows = path_stmt.query_map([], |row| {
+            let id: i64 = row.get(0)?;
+            let path_str: String = row.get(1)?;
+            let status_raw: u8 = row.get(2)?;
+            let display_name: String = row.get(3)?;
+
+            let status = match status_raw {
+                0 => LibraryPathStatus::NotImported,
+                _ => LibraryPathStatus::Imported,
+            };
+
+            let path = PathBuf::from(path_str);
+            let id = LibraryPathId::new(id as usize);
+
+            // Create a new library path but with the database values
+            let mut lib_path = LibraryPath::new(path);
+            lib_path.id = id;
+            lib_path.status = status;
+            lib_path.display_name = display_name;
+
+            Ok(lib_path)
+        })?;
+
+        for path_result in path_rows {
+            library.paths.push(path_result?);
+        }
+
+        // Load library items
+        let mut item_stmt = conn_guard.prepare(
+            "SELECT key, library_path_id, path, title, artist, album, year, genre, track_number, lyrics 
+             FROM library_items"
+        )?;
+
+        let item_rows = item_stmt.query_map([], |row| {
+            let key_str: String = row.get(0)?;
+            let library_id_raw: i64 = row.get(1)?;
+            let path_str: String = row.get(2)?;
+
+            let library_id = LibraryPathId::new(library_id_raw as usize);
+            let path = PathBuf::from(path_str);
+
+            // Create a new library item
+            let mut item = LibraryItem::new(path, library_id);
+
+            // Set all metadata
+            item.set_title(row.get::<_, Option<String>>(3)?.as_deref());
+            item.set_artist(row.get::<_, Option<String>>(4)?.as_deref());
+            item.set_album(row.get::<_, Option<String>>(5)?.as_deref());
+            item.set_year(row.get::<_, Option<i32>>(6)?);
+            item.set_genre(row.get::<_, Option<String>>(7)?.as_deref());
+            item.set_track_number(row.get::<_, Option<u32>>(8)?);
+            item.set_lyrics(row.get::<_, Option<String>>(9)?.as_deref());
+
+            // Force the key to match the database
+            if let Ok(key_val) = key_str.parse::<usize>() {
+                item.set_key(key_val);
+            }
+
+            Ok(item)
+        })?;
+
+        let mut items = Vec::new();
+        for item_result in item_rows {
+            items.push(item_result?);
+        }
+
+        // Load pictures for each item
+        for item in &mut items {
+            let item_key = item.key() as i64;
+
+            let mut pic_stmt = conn_guard.prepare(
+                "SELECT mime_type, picture_type, description, file_path 
+                 FROM pictures WHERE library_item_id = ?",
+            )?;
+
+            let picture_rows = pic_stmt.query_map(rusqlite::params![item_key], |row| {
+                let mime_type: String = row.get(0)?;
+                let picture_type: u8 = row.get(1)?;
+                let description: String = row.get(2)?;
+                let file_path: String = row.get(3)?;
+
+                Ok(Picture::new(
+                    mime_type,
+                    picture_type,
+                    description,
+                    PathBuf::from(file_path),
+                ))
+            })?;
+
+            for picture_result in picture_rows {
+                item.add_picture(picture_result?);
+            }
+        }
+
+        // Add items to the library
+        library.items = items;
+
+        // Build view containers from the items
+        // This logic depends on how you want to organize your views
+        let mut album_containers: std::collections::HashMap<String, LibraryItemContainer> =
+            std::collections::HashMap::new();
+
+        for item in &library.items {
+            if let Some(album) = item.album() {
+                if !album_containers.contains_key(&album) {
+                    album_containers.insert(
+                        album.clone(),
+                        LibraryItemContainer {
+                            name: album.clone(),
+                            items: Vec::new(),
+                        },
+                    );
+                }
+
+                if let Some(container) = album_containers.get_mut(&album) {
+                    container.items.push(item.clone());
+                }
+            }
+        }
+
+        // Convert the HashMap to a Vec
+        let containers = album_containers.into_values().collect();
+
+        // Set the library view
+        library.library_view = LibraryView {
+            view_type: ViewType::Album,
+            containers,
+        };
+
+        Ok(library)
     }
 }
 
@@ -152,7 +387,7 @@ impl LibraryPath {
 }
 
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct LibraryPathId(usize);
+pub struct LibraryPathId(pub usize);
 
 impl LibraryPathId {
     pub fn new(id: usize) -> Self {
@@ -209,6 +444,10 @@ impl LibraryItem {
 
     pub fn key(&self) -> usize {
         self.key
+    }
+
+    pub fn set_key(&mut self, key: usize) {
+        self.key = key;
     }
 
     pub fn set_title(&mut self, title: Option<&str>) -> Self {

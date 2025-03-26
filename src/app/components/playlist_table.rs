@@ -14,18 +14,21 @@ impl AppComponent for PlaylistTable {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         if let Some(current_playlist_idx) = ctx.current_playlist_idx {
-            // Track drag and drop state using egui's memory
-            let drag_id = ui.id().with("playlist_drag_source");
-            let drop_id = ui.id().with("playlist_drop_target");
-            let is_dragging_id = ui.id().with("is_dragging");
+            // Generate a base ID for the current playlist
+            let base_id = ui.id().with(format!("playlist_{}", current_playlist_idx));
+
+            // Track drag and drop state using egui's memory with unique IDs
+            let drag_id = base_id.with("drag_source");
+            let drop_id = base_id.with("drop_target");
+            let is_dragging_id = base_id.with("is_dragging");
 
             // Track which item to remove (if any)
             let mut track_to_remove: Option<usize> = None;
 
-            // Track which field is being edited
-            let edit_field_id = ui.id().with("edit_field_id");
-            let edit_track_idx_id = ui.id().with("edit_track_idx_id");
-            let edit_value_id = ui.id().with("edit_value_id");
+            // Track which field is being edited with unique IDs
+            let edit_field_id = base_id.with("edit_field_id");
+            let edit_track_idx_id = base_id.with("edit_track_idx_id");
+            let edit_value_id = base_id.with("edit_value_id");
 
             // Get editing state from memory
             let editing_field = ui
@@ -61,7 +64,7 @@ impl AppComponent for PlaylistTable {
             let last_played_track = LAST_PLAYED_TRACK.load(Ordering::Relaxed);
 
             // Get the scroll area ID for tracking scroll position
-            ui.id().with("playlist_scroll_area");
+            let _scroll_area_id = base_id.with("scroll_area");
 
             // Disable text selection when dragging
             if is_dragging {
@@ -159,6 +162,9 @@ impl AppComponent for PlaylistTable {
 
                             // Playlist items
                             for idx in 0..playlist_len {
+                                // Generate a unique ID for this row
+                                let row_id = base_id.with(format!("row_{}", idx));
+
                                 let is_being_dragged = dragged_item == Some(idx);
 
                                 // Skip rendering the row if it's being dragged (we'll draw it separately)
@@ -237,97 +243,137 @@ impl AppComponent for PlaylistTable {
 
                                 // Track # / Handle column
                                 ui.scope(|ui| {
-                                    let col_width = available_width * column_proportions[0];
-                                    ui.set_min_width(col_width);
+                                    // Use the row_id to create a unique widget ID for this column
+                                    ui.push_id(row_id.with("number_col"), |ui| {
+                                        let col_width = available_width * column_proportions[0];
+                                        ui.set_min_width(col_width);
 
-                                    let drag_handle_response = ui.add(
-                                        egui::Label::new(drag_handle)
-                                            .sense(egui::Sense::click_and_drag()),
-                                    );
+                                        let drag_handle_response = ui.add(
+                                            egui::Label::new(drag_handle)
+                                                .sense(egui::Sense::click_and_drag()),
+                                        );
 
-                                    // Show grab cursor only when hovering over the drag handle
-                                    if drag_handle_response.hovered() && !is_dragging {
-                                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Grab);
-                                    }
+                                        // Show grab cursor only when hovering over the drag handle
+                                        if drag_handle_response.hovered() && !is_dragging {
+                                            ui.output_mut(|o| {
+                                                o.cursor_icon = egui::CursorIcon::Grab
+                                            });
+                                        }
 
-                                    // Detect drag start from handle
-                                    if drag_handle_response.dragged() && dragged_item.is_none() {
-                                        ui.memory_mut(|mem| {
-                                            mem.data.insert_temp(drag_id, Some(idx));
-                                            mem.data.insert_temp(is_dragging_id, true);
-                                        });
-                                    }
+                                        // Detect drag start from handle
+                                        if drag_handle_response.dragged() && dragged_item.is_none()
+                                        {
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(drag_id, Some(idx));
+                                                mem.data.insert_temp(is_dragging_id, true);
+                                            });
+                                        }
 
-                                    // Toggle selection when clicking on handle with Ctrl
-                                    if drag_handle_response.clicked() && ctrl_pressed {
-                                        toggle_selection = Some(idx);
-                                    }
+                                        // Toggle selection when clicking on handle with Ctrl
+                                        if drag_handle_response.clicked() && ctrl_pressed {
+                                            toggle_selection = Some(idx);
+                                        }
+                                    });
                                 });
 
                                 // Title column
                                 ui.scope(|ui| {
-                                    let col_width = available_width * column_proportions[1];
-                                    ui.set_min_width(col_width);
+                                    // Use the row_id to create a unique widget ID for this column
+                                    ui.push_id(row_id.with("title_col"), |ui| {
+                                        let col_width = available_width * column_proportions[1];
+                                        ui.set_min_width(col_width);
 
-                                    // First handle the title column - make it editable via right-click menu
-                                    if editing_field == Some("title".to_string())
-                                        && editing_track_idx == Some(idx)
-                                    {
-                                        // Get the current edit value from memory
-                                        let mut current_value = ui.memory_mut(|mem| {
-                                            mem.data
-                                                .get_temp::<String>(edit_value_id)
-                                                .unwrap_or_else(|| track_title.clone())
-                                        });
+                                        // First handle the title column - make it editable via right-click menu
+                                        if editing_field == Some("title".to_string())
+                                            && editing_track_idx == Some(idx)
+                                        {
+                                            // Get the current edit value from memory
+                                            let mut current_value = ui.memory_mut(|mem| {
+                                                mem.data
+                                                    .get_temp::<String>(edit_value_id)
+                                                    .unwrap_or_else(|| track_title.clone())
+                                            });
 
-                                        let response = ui.text_edit_singleline(&mut current_value);
+                                            let response =
+                                                ui.text_edit_singleline(&mut current_value);
 
-                                        // Update the value in memory
-                                        ui.memory_mut(|mem| {
-                                            mem.data
-                                                .insert_temp(edit_value_id, current_value.clone());
-                                        });
+                                            // Update the value in memory
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    current_value.clone(),
+                                                );
+                                            });
 
-                                        // Check if Enter was pressed or focus was lost
-                                        let enter_pressed =
-                                            ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                            // Check if Enter was pressed or focus was lost
+                                            let enter_pressed =
+                                                ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-                                        if enter_pressed || response.lost_focus() {
-                                            // Store the final value
-                                            if current_value != track_title {
-                                                tracks_to_update.push((
-                                                    idx,
-                                                    "title".to_string(),
-                                                    current_value,
-                                                ));
+                                            if enter_pressed || response.lost_focus() {
+                                                // Store the final value
+                                                if current_value != track_title {
+                                                    tracks_to_update.push((
+                                                        idx,
+                                                        "title".to_string(),
+                                                        current_value,
+                                                    ));
+                                                }
+
+                                                // Clear the editing state
+                                                ui.memory_mut(|mem| {
+                                                    mem.data
+                                                        .insert_temp(edit_field_id, None::<String>);
+                                                    mem.data.insert_temp(
+                                                        edit_track_idx_id,
+                                                        None::<usize>,
+                                                    );
+                                                });
+                                            }
+                                        } else {
+                                            // Regular title display with click-to-play functionality
+                                            let title_response = ui.add(
+                                                egui::Label::new(title_text)
+                                                    .sense(egui::Sense::click()),
+                                            );
+
+                                            // Show pointing hand cursor when hovering over the title (only when not dragging)
+                                            if title_response.hovered() && !is_dragging {
+                                                ui.output_mut(|o| {
+                                                    o.cursor_icon = egui::CursorIcon::PointingHand
+                                                });
                                             }
 
-                                            // Clear the editing state
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(edit_field_id, None::<String>);
-                                                mem.data
-                                                    .insert_temp(edit_track_idx_id, None::<usize>);
-                                            });
-                                        }
-                                    } else {
-                                        // Regular title display with click-to-play functionality
-                                        let title_response = ui.add(
-                                            egui::Label::new(title_text)
-                                                .sense(egui::Sense::click()),
-                                        );
+                                            // Add context menu for the title
+                                            title_response.context_menu(|ui| {
+                                                if ui.button(t("edit_title")).clicked() {
+                                                    // Start editing title
+                                                    ui.ctx().memory_mut(|mem| {
+                                                        mem.data.insert_temp(
+                                                            edit_field_id,
+                                                            Some("title".to_string()),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_track_idx_id,
+                                                            Some(idx),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_value_id,
+                                                            track_title.clone(),
+                                                        );
+                                                    });
+                                                    ui.close_menu();
+                                                }
 
-                                        // Show pointing hand cursor when hovering over the title (only when not dragging)
-                                        if title_response.hovered() && !is_dragging {
-                                            ui.output_mut(|o| {
-                                                o.cursor_icon = egui::CursorIcon::PointingHand
+                                                if ui.button(t("remove_from_playlist")).clicked() {
+                                                    track_to_remove = Some(idx);
+                                                    ui.close_menu();
+                                                }
                                             });
-                                        }
 
-                                        // Add context menu for the title
-                                        title_response.context_menu(|ui| {
-                                            if ui.button(t("edit_title")).clicked() {
+                                            // Check for double-click to start editing
+                                            if title_response.double_clicked() && !is_dragging {
                                                 // Start editing title
-                                                ui.ctx().memory_mut(|mem| {
+                                                ui.memory_mut(|mem| {
                                                     mem.data.insert_temp(
                                                         edit_field_id,
                                                         Some("title".to_string()),
@@ -339,113 +385,125 @@ impl AppComponent for PlaylistTable {
                                                         track_title.clone(),
                                                     );
                                                 });
-                                                ui.close_menu();
                                             }
 
-                                            if ui.button(t("remove_from_playlist")).clicked() {
-                                                track_to_remove = Some(idx);
-                                                ui.close_menu();
-                                            }
-                                        });
+                                            // Handle click to play/stop track (don't respond to clicks during dragging)
+                                            if title_response.clicked()
+                                                && !title_response.double_clicked()
+                                                && !is_dragging
+                                            {
+                                                // Handle Ctrl+click for selection
+                                                if ctrl_pressed {
+                                                    toggle_selection = Some(idx);
+                                                } else {
+                                                    let is_selected = ctx
+                                                        .player
+                                                        .as_ref()
+                                                        .unwrap()
+                                                        .selected_track
+                                                        .as_ref()
+                                                        == Some(track);
 
-                                        // Check for double-click to start editing
-                                        if title_response.double_clicked() && !is_dragging {
-                                            // Start editing title
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(
-                                                    edit_field_id,
-                                                    Some("title".to_string()),
-                                                );
-                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
-                                                mem.data.insert_temp(
-                                                    edit_value_id,
-                                                    track_title.clone(),
-                                                );
-                                            });
-                                        }
-
-                                        // Handle click to play/stop track (don't respond to clicks during dragging)
-                                        if title_response.clicked()
-                                            && !title_response.double_clicked()
-                                            && !is_dragging
-                                        {
-                                            // Handle Ctrl+click for selection
-                                            if ctrl_pressed {
-                                                toggle_selection = Some(idx);
-                                            } else {
-                                                let is_selected = ctx
-                                                    .player
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .selected_track
-                                                    .as_ref()
-                                                    == Some(track);
-
-                                                if !is_selected {
-                                                    track_to_play = Some(idx);
+                                                    if !is_selected {
+                                                        track_to_play = Some(idx);
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
+                                    });
                                 });
 
                                 // Artist column
                                 ui.scope(|ui| {
-                                    let col_width = available_width * column_proportions[2];
-                                    ui.set_min_width(col_width);
+                                    // Use the row_id to create a unique widget ID for this column
+                                    ui.push_id(row_id.with("artist_col"), |ui| {
+                                        let col_width = available_width * column_proportions[2];
+                                        ui.set_min_width(col_width);
 
-                                    // Artist - make editable
-                                    if editing_field == Some("artist".to_string())
-                                        && editing_track_idx == Some(idx)
-                                    {
-                                        // Get the current edit value from memory
-                                        let mut current_value = ui.memory_mut(|mem| {
-                                            mem.data
-                                                .get_temp::<String>(edit_value_id)
-                                                .unwrap_or_else(|| track_artist.clone())
-                                        });
-
-                                        let response = ui.text_edit_singleline(&mut current_value);
-
-                                        // Update the value in memory
-                                        ui.memory_mut(|mem| {
-                                            mem.data
-                                                .insert_temp(edit_value_id, current_value.clone());
-                                        });
-
-                                        // Check if Enter was pressed or focus was lost
-                                        let enter_pressed =
-                                            ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                        if response.lost_focus() || enter_pressed {
-                                            // Only update if value has changed
-                                            if current_value != track_artist {
-                                                // Queue the update for after the grid rendering
-                                                tracks_to_update.push((
-                                                    idx,
-                                                    "artist".to_string(),
-                                                    current_value,
-                                                ));
-                                            }
-
-                                            // Clear editing state
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(edit_field_id, None::<String>);
+                                        // Artist - make editable
+                                        if editing_field == Some("artist".to_string())
+                                            && editing_track_idx == Some(idx)
+                                        {
+                                            // Get the current edit value from memory
+                                            let mut current_value = ui.memory_mut(|mem| {
                                                 mem.data
-                                                    .insert_temp(edit_track_idx_id, None::<usize>);
+                                                    .get_temp::<String>(edit_value_id)
+                                                    .unwrap_or_else(|| track_artist.clone())
                                             });
-                                        }
-                                    } else {
-                                        // Regular artist display
-                                        let artist_response = ui.add(
-                                            egui::Label::new(artist_text)
-                                                .sense(egui::Sense::click()),
-                                        );
 
-                                        // Add context menu for the artist
-                                        artist_response.context_menu(|ui| {
-                                            if ui.button(t("edit_artist")).clicked() {
+                                            let response =
+                                                ui.text_edit_singleline(&mut current_value);
+
+                                            // Update the value in memory
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    current_value.clone(),
+                                                );
+                                            });
+
+                                            // Check if Enter was pressed or focus was lost
+                                            let enter_pressed =
+                                                ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                            if response.lost_focus() || enter_pressed {
+                                                // Only update if value has changed
+                                                if current_value != track_artist {
+                                                    // Queue the update for after the grid rendering
+                                                    tracks_to_update.push((
+                                                        idx,
+                                                        "artist".to_string(),
+                                                        current_value,
+                                                    ));
+                                                }
+
+                                                // Clear editing state
+                                                ui.memory_mut(|mem| {
+                                                    mem.data
+                                                        .insert_temp(edit_field_id, None::<String>);
+                                                    mem.data.insert_temp(
+                                                        edit_track_idx_id,
+                                                        None::<usize>,
+                                                    );
+                                                });
+                                            }
+                                        } else {
+                                            // Regular artist display
+                                            let artist_response = ui.add(
+                                                egui::Label::new(artist_text)
+                                                    .sense(egui::Sense::click()),
+                                            );
+
+                                            // Add context menu for the artist
+                                            artist_response.context_menu(|ui| {
+                                                if ui.button(t("edit_artist")).clicked() {
+                                                    // Start editing artist
+                                                    ui.ctx().memory_mut(|mem| {
+                                                        mem.data.insert_temp(
+                                                            edit_field_id,
+                                                            Some("artist".to_string()),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_track_idx_id,
+                                                            Some(idx),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_value_id,
+                                                            track_artist.clone(),
+                                                        );
+                                                    });
+                                                    ui.close_menu();
+                                                }
+
+                                                if ui.button(t("remove_from_playlist")).clicked() {
+                                                    track_to_remove = Some(idx);
+                                                    ui.close_menu();
+                                                }
+                                            });
+
+                                            // Check for double-click to start editing
+                                            if artist_response.double_clicked() && !is_dragging {
                                                 // Start editing artist
-                                                ui.ctx().memory_mut(|mem| {
+                                                ui.memory_mut(|mem| {
                                                     mem.data.insert_temp(
                                                         edit_field_id,
                                                         Some("artist".to_string()),
@@ -457,99 +515,111 @@ impl AppComponent for PlaylistTable {
                                                         track_artist.clone(),
                                                     );
                                                 });
-                                                ui.close_menu();
                                             }
 
-                                            if ui.button(t("remove_from_playlist")).clicked() {
-                                                track_to_remove = Some(idx);
-                                                ui.close_menu();
+                                            // Handle Ctrl+click for selection
+                                            if artist_response.clicked()
+                                                && !artist_response.double_clicked()
+                                                && !is_dragging
+                                                && ctrl_pressed
+                                            {
+                                                toggle_selection = Some(idx);
                                             }
-                                        });
-
-                                        // Check for double-click to start editing
-                                        if artist_response.double_clicked() && !is_dragging {
-                                            // Start editing artist
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(
-                                                    edit_field_id,
-                                                    Some("artist".to_string()),
-                                                );
-                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
-                                                mem.data.insert_temp(
-                                                    edit_value_id,
-                                                    track_artist.clone(),
-                                                );
-                                            });
                                         }
-
-                                        // Handle Ctrl+click for selection
-                                        if artist_response.clicked()
-                                            && !artist_response.double_clicked()
-                                            && !is_dragging
-                                            && ctrl_pressed
-                                        {
-                                            toggle_selection = Some(idx);
-                                        }
-                                    }
+                                    });
                                 });
 
                                 // Album column
                                 ui.scope(|ui| {
-                                    let col_width = available_width * column_proportions[3];
-                                    ui.set_min_width(col_width);
+                                    // Use the row_id to create a unique widget ID for this column
+                                    ui.push_id(row_id.with("album_col"), |ui| {
+                                        let col_width = available_width * column_proportions[3];
+                                        ui.set_min_width(col_width);
 
-                                    // Album - make editable
-                                    if editing_field == Some("album".to_string())
-                                        && editing_track_idx == Some(idx)
-                                    {
-                                        // Get the current edit value from memory
-                                        let mut current_value = ui.memory_mut(|mem| {
-                                            mem.data
-                                                .get_temp::<String>(edit_value_id)
-                                                .unwrap_or_else(|| track_album.clone())
-                                        });
-
-                                        let response = ui.text_edit_singleline(&mut current_value);
-
-                                        // Update the value in memory
-                                        ui.memory_mut(|mem| {
-                                            mem.data
-                                                .insert_temp(edit_value_id, current_value.clone());
-                                        });
-
-                                        // Check if Enter was pressed or focus was lost
-                                        let enter_pressed =
-                                            ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                        if response.lost_focus() || enter_pressed {
-                                            // Only update if value has changed
-                                            if current_value != track_album {
-                                                // Queue the update for after the grid rendering
-                                                tracks_to_update.push((
-                                                    idx,
-                                                    "album".to_string(),
-                                                    current_value,
-                                                ));
-                                            }
-
-                                            // Clear editing state
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(edit_field_id, None::<String>);
+                                        // Album - make editable
+                                        if editing_field == Some("album".to_string())
+                                            && editing_track_idx == Some(idx)
+                                        {
+                                            // Get the current edit value from memory
+                                            let mut current_value = ui.memory_mut(|mem| {
                                                 mem.data
-                                                    .insert_temp(edit_track_idx_id, None::<usize>);
+                                                    .get_temp::<String>(edit_value_id)
+                                                    .unwrap_or_else(|| track_album.clone())
                                             });
-                                        }
-                                    } else {
-                                        // Regular album display
-                                        let album_response = ui.add(
-                                            egui::Label::new(album_text)
-                                                .sense(egui::Sense::click()),
-                                        );
 
-                                        // Add context menu for the album
-                                        album_response.context_menu(|ui| {
-                                            if ui.button(t("edit_album")).clicked() {
+                                            let response =
+                                                ui.text_edit_singleline(&mut current_value);
+
+                                            // Update the value in memory
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    current_value.clone(),
+                                                );
+                                            });
+
+                                            // Check if Enter was pressed or focus was lost
+                                            let enter_pressed =
+                                                ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                            if response.lost_focus() || enter_pressed {
+                                                // Only update if value has changed
+                                                if current_value != track_album {
+                                                    // Queue the update for after the grid rendering
+                                                    tracks_to_update.push((
+                                                        idx,
+                                                        "album".to_string(),
+                                                        current_value,
+                                                    ));
+                                                }
+
+                                                // Clear editing state
+                                                ui.memory_mut(|mem| {
+                                                    mem.data
+                                                        .insert_temp(edit_field_id, None::<String>);
+                                                    mem.data.insert_temp(
+                                                        edit_track_idx_id,
+                                                        None::<usize>,
+                                                    );
+                                                });
+                                            }
+                                        } else {
+                                            // Regular album display
+                                            let album_response = ui.add(
+                                                egui::Label::new(album_text)
+                                                    .sense(egui::Sense::click()),
+                                            );
+
+                                            // Add context menu for the album
+                                            album_response.context_menu(|ui| {
+                                                if ui.button(t("edit_album")).clicked() {
+                                                    // Start editing album
+                                                    ui.ctx().memory_mut(|mem| {
+                                                        mem.data.insert_temp(
+                                                            edit_field_id,
+                                                            Some("album".to_string()),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_track_idx_id,
+                                                            Some(idx),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_value_id,
+                                                            track_album.clone(),
+                                                        );
+                                                    });
+                                                    ui.close_menu();
+                                                }
+
+                                                if ui.button(t("remove_from_playlist")).clicked() {
+                                                    track_to_remove = Some(idx);
+                                                    ui.close_menu();
+                                                }
+                                            });
+
+                                            // Check for double-click to start editing
+                                            if album_response.double_clicked() && !is_dragging {
                                                 // Start editing album
-                                                ui.ctx().memory_mut(|mem| {
+                                                ui.memory_mut(|mem| {
                                                     mem.data.insert_temp(
                                                         edit_field_id,
                                                         Some("album".to_string()),
@@ -561,99 +631,111 @@ impl AppComponent for PlaylistTable {
                                                         track_album.clone(),
                                                     );
                                                 });
-                                                ui.close_menu();
                                             }
 
-                                            if ui.button(t("remove_from_playlist")).clicked() {
-                                                track_to_remove = Some(idx);
-                                                ui.close_menu();
+                                            // Handle Ctrl+click for selection
+                                            if album_response.clicked()
+                                                && !album_response.double_clicked()
+                                                && !is_dragging
+                                                && ctrl_pressed
+                                            {
+                                                toggle_selection = Some(idx);
                                             }
-                                        });
-
-                                        // Check for double-click to start editing
-                                        if album_response.double_clicked() && !is_dragging {
-                                            // Start editing album
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(
-                                                    edit_field_id,
-                                                    Some("album".to_string()),
-                                                );
-                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
-                                                mem.data.insert_temp(
-                                                    edit_value_id,
-                                                    track_album.clone(),
-                                                );
-                                            });
                                         }
-
-                                        // Handle Ctrl+click for selection
-                                        if album_response.clicked()
-                                            && !album_response.double_clicked()
-                                            && !is_dragging
-                                            && ctrl_pressed
-                                        {
-                                            toggle_selection = Some(idx);
-                                        }
-                                    }
+                                    });
                                 });
 
                                 // Genre column
                                 ui.scope(|ui| {
-                                    let col_width = available_width * column_proportions[4];
-                                    ui.set_min_width(col_width);
+                                    // Use the row_id to create a unique widget ID for this column
+                                    ui.push_id(row_id.with("genre_col"), |ui| {
+                                        let col_width = available_width * column_proportions[4];
+                                        ui.set_min_width(col_width);
 
-                                    // Genre - make editable
-                                    if editing_field == Some("genre".to_string())
-                                        && editing_track_idx == Some(idx)
-                                    {
-                                        // Get the current edit value from memory
-                                        let mut current_value = ui.memory_mut(|mem| {
-                                            mem.data
-                                                .get_temp::<String>(edit_value_id)
-                                                .unwrap_or_else(|| track_genre.clone())
-                                        });
-
-                                        let response = ui.text_edit_singleline(&mut current_value);
-
-                                        // Update the value in memory
-                                        ui.memory_mut(|mem| {
-                                            mem.data
-                                                .insert_temp(edit_value_id, current_value.clone());
-                                        });
-
-                                        // Check if Enter was pressed or focus was lost
-                                        let enter_pressed =
-                                            ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                        if response.lost_focus() || enter_pressed {
-                                            // Only update if value has changed
-                                            if current_value != track_genre {
-                                                // Queue the update for after the grid rendering
-                                                tracks_to_update.push((
-                                                    idx,
-                                                    "genre".to_string(),
-                                                    current_value,
-                                                ));
-                                            }
-
-                                            // Clear editing state
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(edit_field_id, None::<String>);
+                                        // Genre - make editable
+                                        if editing_field == Some("genre".to_string())
+                                            && editing_track_idx == Some(idx)
+                                        {
+                                            // Get the current edit value from memory
+                                            let mut current_value = ui.memory_mut(|mem| {
                                                 mem.data
-                                                    .insert_temp(edit_track_idx_id, None::<usize>);
+                                                    .get_temp::<String>(edit_value_id)
+                                                    .unwrap_or_else(|| track_genre.clone())
                                             });
-                                        }
-                                    } else {
-                                        // Regular genre display
-                                        let genre_response = ui.add(
-                                            egui::Label::new(genre_text)
-                                                .sense(egui::Sense::click()),
-                                        );
 
-                                        // Add context menu for the genre
-                                        genre_response.context_menu(|ui| {
-                                            if ui.button(t("edit_genre")).clicked() {
+                                            let response =
+                                                ui.text_edit_singleline(&mut current_value);
+
+                                            // Update the value in memory
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(
+                                                    edit_value_id,
+                                                    current_value.clone(),
+                                                );
+                                            });
+
+                                            // Check if Enter was pressed or focus was lost
+                                            let enter_pressed =
+                                                ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                            if response.lost_focus() || enter_pressed {
+                                                // Only update if value has changed
+                                                if current_value != track_genre {
+                                                    // Queue the update for after the grid rendering
+                                                    tracks_to_update.push((
+                                                        idx,
+                                                        "genre".to_string(),
+                                                        current_value,
+                                                    ));
+                                                }
+
+                                                // Clear editing state
+                                                ui.memory_mut(|mem| {
+                                                    mem.data
+                                                        .insert_temp(edit_field_id, None::<String>);
+                                                    mem.data.insert_temp(
+                                                        edit_track_idx_id,
+                                                        None::<usize>,
+                                                    );
+                                                });
+                                            }
+                                        } else {
+                                            // Regular genre display
+                                            let genre_response = ui.add(
+                                                egui::Label::new(genre_text)
+                                                    .sense(egui::Sense::click()),
+                                            );
+
+                                            // Add context menu for the genre
+                                            genre_response.context_menu(|ui| {
+                                                if ui.button(t("edit_genre")).clicked() {
+                                                    // Start editing genre
+                                                    ui.ctx().memory_mut(|mem| {
+                                                        mem.data.insert_temp(
+                                                            edit_field_id,
+                                                            Some("genre".to_string()),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_track_idx_id,
+                                                            Some(idx),
+                                                        );
+                                                        mem.data.insert_temp(
+                                                            edit_value_id,
+                                                            track_genre.clone(),
+                                                        );
+                                                    });
+                                                    ui.close_menu();
+                                                }
+
+                                                if ui.button(t("remove_from_playlist")).clicked() {
+                                                    track_to_remove = Some(idx);
+                                                    ui.close_menu();
+                                                }
+                                            });
+
+                                            // Check for double-click to start editing
+                                            if genre_response.double_clicked() && !is_dragging {
                                                 // Start editing genre
-                                                ui.ctx().memory_mut(|mem| {
+                                                ui.memory_mut(|mem| {
                                                     mem.data.insert_temp(
                                                         edit_field_id,
                                                         Some("genre".to_string()),
@@ -665,40 +747,18 @@ impl AppComponent for PlaylistTable {
                                                         track_genre.clone(),
                                                     );
                                                 });
-                                                ui.close_menu();
                                             }
 
-                                            if ui.button(t("remove_from_playlist")).clicked() {
-                                                track_to_remove = Some(idx);
-                                                ui.close_menu();
+                                            // Handle Ctrl+click for selection
+                                            if genre_response.clicked()
+                                                && !genre_response.double_clicked()
+                                                && !is_dragging
+                                                && ctrl_pressed
+                                            {
+                                                toggle_selection = Some(idx);
                                             }
-                                        });
-
-                                        // Check for double-click to start editing
-                                        if genre_response.double_clicked() && !is_dragging {
-                                            // Start editing genre
-                                            ui.memory_mut(|mem| {
-                                                mem.data.insert_temp(
-                                                    edit_field_id,
-                                                    Some("genre".to_string()),
-                                                );
-                                                mem.data.insert_temp(edit_track_idx_id, Some(idx));
-                                                mem.data.insert_temp(
-                                                    edit_value_id,
-                                                    track_genre.clone(),
-                                                );
-                                            });
                                         }
-
-                                        // Handle Ctrl+click for selection
-                                        if genre_response.clicked()
-                                            && !genre_response.double_clicked()
-                                            && !is_dragging
-                                            && ctrl_pressed
-                                        {
-                                            toggle_selection = Some(idx);
-                                        }
-                                    }
+                                    });
                                 });
 
                                 ui.end_row();

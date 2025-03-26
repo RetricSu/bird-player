@@ -31,6 +31,7 @@ itertools = "0.12"
 lazy_static = "1.4.0"
 rayon = "1.10"
 rfd = "0.6"
+rusqlite = { version = "0.31.0", features = ["bundled"] }
 serde = { version = "1", features=["derive"] }
 serde_json = "1"
 tracing = "0.1.29"

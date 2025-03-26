@@ -17,6 +17,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 mod app;
+mod db;
 mod output;
 mod resampler;
 
@@ -53,15 +54,44 @@ fn main() {
     tracing_subscriber::fmt::init();
     tracing::info!("App booting...");
 
+    // Initialize database first
+    let database = match db::Database::new() {
+        Ok(db) => {
+            tracing::info!("Database initialized successfully");
+            Some(Arc::new(db))
+        }
+        Err(e) => {
+            tracing::error!("Failed to initialize database: {}", e);
+            None
+        }
+    };
+
     let (lib_cmd_tx, lib_cmd_rx) = channel();
     let (audio_tx, audio_rx) = channel();
     let (ui_tx, ui_rx) = channel();
     let cursor = Arc::new(AtomicU32::new(0));
     let player = Player::new(audio_tx, ui_rx, cursor);
 
-    // App setup
+    // App setup - properly initialize with database
     let is_processing_ui_change = Arc::new(AtomicBool::new(false));
-    let mut app = App::load().unwrap_or_default();
+
+    // Create a default app with the database connection
+    let temp_app = App {
+        database: database.clone(),
+        ..Default::default()
+    };
+
+    // Load app state using the temp_app as fallback
+    let mut app = match App::load() {
+        Ok(loaded_app) => {
+            // Ensure database is set in the loaded app
+            let mut app = loaded_app;
+            app.database = database.clone();
+            app
+        }
+        Err(_) => temp_app,
+    };
+
     app.player = Some(player);
     app.library_cmd_tx = Some(lib_cmd_tx);
     app.library_cmd_rx = Some(lib_cmd_rx);

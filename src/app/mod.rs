@@ -55,6 +55,50 @@ pub enum LibraryCommand {
     AddPathId(LibraryPathId),
 }
 
+// Struct for storing basic settings in confy
+#[derive(Serialize, Deserialize)]
+pub struct AppSettings {
+    // Language setting
+    pub current_language: i18n::Language,
+
+    // Player state persistence
+    pub last_track_path: Option<PathBuf>,
+    pub last_position: Option<u64>,
+    pub last_playback_mode: Option<player::PlaybackMode>,
+    pub last_volume: Option<f32>,
+    pub was_playing: Option<bool>,
+
+    // UI state
+    pub library_folders_expanded: bool,
+    pub default_window_height: f64,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            current_language: i18n::Language::English,
+            last_track_path: None,
+            last_position: None,
+            last_playback_mode: None,
+            last_volume: None,
+            was_playing: None,
+            library_folders_expanded: false,
+            default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TempError {
+    MissingAppState,
+}
+
+impl std::fmt::Display for TempError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Couldn't load app state")
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct App {
     pub library: Library,
@@ -87,6 +131,9 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub library_cmd_rx: Option<Receiver<LibraryCommand>>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub database: Option<Arc<crate::db::Database>>,
 
     pub quit: bool,
 
@@ -134,6 +181,7 @@ impl Default for App {
             playlist_being_renamed: None,
             library_cmd_tx: None,
             library_cmd_rx: None,
+            database: None,
             quit: false,
             is_maximized: false,
             lib_config_selections: Default::default(),
@@ -147,53 +195,84 @@ impl Default for App {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum TempError {
-    MissingAppState,
-}
-
-impl std::fmt::Display for TempError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Couldn't load app state")
-    }
-}
-
 impl App {
     pub fn load() -> Result<Self, TempError> {
-        if let Ok(config) = confy::load::<App>("bird-player", None) {
-            let mut app = config;
+        // Still use confy for app settings
+        let config_result = confy::load::<AppSettings>("bird-player", None);
 
-            // Initialize i18n
-            i18n::init();
+        // Create a new default app - this doesn't have a database set yet
+        let mut app = App::default();
 
-            // Set the language from the loaded config
-            i18n::set_language(app.current_language);
+        // Initialize i18n
+        i18n::init();
 
-            app.is_maximized = false;
-            app.is_library_cfg_open = false;
-            app.show_about_dialog = false;
-            app.is_processing_ui_change = None;
-            app.show_library_and_playlist = true;
-            Ok(app)
-        } else {
-            let mut app = App::default();
-
-            // Initialize i18n
-            i18n::init();
-
-            // Set the default language
-            i18n::set_language(app.current_language);
-
-            // Set properties not covered by default
-            app.is_maximized = false;
-            app.is_library_cfg_open = false;
-            app.show_about_dialog = false;
-
-            // Save the initial state
-            app.save_state();
-
-            Ok(app)
+        if let Ok(settings) = config_result {
+            // Apply settings from confy
+            app.current_language = settings.current_language;
+            app.last_track_path = settings.last_track_path;
+            app.last_position = settings.last_position;
+            app.last_playback_mode = settings.last_playback_mode;
+            app.last_volume = settings.last_volume;
+            app.was_playing = settings.was_playing;
+            app.library_folders_expanded = settings.library_folders_expanded;
+            app.default_window_height = settings.default_window_height;
         }
+
+        // Set the language from the loaded config
+        i18n::set_language(app.current_language);
+
+        // Initialize database if it's not already set
+        if app.database.is_none() {
+            match crate::db::Database::new() {
+                Ok(db) => {
+                    app.database = Some(Arc::new(db));
+                    tracing::info!("Database created during App::load()");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to create database during App::load(): {}", e);
+                }
+            }
+        }
+
+        // Try to load library and playlists if we have a database
+        if let Some(ref db) = app.database {
+            // Try to load library from database
+            match Library::load_from_db(&db.connection()) {
+                Ok(library) => {
+                    app.library = library;
+                    tracing::info!("Successfully loaded library from database");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load library from database: {}", e);
+                    // Keep the default empty library
+                }
+            }
+
+            // Try to load playlists from database
+            match playlist::Playlist::load_all_from_db(&db.connection()) {
+                Ok(playlists) => {
+                    if !playlists.is_empty() {
+                        app.playlists = playlists;
+                        app.current_playlist_idx = Some(0);
+                        tracing::info!("Successfully loaded playlists from database");
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load playlists from database: {}", e);
+                    // Keep the default playlist
+                }
+            }
+        } else {
+            tracing::warn!("No database connection available when loading app state");
+        }
+
+        app.is_maximized = false;
+        app.is_library_cfg_open = false;
+        app.show_about_dialog = false;
+        app.is_processing_ui_change = None;
+        app.show_library_and_playlist = true;
+
+        Ok(app)
     }
 
     pub fn get_album_art_dir() -> PathBuf {
@@ -206,11 +285,38 @@ impl App {
     }
 
     pub fn save_state(&self) {
-        // Update player state information before saving
-        let store_result = confy::store("bird-player", None, self);
+        // Split app state - settings go to confy, library and playlists go to SQLite
+        let settings = AppSettings {
+            current_language: self.current_language,
+            last_track_path: self.last_track_path.clone(),
+            last_position: self.last_position,
+            last_playback_mode: self.last_playback_mode,
+            last_volume: self.last_volume,
+            was_playing: self.was_playing,
+            library_folders_expanded: self.library_folders_expanded,
+            default_window_height: self.default_window_height,
+        };
+
+        // Save app settings to confy
+        let store_result = confy::store("bird-player", None, &settings);
         match store_result {
-            Ok(_) => tracing::info!("Store was successful"),
-            Err(err) => tracing::error!("Failed to store the app state: {}", err),
+            Ok(_) => tracing::info!("Settings stored successfully"),
+            Err(err) => tracing::error!("Failed to store app settings: {}", err),
+        }
+
+        // Save library and playlists to SQLite if database is available
+        if let Some(ref db) = &self.database {
+            // Save library
+            if let Err(e) = self.library.save_to_db(&db.connection()) {
+                tracing::error!("Failed to save library to database: {}", e);
+            }
+
+            // Save playlists
+            for playlist in &self.playlists {
+                if let Err(e) = playlist.save_to_db(&db.connection()) {
+                    tracing::error!("Failed to save playlist to database: {}", e);
+                }
+            }
         }
     }
 
@@ -308,7 +414,15 @@ impl App {
                                 .set_album(tag.album())
                                 .set_year(tag.year())
                                 .set_genre(tag.genre())
-                                .set_track_number(tag.track())
+                                .set_track_number(tag.get("TRCK").and_then(|frame| {
+                                    frame.content().text().map(|t| {
+                                        t.split('/')
+                                            .next()
+                                            .unwrap_or("0")
+                                            .parse::<u32>()
+                                            .unwrap_or(0)
+                                    })
+                                }))
                                 .set_lyrics(tag.lyrics().next().map(|l| l.text.as_str()));
 
                             // Extract pictures from ID3 tag
@@ -424,7 +538,7 @@ impl App {
             }
         };
 
-        // Update the corresponding field in the tag
+        // Update the corresponding field in the tag and track
         match field {
             "title" => {
                 tag.set_title(value);
@@ -446,7 +560,7 @@ impl App {
         }
 
         // Write the updated tag back to the file
-        match tag.write_to_path(&path, id3::Version::Id3v24) {
+        let file_update_success = match tag.write_to_path(&path, id3::Version::Id3v24) {
             Ok(_) => {
                 tracing::info!(
                     "Successfully updated {} to '{}' for file: {:?}",
@@ -460,6 +574,81 @@ impl App {
                 tracing::error!("Failed to write {} tag for file {:?}: {}", field, path, e);
                 false
             }
+        };
+
+        // Update the database if file update was successful
+        if file_update_success {
+            if let Some(ref db) = self.database {
+                let conn = db.connection();
+                let result = {
+                    let mut conn_guard = conn.lock().unwrap();
+                    let tx = conn_guard.transaction().ok();
+
+                    if let Some(tx) = tx {
+                        let update_result = tx.execute(
+                            &format!("UPDATE library_items SET {} = ?1 WHERE key = ?2", field),
+                            rusqlite::params![value, track.key().to_string()],
+                        );
+
+                        match update_result.and_then(|_| tx.commit()) {
+                            Ok(_) => {
+                                tracing::info!(
+                                    "Successfully updated {} in database for track {}",
+                                    field,
+                                    track.key()
+                                );
+                                true
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to update {} in database for track {}: {}",
+                                    field,
+                                    track.key(),
+                                    e
+                                );
+                                false
+                            }
+                        }
+                    } else {
+                        tracing::error!("Failed to start database transaction for metadata update");
+                        false
+                    }
+                };
+
+                // If database update was successful, update all instances of this track
+                if result {
+                    // Update all instances of this track in all playlists
+                    for playlist in &mut self.playlists {
+                        for playlist_track in playlist.tracks.iter_mut() {
+                            if playlist_track.key() == track.key() {
+                                let updated_track = match field {
+                                    "title" => playlist_track.set_title(Some(value)),
+                                    "artist" => playlist_track.set_artist(Some(value)),
+                                    "album" => playlist_track.set_album(Some(value)),
+                                    "genre" => playlist_track.set_genre(Some(value)),
+                                    _ => playlist_track.clone(),
+                                };
+                                *playlist_track = updated_track;
+                            }
+                        }
+                    }
+
+                    // Reload the library from the database to get updated metadata
+                    if let Ok(updated_library) = library::Library::load_from_db(&db.connection()) {
+                        self.library = updated_library;
+                    }
+
+                    // Save the updated state to ensure persistence
+                    self.save_state();
+                }
+
+                result
+            } else {
+                tracing::warn!("No database connection available for metadata update");
+                file_update_success
+            }
+        } else {
+            false
         }
     }
 

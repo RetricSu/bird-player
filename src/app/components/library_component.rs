@@ -47,44 +47,30 @@ impl AppComponent for LibraryComponent {
                     }
 
                     if ui.button(t("resync_all")).clicked() {
-                        // First, collect all the paths that need to be reimported
-                        let paths_to_reimport: Vec<_> = ctx
+                        // Get all paths that need to be reimported
+                        let paths_to_resync: Vec<_> = ctx
                             .library
                             .paths()
                             .iter()
                             .filter(|p| {
                                 p.status() == crate::app::library::LibraryPathStatus::Imported
                             })
-                            .map(|p| p.path().clone())
+                            .map(|p| (p.id(), p.path().clone()))
                             .collect();
 
-                        // Remove these paths from the library
-                        let paths_to_remove: Vec<_> = ctx
-                            .library
-                            .paths()
-                            .iter()
-                            .filter(|p| {
-                                p.status() == crate::app::library::LibraryPathStatus::Imported
-                            })
-                            .map(|p| p.id())
-                            .collect();
+                        // For each path, trigger a resync
+                        for (path_id, _path) in paths_to_resync {
+                            // Temporarily set path to NotImported to trigger reimport
+                            ctx.library.set_path_to_not_imported(path_id);
 
-                        for path_id in paths_to_remove {
-                            ctx.library.remove_path(path_id);
-                        }
-
-                        // Re-add and import each path
-                        for path in paths_to_reimport {
-                            ctx.library.add_path(path);
-
-                            // Get the last added path and import it
-                            if let Some(newest_path) = ctx.library.paths().last() {
-                                if newest_path.status()
-                                    == crate::app::library::LibraryPathStatus::NotImported
-                                {
-                                    ctx.import_library_paths(newest_path);
-                                }
-                            }
+                            // Re-import the path, which will update existing items
+                            ctx.import_library_paths(
+                                ctx.library
+                                    .paths()
+                                    .iter()
+                                    .find(|p| p.id() == path_id)
+                                    .unwrap(),
+                            );
                         }
 
                         ui.close_menu();
