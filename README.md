@@ -1,6 +1,9 @@
 # Bird Player
 
-A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, featuring a nostalgic 2000s-inspired interface. Bird Player is originally forked from [music-player](https://github.com/notryanb/music-player) by [notryanb](https://github.com/notryanb) and try to make it a serious daily-used music player. It combines the charm of classic music players with modern technology, providing a seamless experience for managing and playing your local music collection. If you miss the golden era of desktop music players, this is for you!
+A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, featuring a nostalgic 2000s-inspired interface. Bird Player is originally forked from [music-player](https://github.com/notryanb/music-player) by [notryanb](https://github.com/notryanb) and try to make it a serious daily-used music player. If you miss the golden era of desktop music players, this might be for you!
+
+> [!Warning]
+> This project is still under active development and some features are not yet available. You may need to rebuild your playlist and library after the upgrade.
 
 ## Features
 
