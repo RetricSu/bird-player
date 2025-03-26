@@ -1,19 +1,22 @@
 # Bird Player
 
-A modern music player built with [egui](https://github.com/emilk/egui) and Rust, featuring a nostalgic 2000s-inspired interface. Bird Player combines the charm of classic music players with modern technology, providing a seamless experience for managing and playing your local music collection. If you miss the golden era of desktop music players, this is for you!
+A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, featuring a nostalgic 2000s-inspired interface. Bird Player is originally forked from [music-player](https://github.com/notryanb/music-player) by [notryanb](https://github.com/notryanb) and try to make it a serious daily-used music player. It combines the charm of classic music players with modern technology, providing a seamless experience for managing and playing your local music collection. If you miss the golden era of desktop music players, this is for you!
 
 ## Features
 
 - 🎨 Retro-inspired UI built with egui, reminiscent of classic 2000s music players
-- 🎵 Support for MP3 audio format
-- 📁 Local music library management with familiar browsing experience
+- 📁 Local music library and playlist management with familiar browsing experience
 - 🏷️ ID3 tag management and editing support for music metadata
-- ⚡ High-performance audio playback with CPAL
-- 🎚️ Real-time audio processing and resampling
-- 💾 Configuration persistence
 - 📱 Cross-platform support
-- 🌟 Nostalgic visual elements and animations
-- 🎼 Classic playlist management system
+
+## TODO
+
+- [ ] Improve the resource usage and make it small and fast
+- [ ] Add support for more audio formats
+- [ ] Add support for batch tag editing
+- [ ] Add support for lyrics searching and displaying
+- [ ] Add support for speed control
+- [ ] Implement a skin system
 
 ## Installation
 
@@ -87,7 +90,7 @@ Bird Player automatically saves your configuration and library state between ses
 
 ## License
 
-[Your chosen license]
+[MIT](LICENSE)
 
 ## Contributing
 
@@ -95,4 +98,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Acknowledgments
 
-Thanks to all the Rust crate authors whose work made this project possible.
+The project is originally forked from [music-player](https://github.com/notryanb/music-player) by [notryanb](https://github.com/notryanb). Thanks to all the Rust crate authors whose work made this project possible.
