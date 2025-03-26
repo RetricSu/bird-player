@@ -91,7 +91,7 @@ impl AppComponent for PlayerComponent {
 
             // Get current playlist name using map_or for cleaner code
             let current_playlist_name = ctx
-                .current_playlist_idx
+                .playing_playlist_idx
                 .and_then(|idx| ctx.playlists.get(idx))
                 .and_then(|playlist| playlist.get_name())
                 .unwrap_or_default();
@@ -419,17 +419,17 @@ impl AppComponent for PlayerComponent {
                                             }
                                         }
 
-                                        if prev_btn.clicked() && ctx.current_playlist_idx.is_some()
+                                        if prev_btn.clicked() && ctx.playing_playlist_idx.is_some()
                                         {
                                             player.previous(
-                                                &ctx.playlists[ctx.current_playlist_idx.unwrap()],
+                                                &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
                                             );
                                         }
 
-                                        if next_btn.clicked() && ctx.current_playlist_idx.is_some()
+                                        if next_btn.clicked() && ctx.playing_playlist_idx.is_some()
                                         {
                                             player.next(
-                                                &ctx.playlists[ctx.current_playlist_idx.unwrap()],
+                                                &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
                                             );
                                         }
                                     }

@@ -788,6 +788,8 @@ impl AppComponent for PlaylistTable {
                     ctx.player.as_mut().unwrap().selected_track = Some(track_clone.clone());
                     ctx.player.as_mut().unwrap().select_track(Some(track_clone));
                     ctx.player.as_mut().unwrap().play();
+                    // Set the current playlist as the playing playlist
+                    ctx.playing_playlist_idx = Some(current_playlist_idx);
                 }
             }
 

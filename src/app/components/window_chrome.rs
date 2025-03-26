@@ -60,14 +60,14 @@ impl AppComponent for WindowChrome {
                             ui.close_menu();
                         }
                         if ui.button(t("previous")).clicked() {
-                            if let Some(current_playlist_idx) = ctx.current_playlist_idx {
-                                player.previous(&ctx.playlists[current_playlist_idx]);
+                            if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
+                                player.previous(&ctx.playlists[playing_playlist_idx]);
                             }
                             ui.close_menu();
                         }
                         if ui.button(t("next")).clicked() {
-                            if let Some(current_playlist_idx) = ctx.current_playlist_idx {
-                                player.next(&ctx.playlists[current_playlist_idx]);
+                            if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
+                                player.next(&ctx.playlists[playing_playlist_idx]);
                             }
                             ui.close_menu();
                         }

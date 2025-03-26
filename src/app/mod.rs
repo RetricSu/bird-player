@@ -107,6 +107,9 @@ pub struct App {
 
     pub current_playlist_idx: Option<usize>,
 
+    // New field to track which playlist is currently playing
+    pub playing_playlist_idx: Option<usize>,
+
     // Language setting
     pub current_language: i18n::Language,
 
@@ -169,6 +172,7 @@ impl Default for App {
             library: Library::new(),
             playlists: vec![default_playlist],
             current_playlist_idx: Some(0), // Set the first playlist as selected
+            playing_playlist_idx: None,
             current_language: i18n::Language::English, // Default language
             // Initialize the new fields
             last_track_path: None,

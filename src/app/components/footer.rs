@@ -12,7 +12,7 @@ impl AppComponent for Footer {
             if let Some(current_playlist_idx) = ctx.current_playlist_idx {
                 let playlist = &mut ctx.playlists[current_playlist_idx];
                 let selection_count = playlist.selected_indices.len();
-                let has_tracks = !playlist.tracks.is_empty();
+                let _has_tracks = !playlist.tracks.is_empty();
 
                 // Track search state in memory
                 let search_active_id = ui.id().with("search_active");
@@ -253,22 +253,18 @@ impl AppComponent for Footer {
                 ui.memory_mut(|mem| mem.data.insert_temp(search_active_id, search_active));
 
                 // Select All button
-                if ui.button("- Select All").clicked() && has_tracks {
-                    playlist.select_all();
-                }
-
-                // Clear Selection button (disabled if no selection)
-                let clear_btn = ui.add_enabled(
-                    selection_count > 0,
-                    eframe::egui::Button::new("x Clear Selection"),
-                );
-                if clear_btn.clicked() {
-                    playlist.clear_selection();
-                }
+                // if ui.button("- Select All").clicked() && has_tracks {
+                //     playlist.select_all();
+                // }
 
                 // Show selection count if any
                 if selection_count > 0 {
                     ui.label(format!("{} selected", selection_count));
+
+                    // Clear Selection button (disabled if no selection)
+                    if ui.button("Clear Selection").clicked() {
+                        playlist.clear_selection();
+                    }
                 }
             }
         });

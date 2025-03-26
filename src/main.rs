@@ -691,19 +691,9 @@ fn restore_player_state(app: &mut App) {
     }
 
     // If there was a playing track, try to find and load it
-    if let (Some(track_path), Some(current_playlist_idx)) =
-        (&app.last_track_path, app.current_playlist_idx)
-    {
-        if current_playlist_idx < app.playlists.len() && !app.playlists.is_empty() {
-            let playlist = &app.playlists[current_playlist_idx];
-
-            // Skip if the playlist is empty
-            if playlist.tracks.is_empty() {
-                tracing::warn!("Cannot restore track - playlist is empty");
-                return;
-            }
-
-            // Try to find the track in the current playlist
+    if let Some(track_path) = &app.last_track_path {
+        // Search through all playlists for the track
+        for (playlist_idx, playlist) in app.playlists.iter().enumerate() {
             if let Some(track) = playlist
                 .tracks
                 .iter()
@@ -724,13 +714,13 @@ fn restore_player_state(app: &mut App) {
                 if let Some(true) = app.was_playing {
                     tracing::info!("Resuming playback");
                     player.play();
+                    // Set the playlist containing the track as the playing playlist
+                    app.playing_playlist_idx = Some(playlist_idx);
                 }
-            } else {
-                tracing::warn!("Cannot find saved track in playlist: {:?}", track_path);
+                return;
             }
-        } else {
-            tracing::warn!("Cannot restore track - invalid playlist index");
         }
+        tracing::warn!("Cannot find saved track in any playlist: {:?}", track_path);
     } else {
         tracing::info!("No previous track to restore");
     }
@@ -739,6 +729,4 @@ fn restore_player_state(app: &mut App) {
     app.last_track_path = None;
     app.last_position = None;
     app.last_playback_mode = None; // Keep the mode in memory
-    app.last_volume = None; // Keep the volume in memory
-    app.was_playing = None;
 }
