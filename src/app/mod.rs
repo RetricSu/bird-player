@@ -414,7 +414,15 @@ impl App {
                                 .set_album(tag.album())
                                 .set_year(tag.year())
                                 .set_genre(tag.genre())
-                                .set_track_number(tag.track())
+                                .set_track_number(tag.get("TRCK").and_then(|frame| {
+                                    frame.content().text().map(|t| {
+                                        t.split('/')
+                                            .next()
+                                            .unwrap_or("0")
+                                            .parse::<u32>()
+                                            .unwrap_or(0)
+                                    })
+                                }))
                                 .set_lyrics(tag.lyrics().next().map(|l| l.text.as_str()));
 
                             // Extract pictures from ID3 tag

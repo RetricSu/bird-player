@@ -87,6 +87,14 @@ impl Library {
         }
     }
 
+    pub fn set_path_to_not_imported(&mut self, id: LibraryPathId) {
+        for path in self.paths.iter_mut() {
+            if path.id() == id {
+                path.set_status(LibraryPathStatus::NotImported);
+            }
+        }
+    }
+
     pub fn items(&self) -> &Vec<LibraryItem> {
         self.items.as_ref()
     }
@@ -96,7 +104,21 @@ impl Library {
     }
 
     pub fn add_item(&mut self, library_item: LibraryItem) {
-        self.items.push(library_item);
+        // Check if an item with this path already exists
+        if let Some(idx) = self
+            .items
+            .iter()
+            .position(|item| item.path() == library_item.path())
+        {
+            // Update the existing item but preserve its key
+            let existing_key = self.items[idx].key();
+            let mut updated_item = library_item;
+            updated_item.set_key(existing_key);
+            self.items[idx] = updated_item;
+        } else {
+            // Add as a new item
+            self.items.push(library_item);
+        }
     }
 
     pub fn add_view(&mut self, library_view: LibraryView) {
