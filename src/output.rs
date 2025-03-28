@@ -320,9 +320,19 @@ mod cpal {
                     .config()
             };
 
-            // Create a ring buffer with a capacity for up-to 200ms of audio.
-            // let ring_len = ((2 * config.sample_rate.0 as usize) / 1000) * num_channels;
-            let ring_len: usize = 8192; // Increased to reduce buffer underruns
+            // Create an adaptive ring buffer based on sample rate and channels
+            // Allocate enough for ~250ms of audio at the given sample rate
+            let buffer_ms = 250;
+            let samples_per_ms = config.sample_rate.0 as usize / 1000;
+            let ring_len = samples_per_ms * buffer_ms * num_channels;
+
+            // Ensure buffer size is at least 8192 samples and power of 2 for efficiency
+            let ring_len = ring_len.next_power_of_two().max(8192);
+
+            info!(
+                "Using ring buffer size of {} samples ({} ms at {} Hz with {} channels)",
+                ring_len, buffer_ms, config.sample_rate.0, num_channels
+            );
 
             let ring_buf = SpscRb::new(ring_len);
             let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
@@ -405,9 +415,39 @@ mod cpal {
             // Now handle audio output with volume adjustment
             // Using a fixed-size buffer to avoid allocations in the hot path
             // This buffer is used to batch samples with volume applied
-            const BATCH_SIZE: usize = 1024;
+            const BATCH_SIZE: usize = 4096; // Increased batch size for better throughput
             let mut volume_adjusted_samples = [T::MID; BATCH_SIZE];
 
+            // Fast path for volume = 1.0 (no adjustment needed)
+            if volume == 1.0 {
+                // Try non-blocking write first, fall back to blocking only if necessary
+                while !samples.is_empty() {
+                    let batch_count = std::cmp::min(BATCH_SIZE, samples.len());
+
+                    // Try non-blocking write first
+                    if let Ok(written) = self.ring_buf_producer.write(&samples[..batch_count]) {
+                        if written > 0 {
+                            samples = &samples[written..];
+                            continue;
+                        }
+                    }
+
+                    // Fall back to blocking write only if non-blocking failed completely
+                    if let Some(written) = self
+                        .ring_buf_producer
+                        .write_blocking(&samples[..batch_count])
+                    {
+                        if written == 0 {
+                            // If even blocking write fails completely, exit the loop
+                            break;
+                        }
+                        samples = &samples[written..];
+                    }
+                }
+                return Ok(());
+            }
+
+            // Apply volume for non-unity gain
             while !samples.is_empty() {
                 // Calculate how many samples to process in this batch
                 let batch_count = std::cmp::min(BATCH_SIZE, samples.len());
@@ -417,50 +457,29 @@ mod cpal {
                     volume_adjusted_samples[i] = samples[i].mul(volume);
                 }
 
-                // Write the volume-adjusted batch to the ring buffer
-                match self
+                // Try non-blocking write first
+
+                if let Ok(written) = self
+                    .ring_buf_producer
+                    .write(&volume_adjusted_samples[..batch_count])
+                {
+                    if written > 0 {
+                        samples = &samples[written..];
+                        continue;
+                    }
+                }
+
+                // Fall back to blocking write only if non-blocking failed completely
+
+                if let Some(written) = self
                     .ring_buf_producer
                     .write_blocking(&volume_adjusted_samples[..batch_count])
                 {
-                    Some(written) => {
-                        // If not all samples were written, try again with the remaining ones
-                        if written < batch_count {
-                            // Move remaining unwritten samples to the beginning of the batch
-                            for i in 0..(batch_count - written) {
-                                volume_adjusted_samples[i] = volume_adjusted_samples[written + i];
-                            }
-
-                            // Continuously try to write the remaining samples
-                            let mut remaining = batch_count - written;
-                            while remaining > 0 {
-                                if let Some(written) = self
-                                    .ring_buf_producer
-                                    .write_blocking(&volume_adjusted_samples[..remaining])
-                                {
-                                    if written == 0 {
-                                        // If we can't write any more, break to avoid infinite loop
-                                        break;
-                                    }
-
-                                    // Move remaining samples again
-                                    for i in 0..(remaining - written) {
-                                        volume_adjusted_samples[i] =
-                                            volume_adjusted_samples[written + i];
-                                    }
-                                    remaining -= written;
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Advance to the next batch of samples
-                        samples = &samples[batch_count..];
-                    }
-                    None => {
-                        // If we can't write at all, break out
+                    if written == 0 {
+                        // If even blocking write fails completely, exit the loop
                         break;
                     }
+                    samples = &samples[written..];
                 }
             }
 
