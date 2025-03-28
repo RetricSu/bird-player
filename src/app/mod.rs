@@ -164,14 +164,10 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        // Create a default playlist
-        let mut default_playlist = playlist::Playlist::new();
-        default_playlist.set_name("Default Playlist".to_string());
-
         Self {
             library: Library::new(),
-            playlists: vec![default_playlist],
-            current_playlist_idx: Some(0), // Set the first playlist as selected
+            playlists: vec![],          // Start with empty playlists
+            current_playlist_idx: None, // No playlist selected initially
             playing_playlist_idx: None,
             current_language: i18n::Language::English, // Default language
             // Initialize the new fields
@@ -257,8 +253,38 @@ impl App {
                 Ok(playlists) => {
                     if !playlists.is_empty() {
                         app.playlists = playlists;
+
+                        // If there was a last played track, try to find its playlist
+                        if let Some(last_track_path) = &app.last_track_path {
+                            for (idx, playlist) in app.playlists.iter().enumerate() {
+                                if playlist
+                                    .tracks
+                                    .iter()
+                                    .any(|track| track.path() == *last_track_path)
+                                {
+                                    app.current_playlist_idx = Some(idx);
+                                    app.playing_playlist_idx = Some(idx);
+                                    tracing::info!(
+                                        "Found last played track in playlist '{}', selecting it",
+                                        playlist.get_name().unwrap_or_default()
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If no playlist was selected (no last track or track not found), select first playlist
+                        if app.current_playlist_idx.is_none() {
+                            app.current_playlist_idx = Some(0);
+                            tracing::info!("No last played track found, selecting first playlist");
+                        }
+                    } else {
+                        // Only create a default playlist if no playlists exist in the database
+                        let mut default_playlist = playlist::Playlist::new();
+                        default_playlist.set_name("Default Playlist".to_string());
+                        app.playlists = vec![default_playlist];
                         app.current_playlist_idx = Some(0);
-                        tracing::info!("Successfully loaded playlists from database");
+                        tracing::info!("No playlists found in database, created default playlist");
                     }
                 }
                 Err(e) => {
