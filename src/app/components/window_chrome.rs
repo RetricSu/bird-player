@@ -151,11 +151,28 @@ impl AppComponent for WindowChrome {
                         .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                 }
 
-                // Add window drag area
-                let title_bar_response =
-                    ui.allocate_response(ui.available_size(), egui::Sense::click_and_drag());
+                // Add window drag area - using technique from egui's custom_window_frame example
+                // The drag area will fill the remaining space in the top panel
+                let title_bar_rect = ui.available_rect_before_wrap();
 
-                if title_bar_response.dragged() && !ctx.is_maximized {
+                let title_bar_response = ui.interact(
+                    title_bar_rect,
+                    ui.id().with("title_bar"),
+                    egui::Sense::click_and_drag(),
+                );
+
+                // Double click to maximize/restore (common UI pattern)
+                if title_bar_response.double_clicked() {
+                    ctx.is_maximized = !ctx.is_maximized;
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::Maximized(ctx.is_maximized));
+                }
+
+                // This approach explicitly checks for drag start with primary button
+                // which works better across platforms including Ubuntu/Linux
+                if title_bar_response.drag_started_by(egui::PointerButton::Primary)
+                    && !ctx.is_maximized
+                {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
             });

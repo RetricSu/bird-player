@@ -352,6 +352,7 @@ fn main() {
             let font_names: Vec<&str> = match std::env::consts::OS {
                 "macos" => vec!["PingFang SC", "Hiragino Sans GB", "STSong", "Heiti SC"],
                 "windows" => vec!["Microsoft YaHei", "SimSun", "SimHei", "MS Gothic"],
+                "linux" => vec!["Noto Sans CJK TC"],
                 _ => vec![], // Empty for other OSes - we'll use generic fallback
             };
 
