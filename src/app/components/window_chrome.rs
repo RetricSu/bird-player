@@ -151,34 +151,29 @@ impl AppComponent for WindowChrome {
                         .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                 }
 
-                // Add window drag area - modified approach for cross-platform support
+                // Add window drag area - using technique from egui's custom_window_frame example
                 // The drag area will fill the remaining space in the top panel
                 let title_bar_rect = ui.available_rect_before_wrap();
 
-                // Only handle dragging if window is not maximized
-                if !ctx.is_maximized {
-                    let response = ui.interact(
-                        title_bar_rect,
-                        ui.id().with("title_bar_drag"),
-                        egui::Sense::click_and_drag(),
-                    );
+                let title_bar_response = ui.interact(
+                    title_bar_rect,
+                    ui.id().with("title_bar"),
+                    egui::Sense::click_and_drag(),
+                );
 
-                    // Use the cursor to indicate draggable area
-                    if response.hovered() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-                    }
+                // Double click to maximize/restore (common UI pattern)
+                if title_bar_response.double_clicked() {
+                    ctx.is_maximized = !ctx.is_maximized;
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::Maximized(ctx.is_maximized));
+                }
 
-                    // StartDrag is the proper cross-platform way to handle window dragging
-                    if response.dragged() {
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                    }
-                } else {
-                    // Just make the area interactive (clickable) but not draggable when maximized
-                    ui.interact(
-                        title_bar_rect,
-                        ui.id().with("title_bar_nodrag"),
-                        egui::Sense::click(),
-                    );
+                // This approach explicitly checks for drag start with primary button
+                // which works better across platforms including Ubuntu/Linux
+                if title_bar_response.drag_started_by(egui::PointerButton::Primary)
+                    && !ctx.is_maximized
+                {
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
             });
         });
