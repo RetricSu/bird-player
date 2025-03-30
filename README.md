@@ -4,7 +4,7 @@ A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, fe
 
 <div style="display: flex; width: 100%;">
     <img src="./docs/conver.png" width="50%" alt="Cover">
-    <img src="./docs/cover-black.png" width="50%" alt="Cover Black">
+    <img src="./docs/cover-black.jpg" width="50%" alt="Cover Black">
 </div>
 
 > [!Warning]
