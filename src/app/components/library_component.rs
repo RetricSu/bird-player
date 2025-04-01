@@ -223,6 +223,12 @@ impl AppComponent for LibraryComponent {
 
         // Process any path removal after rendering the UI
         if let Some(path_id) = path_to_remove {
+            // Delete from database if available
+            if let Some(ref db) = ctx.database {
+                if let Err(e) = ctx.library.remove_path_from_db(&db.connection(), path_id) {
+                    tracing::error!("Failed to delete library path from database: {}", e);
+                }
+            }
             ctx.library.remove_path(path_id);
         }
     }

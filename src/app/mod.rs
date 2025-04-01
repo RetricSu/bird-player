@@ -334,17 +334,20 @@ impl App {
             Err(err) => tracing::error!("Failed to store app settings: {}", err),
         }
 
-        // Save library and playlists to SQLite if database is available
-        if let Some(ref db) = &self.database {
-            // Save library
-            if let Err(e) = self.library.save_to_db(&db.connection()) {
-                tracing::error!("Failed to save library to database: {}", e);
-            }
+        // Only save to database if we're quitting or if there are pending changes
+        if self.quit {
+            // Save library and playlists to SQLite if database is available
+            if let Some(ref db) = &self.database {
+                // Save library
+                if let Err(e) = self.library.save_to_db(&db.connection()) {
+                    tracing::error!("Failed to save library to database: {}", e);
+                }
 
-            // Save playlists
-            for playlist in &self.playlists {
-                if let Err(e) = playlist.save_to_db(&db.connection()) {
-                    tracing::error!("Failed to save playlist to database: {}", e);
+                // Save playlists
+                for playlist in &self.playlists {
+                    if let Err(e) = playlist.save_to_db(&db.connection()) {
+                        tracing::error!("Failed to save playlist to database: {}", e);
+                    }
                 }
             }
         }

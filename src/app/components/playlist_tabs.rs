@@ -1,6 +1,6 @@
 use super::AppComponent;
 use crate::app::t;
-use crate::app::{App, Playlist};
+use crate::app::{playlist, App, Playlist};
 use eframe::egui;
 
 pub struct PlaylistTabs;
@@ -82,15 +82,41 @@ impl AppComponent for PlaylistTabs {
             if let Some(idx) = ctx.playlist_idx_to_remove {
                 ctx.playlist_idx_to_remove = None;
 
-                if let Some(mut current_playlist_idx) = ctx.current_playlist_idx {
-                    if current_playlist_idx == 0 && idx == 0 {
-                        ctx.current_playlist_idx = None;
-                    } else if current_playlist_idx >= idx {
-                        current_playlist_idx -= 1;
-                        ctx.current_playlist_idx = Some(current_playlist_idx);
+                // Delete from database if the playlist has an ID
+                if let Some(ref db) = ctx.database {
+                    if let Some(playlist_id) = ctx.playlists[idx].id {
+                        if let Err(e) =
+                            playlist::Playlist::delete_from_db(&db.connection(), playlist_id)
+                        {
+                            tracing::error!("Failed to delete playlist from database: {}", e);
+                        }
                     }
                 }
 
+                // Update current playlist index before removing
+                if let Some(current_playlist_idx) = ctx.current_playlist_idx {
+                    match current_playlist_idx.cmp(&idx) {
+                        std::cmp::Ordering::Equal => {
+                            // If we're removing the current playlist, select the next one or previous one
+                            if idx < ctx.playlists.len() - 1 {
+                                ctx.current_playlist_idx = Some(idx);
+                            } else if idx > 0 {
+                                ctx.current_playlist_idx = Some(idx - 1);
+                            } else {
+                                ctx.current_playlist_idx = None;
+                            }
+                        }
+                        std::cmp::Ordering::Greater => {
+                            // If we're removing a playlist before the current one, adjust the index
+                            ctx.current_playlist_idx = Some(current_playlist_idx - 1);
+                        }
+                        std::cmp::Ordering::Less => {
+                            // No need to adjust if removing a playlist after the current one
+                        }
+                    }
+                }
+
+                // Remove the playlist
                 ctx.playlists.remove(idx);
             }
         });

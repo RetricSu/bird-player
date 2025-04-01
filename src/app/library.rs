@@ -79,6 +79,38 @@ impl Library {
         }
     }
 
+    pub fn remove_path_from_db(
+        &self,
+        conn: &Arc<Mutex<Connection>>,
+        path_id: LibraryPathId,
+    ) -> SqlResult<()> {
+        let mut conn_guard = conn.lock().unwrap();
+        let tx = conn_guard.transaction()?;
+
+        // First delete all pictures associated with items from this path
+        tx.execute(
+            "DELETE FROM pictures WHERE library_item_id IN (
+                SELECT key FROM library_items WHERE library_path_id = ?1
+            )",
+            rusqlite::params![path_id.0 as i64],
+        )?;
+
+        // Then delete all library items from this path
+        tx.execute(
+            "DELETE FROM library_items WHERE library_path_id = ?1",
+            rusqlite::params![path_id.0 as i64],
+        )?;
+
+        // Finally delete the library path
+        tx.execute(
+            "DELETE FROM library_paths WHERE id = ?1",
+            rusqlite::params![path_id.0 as i64],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn set_path_to_imported(&mut self, id: LibraryPathId) {
         for path in self.paths.iter_mut() {
             if path.id() == id {
