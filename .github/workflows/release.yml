@@ -117,7 +117,7 @@ jobs:
           PKG_CONFIG=/usr/local/bin/musl-pkg-config \
           PKG_CONFIG_ALLOW_CROSS=1 \
           PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig \
-          cargo build --release --target=${{ matrix.TARGET }} --no-default-features --features "cpal-backend"
+          cargo build --release --target=${{ matrix.TARGET }} --no-default-features
         env:
           CARGO_TERM_COLOR: always
           RUSTFLAGS: "-C target-feature=+crt-static"
