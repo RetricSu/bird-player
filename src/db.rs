@@ -1,9 +1,210 @@
 use rusqlite::{Connection, Error, ErrorCode, Result};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::sync::mpsc::{self, Sender, Receiver};
 
 pub struct Database {
     connection: Arc<Mutex<Connection>>,
+}
+
+// New enum for database operations
+pub enum DbOperation {
+    Execute {
+        sql: String,
+        params: Vec<Box<dyn rusqlite::ToSql + Send>>,
+        response_tx: Sender<Result<usize>>,
+    },
+    Transaction {
+        operations: Vec<(String, Vec<Box<dyn rusqlite::ToSql + Send>>)>,
+        response_tx: Sender<Result<()>>,
+    },
+    LoadAsync {
+        loader: Box<dyn FnOnce(&Connection) -> rusqlite::Result<()> + Send>,
+        response_tx: Sender<Result<()>>,
+    },
+}
+
+// New worker for background database operations
+#[derive(Clone)]
+pub struct DbWorker {
+    operation_tx: Sender<DbOperation>,
+}
+
+impl DbWorker {
+    pub fn new(db_connection: Arc<Mutex<Connection>>) -> Self {
+        let (operation_tx, operation_rx) = mpsc::channel::<DbOperation>();
+        
+        // Spawn a background thread to handle database operations
+        thread::spawn(move || {
+            Self::worker_thread(db_connection, operation_rx);
+        });
+        
+        Self { operation_tx }
+    }
+    
+    fn worker_thread(db_connection: Arc<Mutex<Connection>>, operation_rx: Receiver<DbOperation>) {
+        while let Ok(operation) = operation_rx.recv() {
+            match operation {
+                DbOperation::Execute { sql, params, response_tx } => {
+                    let result = {
+                        let mut conn = db_connection.lock().unwrap();
+                        let mut stmt = match conn.prepare(&sql) {
+                            Ok(stmt) => stmt,
+                            Err(e) => {
+                                let _ = response_tx.send(Err(e));
+                                continue;
+                            }
+                        };
+                        
+                        // Convert params to slice of ToSql trait objects
+                        let param_refs: Vec<&dyn rusqlite::ToSql> = params
+                            .iter()
+                            .map(|p| p.as_ref() as &dyn rusqlite::ToSql)
+                            .collect();
+                        
+                        stmt.execute(param_refs.as_slice())
+                    };
+                    
+                    let _ = response_tx.send(result);
+                },
+                DbOperation::Transaction { operations, response_tx } => {
+                    let result = {
+                        let mut conn = db_connection.lock().unwrap();
+                        let tx = match conn.transaction() {
+                            Ok(tx) => tx,
+                            Err(e) => {
+                                let _ = response_tx.send(Err(e));
+                                continue;
+                            }
+                        };
+                        
+                        for (sql, params) in operations {
+                            let mut stmt = match tx.prepare(&sql) {
+                                Ok(stmt) => stmt,
+                                Err(e) => {
+                                    let _ = response_tx.send(Err(e));
+                                    return;
+                                }
+                            };
+                            
+                            // Convert params to slice of ToSql trait objects
+                            let param_refs: Vec<&dyn rusqlite::ToSql> = params
+                                .iter()
+                                .map(|p| p.as_ref() as &dyn rusqlite::ToSql)
+                                .collect();
+                            
+                            if let Err(e) = stmt.execute(param_refs.as_slice()) {
+                                let _ = response_tx.send(Err(e));
+                                return;
+                            }
+                        }
+                        
+                        tx.commit().map(|_| ())
+                    };
+                    
+                    let _ = response_tx.send(result);
+                },
+                DbOperation::LoadAsync { loader, response_tx } => {
+                    let result = {
+                        let conn = db_connection.lock().unwrap();
+                        loader(&conn)
+                    };
+                    
+                    let _ = response_tx.send(result);
+                }
+            }
+        }
+    }
+    
+    pub fn execute(&self, sql: String, params: Vec<Box<dyn rusqlite::ToSql + Send>>) -> Result<usize> {
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.operation_tx.send(DbOperation::Execute {
+            sql,
+            params,
+            response_tx,
+        }).map_err(|_| Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: ErrorCode::CannotOpen,
+                extended_code: 0,
+            },
+            Some("Failed to send database operation to worker thread".to_string()),
+        ))?;
+        
+        response_rx.recv().map_err(|_| Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: ErrorCode::CannotOpen,
+                extended_code: 0,
+            },
+            Some("Failed to receive response from worker thread".to_string()),
+        ))?
+    }
+    
+    pub fn transaction(&self, operations: Vec<(String, Vec<Box<dyn rusqlite::ToSql + Send>>)>) -> Result<()> {
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.operation_tx.send(DbOperation::Transaction {
+            operations,
+            response_tx,
+        }).map_err(|_| Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: ErrorCode::CannotOpen,
+                extended_code: 0,
+            },
+            Some("Failed to send transaction operation to worker thread".to_string()),
+        ))?;
+        
+        response_rx.recv().map_err(|_| Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: ErrorCode::CannotOpen,
+                extended_code: 0,
+            },
+            Some("Failed to receive response from worker thread".to_string()),
+        ))?
+    }
+    
+    // Add a method to load data asynchronously
+    pub fn load_async<F, T>(&self, loader_fn: F) -> Result<()> 
+    where
+        F: FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
+        T: Send + 'static
+    {
+        // Create channel for result
+        let (completion_tx, _) = mpsc::channel::<T>();
+        
+        // Create a new operation type for this
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.operation_tx.send(DbOperation::LoadAsync {
+            loader: Box::new(move |conn| {
+                match loader_fn(conn) {
+                    Ok(result) => {
+                        // Send result to calling thread
+                        let _ = completion_tx.send(result);
+                        Ok(())
+                    }
+                    Err(e) => Err(e)
+                }
+            }),
+            response_tx,
+        }).map_err(|_| Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: ErrorCode::CannotOpen,
+                extended_code: 0,
+            },
+            Some("Failed to send load async operation to worker thread".to_string()),
+        ))?;
+        
+        // Wait for operation to start but don't wait for completion
+        response_rx.recv().map_err(|_| Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: ErrorCode::CannotOpen,
+                extended_code: 0,
+            },
+            Some("Failed to receive response from worker thread".to_string()),
+        ))?
+    }
 }
 
 impl Database {
@@ -36,6 +237,11 @@ impl Database {
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
         })
+    }
+    
+    // Create a worker to handle background operations
+    pub fn create_worker(&self) -> DbWorker {
+        DbWorker::new(self.connection.clone())
     }
 
     fn get_database_path() -> Result<PathBuf> {

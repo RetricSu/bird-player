@@ -1,13 +1,13 @@
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Library {
-    paths: Vec<LibraryPath>,
-    items: Vec<LibraryItem>,
-    library_view: LibraryView,
+    pub paths: Vec<LibraryPath>,
+    pub items: Vec<LibraryItem>,
+    pub library_view: LibraryView,
 }
 
 impl Default for Library {
@@ -197,6 +197,88 @@ impl Library {
         Ok(())
     }
 
+    // New async version that uses the DbWorker
+    pub fn save_to_db_async(&self, db_worker: &crate::db::DbWorker) -> SqlResult<()> {
+        // Create a list of operations for the transaction
+        let mut operations = Vec::new();
+
+        // Add operations for library paths
+        for path in &self.paths {
+            let status_value = match path.status() {
+                LibraryPathStatus::NotImported => 0,
+                LibraryPathStatus::Imported => 1,
+            };
+
+            // Create owned versions of all data being sent to the worker
+            let id_value = path.id().0 as i64;
+            let path_string = path.path().to_string_lossy().to_string();
+            let display_name_string = path.display_name().to_string();
+
+            let sql = "INSERT OR REPLACE INTO library_paths (id, path, status, display_name) VALUES (?1, ?2, ?3, ?4)".to_string();
+            let mut params: Vec<Box<dyn rusqlite::ToSql + Send>> = Vec::new();
+            params.push(Box::new(id_value));
+            params.push(Box::new(path_string));
+            params.push(Box::new(status_value));
+            params.push(Box::new(display_name_string));
+
+            operations.push((sql, params));
+        }
+
+        // Add operations for library items
+        for item in &self.items {
+            // Create owned versions of all data
+            let key_string = item.key().to_string();
+            let path_id = item.library_id().0 as i64;
+            let path_string = item.path().to_string_lossy().to_string();
+            
+            // Handle Optional fields safely
+            let title_string = item.title().unwrap_or_default();
+            let artist_string = item.artist().unwrap_or_default();
+            let album_string = item.album().unwrap_or_default();
+            let year_value = item.year();
+            let genre_string = item.genre().unwrap_or_default();
+            let track_number_value = item.track_number();
+            let lyrics_string = item.lyrics().unwrap_or_default();
+
+            let sql = "INSERT OR REPLACE INTO library_items (key, library_path_id, path, title, artist, album, year, genre, track_number, lyrics) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)".to_string();
+            let mut params: Vec<Box<dyn rusqlite::ToSql + Send>> = Vec::new();
+            params.push(Box::new(key_string.clone()));
+            params.push(Box::new(path_id));
+            params.push(Box::new(path_string));
+            params.push(Box::new(title_string));
+            params.push(Box::new(artist_string));
+            params.push(Box::new(album_string));
+            params.push(Box::new(year_value));
+            params.push(Box::new(genre_string));
+            params.push(Box::new(track_number_value));
+            params.push(Box::new(lyrics_string));
+
+            operations.push((sql, params));
+
+            // Add operations for pictures
+            for picture in item.pictures() {
+                // Create owned versions of picture data
+                let mime_type_string = picture.mime_type.clone();
+                let picture_type_value = picture.picture_type;
+                let description_string = picture.description.clone();
+                let file_path_string = picture.file_path.to_string_lossy().to_string();
+
+                let sql = "INSERT OR REPLACE INTO pictures (library_item_id, mime_type, picture_type, description, file_path) VALUES (?1, ?2, ?3, ?4, ?5)".to_string();
+                let mut params: Vec<Box<dyn rusqlite::ToSql + Send>> = Vec::new();
+                params.push(Box::new(key_string.clone()));
+                params.push(Box::new(mime_type_string));
+                params.push(Box::new(picture_type_value));
+                params.push(Box::new(description_string));
+                params.push(Box::new(file_path_string));
+
+                operations.push((sql, params));
+            }
+        }
+
+        // Execute all operations in a transaction
+        db_worker.transaction(operations)
+    }
+
     pub fn load_from_db(conn: &Arc<Mutex<Connection>>) -> SqlResult<Self> {
         let conn_guard = conn.lock().unwrap();
 
@@ -336,6 +418,157 @@ impl Library {
         };
 
         Ok(library)
+    }
+
+    pub fn load_from_db_async(db_worker: &crate::db::DbWorker) -> SqlResult<Self> {
+        // Create a shared thread-safe reference counted library with interior mutability
+        let library = Arc::new(Mutex::new(Library::new()));
+        
+        // Clone the Arc for the closure
+        let library_clone = library.clone();
+        
+        // Load library paths
+        let sql = "SELECT id, path, status, display_name FROM library_paths".to_string();
+        db_worker.load_async(move |conn| {
+            let mut path_stmt = conn.prepare(&sql)?;
+            
+            let path_rows = path_stmt.query_map([], |row| {
+                let id: i64 = row.get(0)?;
+                let path_str: String = row.get(1)?;
+                let status_raw: u8 = row.get(2)?;
+                let display_name: String = row.get(3)?;
+
+                let status = match status_raw {
+                    0 => LibraryPathStatus::NotImported,
+                    _ => LibraryPathStatus::Imported,
+                };
+
+                let path = PathBuf::from(path_str);
+                let id = LibraryPathId::new(id as usize);
+
+                // Create a new library path but with the database values
+                let mut lib_path = LibraryPath::new(path);
+                lib_path.id = id;
+                lib_path.status = status;
+                lib_path.display_name = display_name;
+
+                Ok(lib_path)
+            })?;
+
+            let mut library_mut = library_clone.lock().unwrap();
+            
+            for path_result in path_rows {
+                library_mut.paths.push(path_result?);
+            }
+            
+            // Load library items
+            let mut item_stmt = conn.prepare(
+                "SELECT key, library_path_id, path, title, artist, album, year, genre, track_number, lyrics 
+                 FROM library_items"
+            )?;
+
+            let item_rows = item_stmt.query_map([], |row| {
+                let key_str: String = row.get(0)?;
+                let library_id_raw: i64 = row.get(1)?;
+                let path_str: String = row.get(2)?;
+
+                let library_id = LibraryPathId::new(library_id_raw as usize);
+                let path = PathBuf::from(path_str);
+
+                // Create a new library item
+                let mut item = LibraryItem::new(path, library_id);
+
+                // Set all metadata
+                item.set_title(row.get::<_, Option<String>>(3)?.as_deref());
+                item.set_artist(row.get::<_, Option<String>>(4)?.as_deref());
+                item.set_album(row.get::<_, Option<String>>(5)?.as_deref());
+                item.set_year(row.get::<_, Option<i32>>(6)?);
+                item.set_genre(row.get::<_, Option<String>>(7)?.as_deref());
+                item.set_track_number(row.get::<_, Option<u32>>(8)?);
+                item.set_lyrics(row.get::<_, Option<String>>(9)?.as_deref());
+
+                // Force the key to match the database
+                if let Ok(key_val) = key_str.parse::<usize>() {
+                    item.set_key(key_val);
+                }
+
+                Ok(item)
+            })?;
+
+            let mut items = Vec::new();
+            for item_result in item_rows {
+                items.push(item_result?);
+            }
+
+            // Load pictures for each item
+            for item in &mut items {
+                let key = item.key().to_string();
+                let mut pic_stmt = conn.prepare(
+                    "SELECT mime_type, picture_type, description, file_path 
+                     FROM pictures WHERE library_item_id = ?",
+                )?;
+
+                let picture_rows = pic_stmt.query_map(rusqlite::params![key], |row| {
+                    let mime_type: String = row.get(0)?;
+                    let picture_type: u8 = row.get(1)?;
+                    let description: String = row.get(2)?;
+                    let file_path: String = row.get(3)?;
+
+                    Ok(Picture::new(
+                        mime_type,
+                        picture_type,
+                        description,
+                        PathBuf::from(file_path),
+                    ))
+                })?;
+
+                for pic_result in picture_rows {
+                    let pic = pic_result?;
+                    item.add_picture(pic);
+                }
+            }
+
+            // Add all items to the library
+            library_mut.items = items;
+
+            // Build view containers from the items
+            // This logic depends on how you want to organize your views
+            let mut album_containers: std::collections::HashMap<String, LibraryItemContainer> =
+                std::collections::HashMap::new();
+
+            for item in &library_mut.items {
+                if let Some(album) = item.album() {
+                    if !album_containers.contains_key(&album) {
+                        album_containers.insert(
+                            album.clone(),
+                            LibraryItemContainer {
+                                name: album.clone(),
+                                items: Vec::new(),
+                            },
+                        );
+                    }
+
+                    if let Some(container) = album_containers.get_mut(&album) {
+                        container.items.push(item.clone());
+                    }
+                }
+            }
+
+            // Convert the HashMap to a Vec
+            let containers = album_containers.into_values().collect();
+
+            // Set the library view
+            library_mut.library_view = LibraryView {
+                view_type: ViewType::Album,
+                containers,
+            };
+
+            Ok(()) // Just return Ok as we're modifying the shared library
+        })?;
+        
+        // Return the library after it's been populated by the async operation
+        // We can safely unwrap here because we have exclusive ownership of the Arc at this point
+        Ok(Arc::try_unwrap(library).unwrap().into_inner().unwrap())
     }
 }
 

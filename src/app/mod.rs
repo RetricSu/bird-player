@@ -137,6 +137,9 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub database: Option<Arc<crate::db::Database>>,
+    
+    #[serde(skip_serializing, skip_deserializing)]
+    pub db_worker: Option<crate::db::DbWorker>,
 
     pub quit: bool,
 
@@ -182,6 +185,7 @@ impl Default for App {
             library_cmd_tx: None,
             library_cmd_rx: None,
             database: None,
+            db_worker: None,
             quit: false,
             is_maximized: false,
             lib_config_selections: Default::default(),
@@ -225,7 +229,9 @@ impl App {
         if app.database.is_none() {
             match crate::db::Database::new() {
                 Ok(db) => {
-                    app.database = Some(Arc::new(db));
+                    let db = Arc::new(db);
+                    app.database = Some(db.clone());
+                    app.db_worker = Some(db.create_worker());
                     tracing::info!("Database created during App::load()");
                 }
                 Err(e) => {

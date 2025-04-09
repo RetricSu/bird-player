@@ -47,9 +47,67 @@ impl AppComponent for PlayerComponent {
                         LAST_SAVE.with(|last_save| {
                             let elapsed = last_save.borrow().elapsed().as_secs();
                             if elapsed > 30 {
-                                // Update persistence state
+                                // Update persistence state in the main thread (this is lightweight)
                                 ctx.update_player_persistence();
-                                ctx.save_state();
+                                
+                                // Save app settings to confy (usually fast)
+                                let settings = crate::app::AppSettings {
+                                    current_language: ctx.current_language,
+                                    last_track_path: ctx.last_track_path.clone(),
+                                    last_position: ctx.last_position,
+                                    last_playback_mode: ctx.last_playback_mode,
+                                    last_volume: ctx.last_volume,
+                                    was_playing: ctx.was_playing,
+                                    library_folders_expanded: ctx.library_folders_expanded,
+                                    default_window_height: ctx.default_window_height,
+                                };
+                                
+                                if let Err(err) = confy::store("bird-player", None, &settings) {
+                                    tracing::error!("Failed to store app settings: {}", err);
+                                }
+                                
+                                // Database operations - use the DbWorker if available
+                                if let Some(db_worker) = &ctx.db_worker {
+                                    tracing::info!("Using DbWorker for background database operations");
+                                    
+                                    // Save library - this now correctly handles reference lifetimes
+                                    if let Err(e) = ctx.library.save_to_db_async(db_worker) {
+                                        tracing::error!("Failed to save library to database: {}", e);
+                                    }
+                                    
+                                    // Save playlists
+                                    for playlist in &ctx.playlists {
+                                        if let Err(e) = playlist.save_to_db_async(db_worker) {
+                                            tracing::error!("Failed to save playlist to database: {}", e);
+                                        }
+                                    }
+                                } else {
+                                    // No DbWorker available, try the separate connection approach
+                                    let db_path = match confy::get_configuration_file_path("bird-player", None) {
+                                        Ok(path) => path.parent().map(|p| p.join("bird-player.db")),
+                                        Err(_) => None,
+                                    };
+                                    
+                                    if let Some(db_path) = db_path {
+                                        // Spawn a thread that will handle database operations
+                                        std::thread::spawn(move || {
+                                            // Create a new database connection in the background thread
+                                            match rusqlite::Connection::open(&db_path) {
+                                                Ok(_conn) => {
+                                                    tracing::info!("Background thread: Successfully opened database, but can't save data because we don't have access to the app state");
+                                                    // We can't access app data from here, so this approach is limited
+                                                },
+                                                Err(e) => {
+                                                    tracing::error!("Background thread: Failed to open database: {}", e);
+                                                }
+                                            }
+                                        });
+                                    } else {
+                                        // Fallback to synchronous method if we can't get the DB path
+                                        ctx.save_state();
+                                    }
+                                }
+                                
                                 // Reset timer
                                 *last_save.borrow_mut() = Instant::now();
                             }

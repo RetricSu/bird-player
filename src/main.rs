@@ -66,6 +66,12 @@ fn main() {
         }
     };
 
+    // Initialize database worker if database was created successfully
+    let db_worker = database.as_ref().map(|db| db.create_worker());
+    
+    // Create a clone of db_worker for later use
+    let db_worker_clone = db_worker.clone();
+
     let (lib_cmd_tx, lib_cmd_rx) = channel();
     let (audio_tx, audio_rx) = channel();
     let (ui_tx, ui_rx) = channel();
@@ -78,6 +84,7 @@ fn main() {
     // Create a default app with the database connection
     let temp_app = App {
         database: database.clone(),
+        db_worker: db_worker,
         ..Default::default()
     };
 
@@ -87,6 +94,7 @@ fn main() {
             // Ensure database is set in the loaded app
             let mut app = loaded_app;
             app.database = database.clone();
+            app.db_worker = db_worker_clone;
             app
         }
         Err(_) => temp_app,
