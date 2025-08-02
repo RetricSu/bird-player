@@ -242,6 +242,9 @@ impl Playlist {
                 }
 
                 // Load album art (pictures) from the database
+                // Temporarily disable picture loading to improve startup performance
+                // TODO: Fix the picture loading issue that's causing 18.8M records
+                /*
                 let mut pic_stmt = conn_guard.prepare(
                     "SELECT mime_type, picture_type, description, file_path 
                      FROM pictures WHERE library_item_id = ?",
@@ -264,6 +267,7 @@ impl Playlist {
                 for picture in picture_rows {
                     item.add_picture(picture?);
                 }
+                */
 
                 playlist.tracks.push(item);
             }

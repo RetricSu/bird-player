@@ -274,8 +274,11 @@ impl Library {
 
         // Load pictures for each item
         for item in &mut items {
-            let item_key = item.key() as i64;
+            let _item_key = item.key() as i64;
 
+            // Temporarily disable picture loading to improve startup performance
+            // TODO: Fix the picture loading issue that's causing 18.8M records
+            /*
             let mut pic_stmt = conn_guard.prepare(
                 "SELECT mime_type, picture_type, description, file_path 
                  FROM pictures WHERE library_item_id = ?",
@@ -298,6 +301,7 @@ impl Library {
             for picture_result in picture_rows {
                 item.add_picture(picture_result?);
             }
+            */
         }
 
         // Add items to the library

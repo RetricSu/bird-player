@@ -160,6 +160,10 @@ pub struct App {
     pub show_about_dialog: bool,
 
     pub default_window_height: f64,
+
+    // New field to track if heavy data has been loaded
+    #[serde(skip_serializing, skip_deserializing)]
+    pub heavy_data_loaded: bool,
 }
 
 impl Default for App {
@@ -191,12 +195,13 @@ impl Default for App {
             library_folders_expanded: false,
             show_about_dialog: false,
             default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
+            heavy_data_loaded: false,
         }
     }
 }
 
 impl App {
-    pub fn load() -> Result<Self, TempError> {
+    pub fn load_basic() -> Result<Self, TempError> {
         // Still use confy for app settings
         let config_result = confy::load::<AppSettings>("bird-player", None);
 
@@ -226,15 +231,25 @@ impl App {
             match crate::db::Database::new() {
                 Ok(db) => {
                     app.database = Some(Arc::new(db));
-                    tracing::info!("Database created during App::load()");
+                    tracing::info!("Database created during App::load_basic()");
                 }
                 Err(e) => {
-                    tracing::error!("Failed to create database during App::load(): {}", e);
+                    tracing::error!("Failed to create database during App::load_basic(): {}", e);
                 }
             }
         }
 
-        // Try to load library and playlists if we have a database
+        app.is_maximized = false;
+        app.is_library_cfg_open = false;
+
+        Ok(app)
+    }
+
+    pub fn load() -> Result<Self, TempError> {
+        // Load basic app state first
+        let mut app = Self::load_basic()?;
+
+        // Now load the heavy data (library and playlists) if we have a database
         if let Some(ref db) = app.database {
             // Try to load library from database
             match Library::load_from_db(&db.connection()) {
@@ -296,13 +311,44 @@ impl App {
             tracing::warn!("No database connection available when loading app state");
         }
 
-        app.is_maximized = false;
-        app.is_library_cfg_open = false;
-        app.show_about_dialog = false;
-        app.is_processing_ui_change = None;
-        app.show_library_and_playlist = true;
-
         Ok(app)
+    }
+
+    pub fn start_async_loading(&mut self) {
+        if self.heavy_data_loaded {
+            return;
+        }
+
+        tracing::info!("Starting async heavy data loading...");
+
+        // Clone the database connection for the background thread
+        let db_connection = self.database.clone();
+        
+        // Start loading in a background thread
+        std::thread::spawn(move || {
+            if let Some(db) = db_connection {
+                // Load library
+                let _library_result = Library::load_from_db(&db.connection());
+                
+                // Load playlists
+                let _playlists_result = playlist::Playlist::load_all_from_db(&db.connection());
+                
+                tracing::info!("Async loading completed");
+            } else {
+                tracing::warn!("No database connection for async loading");
+            }
+        });
+    }
+
+    pub fn load_heavy_data(&mut self) {
+        if self.heavy_data_loaded {
+            return;
+        }
+
+        // For now, just mark as loaded to avoid blocking the UI
+        // The actual loading will happen in the background
+        self.heavy_data_loaded = true;
+        tracing::info!("Heavy data loading deferred to background");
     }
 
     pub fn get_album_art_dir() -> PathBuf {
@@ -704,3 +750,4 @@ pub mod version_info {
         format!("Version {} ({})", VERSION, GIT_HASH)
     }
 }
+

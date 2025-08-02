@@ -75,14 +75,14 @@ fn main() {
     // App setup - properly initialize with database
     let is_processing_ui_change = Arc::new(AtomicBool::new(false));
 
-    // Create a default app with the database connection
+    // Create a default app with the database connection - but don't load heavy data yet
     let temp_app = App {
         database: database.clone(),
         ..Default::default()
     };
 
-    // Load app state using the temp_app as fallback
-    let mut app = match App::load() {
+    // Load basic app state using the temp_app as fallback
+    let mut app = match App::load_basic() {
         Ok(loaded_app) => {
             // Ensure database is set in the loaded app
             let mut app = loaded_app;
