@@ -677,6 +677,12 @@ fn do_verification(finalization: FinalizeResult) -> Result<i32> {
 fn restore_player_state(app: &mut App) {
     let player = app.player.as_mut().unwrap();
 
+    tracing::info!("Restoring player state...");
+    tracing::info!("Last track path: {:?}", app.last_track_path);
+    tracing::info!("Last position: {:?}", app.last_position);
+    tracing::info!("Was playing: {:?}", app.was_playing);
+    tracing::info!("Number of playlists: {}", app.playlists.len());
+
     // Restore volume if it was saved
     if let Some(volume) = app.last_volume {
         let is_processing = app
@@ -684,11 +690,13 @@ fn restore_player_state(app: &mut App) {
             .clone()
             .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
         player.set_volume(volume, &is_processing);
+        tracing::info!("Restored volume: {}", volume);
     }
 
     // Restore playback mode if it was saved
     if let Some(mode) = app.last_playback_mode {
         player.playback_mode = mode;
+        tracing::info!("Restored playback mode: {:?}", mode);
     }
 
     // If there was a playing track, try to find and load it

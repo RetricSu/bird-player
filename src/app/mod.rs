@@ -422,7 +422,7 @@ impl App {
             .unwrap_or_else(|_| PathBuf::from("album_art"))
     }
 
-    pub fn save_state(&self) {
+    pub fn save_state(&mut self) {
         // Split app state - settings go to confy, library and playlists go to SQLite
         let settings = AppSettings {
             current_language: self.current_language,
@@ -449,9 +449,9 @@ impl App {
                 tracing::error!("Failed to save library to database: {}", e);
             }
 
-            // Save playlists
-            for playlist in &self.playlists {
-                if let Err(e) = playlist.save_to_db(&db.connection()) {
+            // Save playlists with ID updates
+            for playlist in &mut self.playlists {
+                if let Err(e) = playlist.save_to_db_and_update_id(&db.connection()) {
                     tracing::error!("Failed to save playlist to database: {}", e);
                 }
             }
