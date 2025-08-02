@@ -25,6 +25,7 @@ jobs:
         with:
           toolchain: 1.85.0
           override: true
+          components: rustfmt, clippy
       - name: Cargo fmt
         run: cargo fmt --all -- --check
       - name: Cargo clippy with PulseAudio
@@ -49,6 +50,7 @@ jobs:
         with:
           toolchain: 1.85.0
           override: true
+          components: rustfmt, clippy
       - name: Cargo clippy without PulseAudio
         run: cargo clippy -- -D warnings
       - name: Cargo build without PulseAudio
