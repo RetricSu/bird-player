@@ -409,6 +409,9 @@ impl App {
             tracing::warn!("No database connection available when loading heavy data");
         }
 
+        // Restore player state after heavy data is loaded
+        crate::restore_player_state(self);
+
         self.heavy_data_loaded = true;
         tracing::info!("Heavy data loading completed");
     }

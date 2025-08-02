@@ -121,9 +121,6 @@ fn main() {
         native_options
     };
 
-    // Restore player state
-    restore_player_state(&mut app);
-
     // Audio output setup
     let _audio_thread = thread::spawn(move || {
         let mut state = PlayerState::Unstarted;
@@ -674,7 +671,7 @@ fn do_verification(finalization: FinalizeResult) -> Result<i32> {
 }
 
 // Function to restore player state from saved settings
-fn restore_player_state(app: &mut App) {
+pub fn restore_player_state(app: &mut App) {
     let player = app.player.as_mut().unwrap();
 
     tracing::info!("Restoring player state...");
