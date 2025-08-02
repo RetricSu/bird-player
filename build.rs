@@ -34,8 +34,7 @@ fn main() {
     fs::write(
         &dest_path,
         format!(
-            "pub const VERSION: &str = \"{}\";\npub const GIT_HASH: &str = \"{}\";\n",
-            version, git_hash
+            "pub const VERSION: &str = \"{version}\";\npub const GIT_HASH: &str = \"{git_hash}\";\n"
         ),
     )
     .unwrap();
