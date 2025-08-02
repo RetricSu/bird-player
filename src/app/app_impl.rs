@@ -28,8 +28,7 @@ impl eframe::App for App {
                 });
             });
             
-            // Start async loading and mark as loaded to avoid blocking UI
-            self.start_async_loading();
+            // Load heavy data synchronously since database is now small and fast
             self.load_heavy_data();
             return;
         }

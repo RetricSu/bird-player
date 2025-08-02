@@ -345,10 +345,72 @@ impl App {
             return;
         }
 
-        // For now, just mark as loaded to avoid blocking the UI
-        // The actual loading will happen in the background
+        tracing::info!("Loading heavy data (library and playlists)...");
+
+        // Load the heavy data (library and playlists) if we have a database
+        if let Some(ref db) = self.database {
+            // Try to load library from database
+            match Library::load_from_db(&db.connection()) {
+                Ok(library) => {
+                    self.library = library;
+                    tracing::info!("Successfully loaded library from database");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load library from database: {}", e);
+                    // Keep the default empty library
+                }
+            }
+
+            // Try to load playlists from database
+            match playlist::Playlist::load_all_from_db(&db.connection()) {
+                Ok(playlists) => {
+                    if !playlists.is_empty() {
+                        self.playlists = playlists;
+
+                        // If there was a last played track, try to find its playlist
+                        if let Some(last_track_path) = &self.last_track_path {
+                            for (idx, playlist) in self.playlists.iter().enumerate() {
+                                if playlist
+                                    .tracks
+                                    .iter()
+                                    .any(|track| track.path() == *last_track_path)
+                                {
+                                    self.current_playlist_idx = Some(idx);
+                                    self.playing_playlist_idx = Some(idx);
+                                    tracing::info!(
+                                        "Found last played track in playlist '{}', selecting it",
+                                        playlist.get_name().unwrap_or_default()
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If no playlist was selected (no last track or track not found), select first playlist
+                        if self.current_playlist_idx.is_none() {
+                            self.current_playlist_idx = Some(0);
+                            tracing::info!("No last played track found, selecting first playlist");
+                        }
+                    } else {
+                        // Only create a default playlist if no playlists exist in the database
+                        let mut default_playlist = playlist::Playlist::new();
+                        default_playlist.set_name("Default Playlist".to_string());
+                        self.playlists = vec![default_playlist];
+                        self.current_playlist_idx = Some(0);
+                        tracing::info!("No playlists found in database, created default playlist");
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load playlists from database: {}", e);
+                    // Keep the default playlist
+                }
+            }
+        } else {
+            tracing::warn!("No database connection available when loading heavy data");
+        }
+
         self.heavy_data_loaded = true;
-        tracing::info!("Heavy data loading deferred to background");
+        tracing::info!("Heavy data loading completed");
     }
 
     pub fn get_album_art_dir() -> PathBuf {
