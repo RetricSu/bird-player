@@ -160,6 +160,10 @@ pub struct App {
     pub show_about_dialog: bool,
 
     pub default_window_height: f64,
+
+    // New field to track if heavy data has been loaded
+    #[serde(skip_serializing, skip_deserializing)]
+    pub heavy_data_loaded: bool,
 }
 
 impl Default for App {
@@ -191,12 +195,13 @@ impl Default for App {
             library_folders_expanded: false,
             show_about_dialog: false,
             default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
+            heavy_data_loaded: false,
         }
     }
 }
 
 impl App {
-    pub fn load() -> Result<Self, TempError> {
+    pub fn load_basic() -> Result<Self, TempError> {
         // Still use confy for app settings
         let config_result = confy::load::<AppSettings>("bird-player", None);
 
@@ -226,15 +231,25 @@ impl App {
             match crate::db::Database::new() {
                 Ok(db) => {
                     app.database = Some(Arc::new(db));
-                    tracing::info!("Database created during App::load()");
+                    tracing::info!("Database created during App::load_basic()");
                 }
                 Err(e) => {
-                    tracing::error!("Failed to create database during App::load(): {}", e);
+                    tracing::error!("Failed to create database during App::load_basic(): {}", e);
                 }
             }
         }
 
-        // Try to load library and playlists if we have a database
+        app.is_maximized = false;
+        app.is_library_cfg_open = false;
+
+        Ok(app)
+    }
+
+    pub fn load() -> Result<Self, TempError> {
+        // Load basic app state first
+        let mut app = Self::load_basic()?;
+
+        // Now load the heavy data (library and playlists) if we have a database
         if let Some(ref db) = app.database {
             // Try to load library from database
             match Library::load_from_db(&db.connection()) {
@@ -296,13 +311,109 @@ impl App {
             tracing::warn!("No database connection available when loading app state");
         }
 
-        app.is_maximized = false;
-        app.is_library_cfg_open = false;
-        app.show_about_dialog = false;
-        app.is_processing_ui_change = None;
-        app.show_library_and_playlist = true;
-
         Ok(app)
+    }
+
+    pub fn start_async_loading(&mut self) {
+        if self.heavy_data_loaded {
+            return;
+        }
+
+        tracing::info!("Starting async heavy data loading...");
+
+        // Clone the database connection for the background thread
+        let db_connection = self.database.clone();
+
+        // Start loading in a background thread
+        std::thread::spawn(move || {
+            if let Some(db) = db_connection {
+                // Load library
+                let _library_result = Library::load_from_db(&db.connection());
+
+                // Load playlists
+                let _playlists_result = playlist::Playlist::load_all_from_db(&db.connection());
+
+                tracing::info!("Async loading completed");
+            } else {
+                tracing::warn!("No database connection for async loading");
+            }
+        });
+    }
+
+    pub fn load_heavy_data(&mut self) {
+        if self.heavy_data_loaded {
+            return;
+        }
+
+        tracing::info!("Loading heavy data (library and playlists)...");
+
+        // Load the heavy data (library and playlists) if we have a database
+        if let Some(ref db) = self.database {
+            // Try to load library from database
+            match Library::load_from_db(&db.connection()) {
+                Ok(library) => {
+                    self.library = library;
+                    tracing::info!("Successfully loaded library from database");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load library from database: {}", e);
+                    // Keep the default empty library
+                }
+            }
+
+            // Try to load playlists from database
+            match playlist::Playlist::load_all_from_db(&db.connection()) {
+                Ok(playlists) => {
+                    if !playlists.is_empty() {
+                        self.playlists = playlists;
+
+                        // If there was a last played track, try to find its playlist
+                        if let Some(last_track_path) = &self.last_track_path {
+                            for (idx, playlist) in self.playlists.iter().enumerate() {
+                                if playlist
+                                    .tracks
+                                    .iter()
+                                    .any(|track| track.path() == *last_track_path)
+                                {
+                                    self.current_playlist_idx = Some(idx);
+                                    self.playing_playlist_idx = Some(idx);
+                                    tracing::info!(
+                                        "Found last played track in playlist '{}', selecting it",
+                                        playlist.get_name().unwrap_or_default()
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If no playlist was selected (no last track or track not found), select first playlist
+                        if self.current_playlist_idx.is_none() {
+                            self.current_playlist_idx = Some(0);
+                            tracing::info!("No last played track found, selecting first playlist");
+                        }
+                    } else {
+                        // Only create a default playlist if no playlists exist in the database
+                        let mut default_playlist = playlist::Playlist::new();
+                        default_playlist.set_name("Default Playlist".to_string());
+                        self.playlists = vec![default_playlist];
+                        self.current_playlist_idx = Some(0);
+                        tracing::info!("No playlists found in database, created default playlist");
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load playlists from database: {}", e);
+                    // Keep the default playlist
+                }
+            }
+        } else {
+            tracing::warn!("No database connection available when loading heavy data");
+        }
+
+        // Restore player state after heavy data is loaded
+        crate::restore_player_state(self);
+
+        self.heavy_data_loaded = true;
+        tracing::info!("Heavy data loading completed");
     }
 
     pub fn get_album_art_dir() -> PathBuf {
@@ -314,7 +425,7 @@ impl App {
             .unwrap_or_else(|_| PathBuf::from("album_art"))
     }
 
-    pub fn save_state(&self) {
+    pub fn save_state(&mut self) {
         // Split app state - settings go to confy, library and playlists go to SQLite
         let settings = AppSettings {
             current_language: self.current_language,
@@ -341,9 +452,9 @@ impl App {
                 tracing::error!("Failed to save library to database: {}", e);
             }
 
-            // Save playlists
-            for playlist in &self.playlists {
-                if let Err(e) = playlist.save_to_db(&db.connection()) {
+            // Save playlists with ID updates
+            for playlist in &mut self.playlists {
+                if let Err(e) = playlist.save_to_db_and_update_id(&db.connection()) {
                     tracing::error!("Failed to save playlist to database: {}", e);
                 }
             }
@@ -692,6 +803,32 @@ impl App {
 
     pub fn get_language(&self) -> i18n::Language {
         self.current_language
+    }
+
+    pub fn cleanup_duplicate_pictures(&self) {
+        if let Some(ref db) = self.database {
+            let conn = db.connection();
+            let conn_guard = conn.lock().unwrap();
+
+            tracing::info!("Cleaning up duplicate pictures in database...");
+
+            // Delete all duplicate pictures, keeping only the first one for each library_item_id
+            let result = conn_guard.execute(
+                "DELETE FROM pictures WHERE id NOT IN (
+                    SELECT MIN(id) FROM pictures GROUP BY library_item_id, mime_type, picture_type, description, file_path
+                )",
+                [],
+            );
+
+            match result {
+                Ok(rows_deleted) => {
+                    tracing::info!("Cleaned up {} duplicate picture records", rows_deleted);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to clean up duplicate pictures: {}", e);
+                }
+            }
+        }
     }
 }
 

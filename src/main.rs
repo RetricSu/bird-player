@@ -75,14 +75,14 @@ fn main() {
     // App setup - properly initialize with database
     let is_processing_ui_change = Arc::new(AtomicBool::new(false));
 
-    // Create a default app with the database connection
+    // Create a default app with the database connection - but don't load heavy data yet
     let temp_app = App {
         database: database.clone(),
         ..Default::default()
     };
 
-    // Load app state using the temp_app as fallback
-    let mut app = match App::load() {
+    // Load basic app state using the temp_app as fallback
+    let mut app = match App::load_basic() {
         Ok(loaded_app) => {
             // Ensure database is set in the loaded app
             let mut app = loaded_app;
@@ -120,9 +120,6 @@ fn main() {
     } else {
         native_options
     };
-
-    // Restore player state
-    restore_player_state(&mut app);
 
     // Audio output setup
     let _audio_thread = thread::spawn(move || {
@@ -674,8 +671,14 @@ fn do_verification(finalization: FinalizeResult) -> Result<i32> {
 }
 
 // Function to restore player state from saved settings
-fn restore_player_state(app: &mut App) {
+pub fn restore_player_state(app: &mut App) {
     let player = app.player.as_mut().unwrap();
+
+    tracing::info!("Restoring player state...");
+    tracing::info!("Last track path: {:?}", app.last_track_path);
+    tracing::info!("Last position: {:?}", app.last_position);
+    tracing::info!("Was playing: {:?}", app.was_playing);
+    tracing::info!("Number of playlists: {}", app.playlists.len());
 
     // Restore volume if it was saved
     if let Some(volume) = app.last_volume {
@@ -684,11 +687,13 @@ fn restore_player_state(app: &mut App) {
             .clone()
             .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
         player.set_volume(volume, &is_processing);
+        tracing::info!("Restored volume: {}", volume);
     }
 
     // Restore playback mode if it was saved
     if let Some(mode) = app.last_playback_mode {
         player.playback_mode = mode;
+        tracing::info!("Restored playback mode: {:?}", mode);
     }
 
     // If there was a playing track, try to find and load it

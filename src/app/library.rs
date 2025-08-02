@@ -175,9 +175,16 @@ impl Library {
             )?;
 
             // Save pictures for this item
+            // First, delete existing pictures for this item to prevent duplicates
+            tx.execute(
+                "DELETE FROM pictures WHERE library_item_id = ?",
+                rusqlite::params![item.key().to_string()],
+            )?;
+
+            // Then insert the current pictures
             for picture in item.pictures() {
                 tx.execute(
-                    "INSERT OR REPLACE INTO pictures 
+                    "INSERT INTO pictures 
                      (library_item_id, mime_type, picture_type, description, file_path) 
                      VALUES (?1, ?2, ?3, ?4, ?5)",
                     rusqlite::params![

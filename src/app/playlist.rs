@@ -143,13 +143,14 @@ impl Playlist {
         let tx = conn.transaction()?;
 
         // Insert or update the playlist record
-        match self.id {
+        let playlist_id = match self.id {
             Some(id) => {
                 // Update existing playlist
                 tx.execute(
                     "UPDATE playlists SET name = ?1 WHERE id = ?2",
                     rusqlite::params![self.name, id],
                 )?;
+                id
             }
             None => {
                 // Insert new playlist
@@ -157,14 +158,61 @@ impl Playlist {
                     "INSERT INTO playlists (name) VALUES (?1)",
                     rusqlite::params![self.name],
                 )?;
+                tx.last_insert_rowid()
             }
+        };
+
+        // Clear existing playlist items
+        tx.execute(
+            "DELETE FROM playlist_items WHERE playlist_id = ?1",
+            rusqlite::params![playlist_id],
+        )?;
+
+        // Insert the tracks with their positions
+        for (position, track) in self.tracks.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO playlist_items (playlist_id, library_item_id, position) 
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![playlist_id, track.key().to_string(), position as i32],
+            )?;
         }
 
-        // Get the playlist ID (either existing or newly inserted)
+        // Commit the transaction
+        tx.commit()?;
+
+        Ok(())
+    }
+
+    pub fn save_to_db_and_update_id(&mut self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
+        let mut conn = conn.lock().unwrap();
+
+        // Start a transaction
+        let tx = conn.transaction()?;
+
+        // Insert or update the playlist record
         let playlist_id = match self.id {
-            Some(id) => id,
-            None => tx.last_insert_rowid(),
+            Some(id) => {
+                // Update existing playlist
+                tx.execute(
+                    "UPDATE playlists SET name = ?1 WHERE id = ?2",
+                    rusqlite::params![self.name, id],
+                )?;
+                id
+            }
+            None => {
+                // Insert new playlist
+                tx.execute(
+                    "INSERT INTO playlists (name) VALUES (?1)",
+                    rusqlite::params![self.name],
+                )?;
+                tx.last_insert_rowid()
+            }
         };
+
+        // Update the playlist ID if it was None
+        if self.id.is_none() {
+            self.id = Some(playlist_id);
+        }
 
         // Clear existing playlist items
         tx.execute(
