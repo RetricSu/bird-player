@@ -27,7 +27,7 @@ impl eframe::App for App {
                     ui.spinner();
                 });
             });
-            
+
             // Load heavy data synchronously since database is now small and fast
             self.load_heavy_data();
             return;

@@ -323,16 +323,16 @@ impl App {
 
         // Clone the database connection for the background thread
         let db_connection = self.database.clone();
-        
+
         // Start loading in a background thread
         std::thread::spawn(move || {
             if let Some(db) = db_connection {
                 // Load library
                 let _library_result = Library::load_from_db(&db.connection());
-                
+
                 // Load playlists
                 let _playlists_result = playlist::Playlist::load_all_from_db(&db.connection());
-                
+
                 tracing::info!("Async loading completed");
             } else {
                 tracing::warn!("No database connection for async loading");
@@ -809,9 +809,9 @@ impl App {
         if let Some(ref db) = self.database {
             let conn = db.connection();
             let conn_guard = conn.lock().unwrap();
-            
+
             tracing::info!("Cleaning up duplicate pictures in database...");
-            
+
             // Delete all duplicate pictures, keeping only the first one for each library_item_id
             let result = conn_guard.execute(
                 "DELETE FROM pictures WHERE id NOT IN (
@@ -819,7 +819,7 @@ impl App {
                 )",
                 [],
             );
-            
+
             match result {
                 Ok(rows_deleted) => {
                     tracing::info!("Cleaned up {} duplicate picture records", rows_deleted);
@@ -841,4 +841,3 @@ pub mod version_info {
         format!("Version {} ({})", VERSION, GIT_HASH)
     }
 }
-
