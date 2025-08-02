@@ -739,6 +739,32 @@ impl App {
     pub fn get_language(&self) -> i18n::Language {
         self.current_language
     }
+
+    pub fn cleanup_duplicate_pictures(&self) {
+        if let Some(ref db) = self.database {
+            let conn = db.connection();
+            let conn_guard = conn.lock().unwrap();
+            
+            tracing::info!("Cleaning up duplicate pictures in database...");
+            
+            // Delete all duplicate pictures, keeping only the first one for each library_item_id
+            let result = conn_guard.execute(
+                "DELETE FROM pictures WHERE id NOT IN (
+                    SELECT MIN(id) FROM pictures GROUP BY library_item_id, mime_type, picture_type, description, file_path
+                )",
+                [],
+            );
+            
+            match result {
+                Ok(rows_deleted) => {
+                    tracing::info!("Cleaned up {} duplicate picture records", rows_deleted);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to clean up duplicate pictures: {}", e);
+                }
+            }
+        }
+    }
 }
 
 // Include the version info module generated at build time

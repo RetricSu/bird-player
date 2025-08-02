@@ -175,9 +175,16 @@ impl Library {
             )?;
 
             // Save pictures for this item
+            // First, delete existing pictures for this item to prevent duplicates
+            tx.execute(
+                "DELETE FROM pictures WHERE library_item_id = ?",
+                rusqlite::params![item.key().to_string()],
+            )?;
+
+            // Then insert the current pictures
             for picture in item.pictures() {
                 tx.execute(
-                    "INSERT OR REPLACE INTO pictures 
+                    "INSERT INTO pictures 
                      (library_item_id, mime_type, picture_type, description, file_path) 
                      VALUES (?1, ?2, ?3, ?4, ?5)",
                     rusqlite::params![
@@ -274,11 +281,8 @@ impl Library {
 
         // Load pictures for each item
         for item in &mut items {
-            let _item_key = item.key() as i64;
+            let item_key = item.key() as i64;
 
-            // Temporarily disable picture loading to improve startup performance
-            // TODO: Fix the picture loading issue that's causing 18.8M records
-            /*
             let mut pic_stmt = conn_guard.prepare(
                 "SELECT mime_type, picture_type, description, file_path 
                  FROM pictures WHERE library_item_id = ?",
@@ -301,7 +305,6 @@ impl Library {
             for picture_result in picture_rows {
                 item.add_picture(picture_result?);
             }
-            */
         }
 
         // Add items to the library
