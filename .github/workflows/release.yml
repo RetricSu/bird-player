@@ -59,7 +59,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.85.0
           target: ${{ matrix.TARGET }}
           override: true
 

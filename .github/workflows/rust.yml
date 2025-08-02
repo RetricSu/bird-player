@@ -21,9 +21,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libglib2.0-dev libasound2-dev libpulse-dev
       - name: Install Rust
-        run: |
-          rustup update stable
-          rustup default stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.85.0
+          override: true
       - name: Cargo fmt
         run: cargo fmt --all -- --check
       - name: Cargo clippy with PulseAudio
@@ -44,9 +45,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libglib2.0-dev libasound2-dev
       - name: Install Rust
-        run: |
-          rustup update stable
-          rustup default stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.85.0
+          override: true
       - name: Cargo clippy without PulseAudio
         run: cargo clippy -- -D warnings
       - name: Cargo build without PulseAudio
