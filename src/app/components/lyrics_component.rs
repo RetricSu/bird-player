@@ -77,16 +77,12 @@ impl LyricsComponent {
                 // Highlight current line
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::BLACK)
+                        .color(egui::Color32::BLUE)
                         .size(16.0)
                         .strong(),
                 ));
             } else {
-                ui.add(egui::Label::new(
-                    egui::RichText::new(label)
-                        .color(egui::Color32::BLACK)
-                        .size(14.0),
-                ));
+                ui.add(egui::Label::new(egui::RichText::new(label)));
             }
 
             // Add some spacing between lines
