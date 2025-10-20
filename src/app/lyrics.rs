@@ -66,7 +66,7 @@ impl Lyrics {
         let minutes: u64 = parts[0].parse().map_err(|_| ())?;
         let seconds: f64 = parts[1].parse().map_err(|_| ())?;
 
-        Ok((minutes * 60 * 1000) as u64 + (seconds * 1000.0) as u64)
+        Ok((minutes * 60 * 1000) + (seconds * 1000.0) as u64)
     }
 }
 
@@ -253,6 +253,12 @@ impl LyricsService {
                 None
             }
         }
+    }
+}
+
+impl Default for LyricsService {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

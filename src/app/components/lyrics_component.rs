@@ -66,7 +66,7 @@ impl LyricsComponent {
             0
         };
 
-        for (_index, line) in lyrics.lines.iter().enumerate() {
+        for line in &lyrics.lines {
             let is_current_line =
                 if let (Some(start), Some(end)) = (line.start_time_ms, line.end_time_ms) {
                     current_time_ms >= start && current_time_ms < end
