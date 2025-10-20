@@ -56,7 +56,26 @@ impl eframe::App for App {
                     tracing::debug!("📡 Lyrics response received");
                     self.current_lyrics = lyrics;
                     self.pending_lyrics_rx = None; // Clear the receiver
-                                                   // Show the lyrics panel when lyrics are loaded
+
+                    // Store the fetched lyrics in the ID3 tag for future use
+                    if let Some(lyrics_data) = &self.current_lyrics {
+                        if let Some(player) = &self.player {
+                            if let Some(track) = &player.selected_track {
+                                if let Err(e) =
+                                    crate::app::lyrics::LyricsService::write_lyrics_to_file(
+                                        track.path(),
+                                        lyrics_data,
+                                    )
+                                {
+                                    tracing::warn!("⚠️  Failed to cache lyrics in ID3 tag: {}", e);
+                                } else {
+                                    tracing::info!("📝 Successfully cached lyrics in ID3 tag");
+                                }
+                            }
+                        }
+                    }
+
+                    // Show the lyrics panel when lyrics are loaded
                     if let Some(lyrics_data) = &self.current_lyrics {
                         if lyrics_data.instrumental
                             || !lyrics_data.lines.is_empty()

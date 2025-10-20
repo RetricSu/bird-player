@@ -880,11 +880,35 @@ impl App {
 
         if let Some(player) = &self.player {
             if let Some(track) = &player.selected_track {
+                let artist = track
+                    .artist()
+                    .unwrap_or_else(|| "Unknown Artist".to_string());
+                let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
+
+                // First, try to read lyrics from the ID3 tag
+                if let Some(cached_lyrics) =
+                    crate::app::lyrics::LyricsService::read_lyrics_from_file(
+                        track.path(),
+                        &artist,
+                        &title,
+                    )
+                {
+                    tracing::info!(
+                        "✅ Found cached lyrics in ID3 tag for '{}'",
+                        track.path().display()
+                    );
+                    self.current_lyrics = Some(cached_lyrics);
+                    // Show the lyrics panel when cached lyrics are loaded
+                    if self.current_lyrics.as_ref().is_some_and(|lyrics| {
+                        !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some()
+                    }) {
+                        self.show_lyrics_panel = true;
+                    }
+                    return; // Don't fetch from API if we have cached lyrics
+                }
+
+                // If no cached lyrics, proceed with API fetch
                 if let Some(lyrics_service) = &self.lyrics_service {
-                    let artist = track
-                        .artist()
-                        .unwrap_or_else(|| "Unknown Artist".to_string());
-                    let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
                     let album = track.album();
                     let duration = if player.duration > 0 {
                         Some(player.duration)
@@ -893,7 +917,7 @@ impl App {
                     };
 
                     tracing::info!(
-                        "🎵 Triggered lyrics fetch for track: '{}' by '{}'",
+                        "🎵 No cached lyrics found, fetching from API for track: '{}' by '{}'",
                         title,
                         artist
                     );
