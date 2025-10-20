@@ -22,7 +22,7 @@ A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, fe
 - [ ] Improve the resource usage and make it small and fast
 - [ ] Add support for more audio formats
 - [ ] Add support for batch tag editing
-- [ ] Add support for lyrics searching and displaying
+- [x] Add support for lyrics searching and displaying
 - [ ] Add support for speed control
 - [ ] Implement a skin system
 
