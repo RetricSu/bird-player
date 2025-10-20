@@ -154,8 +154,31 @@ fn main() {
                             break 'once Ok(());
                         }
 
-                        let reader = audio_engine_state.reader.as_mut().unwrap();
-                        let play_opts = audio_engine_state.track_info.unwrap();
+                        // Check if we have a valid reader and track info before proceeding
+                        let reader = match audio_engine_state.reader.as_mut() {
+                            Some(reader) => reader,
+                            None => {
+                                tracing::warn!("AudioThread Playing - No reader available, switching to stopped");
+                                state = PlayerState::Stopped;
+                                ui_tx
+                                    .send(UiCommand::AudioFinished)
+                                    .expect("Failed to send audio finished to ui thread");
+                                break 'once Ok(());
+                            }
+                        };
+
+                        let play_opts = match audio_engine_state.track_info {
+                            Some(opts) => opts,
+                            None => {
+                                tracing::warn!("AudioThread Playing - No track info available, switching to stopped");
+                                state = PlayerState::Stopped;
+                                ui_tx
+                                    .send(UiCommand::AudioFinished)
+                                    .expect("Failed to send audio finished to ui thread");
+                                break 'once Ok(());
+                            }
+                        };
+
                         let audio_output = &mut audio_engine_state.audio_output;
                         // Get the next packet from the format reader.
                         let packet = match reader.next_packet() {
@@ -285,12 +308,25 @@ fn main() {
                             &mut decoder,
                             seek_timestamp,
                         );
-                        state = PlayerState::Playing;
 
-                        // Update UI with playing state to ensure synchronization
-                        ui_tx
-                            .send(UiCommand::PlaybackStateChanged(true))
-                            .expect("Failed to send playback state to ui thread");
+                        // Check if the load was successful before proceeding
+                        if audio_engine_state.reader.is_some()
+                            && audio_engine_state.track_info.is_some()
+                        {
+                            state = PlayerState::Playing;
+
+                            // Update UI with playing state to ensure synchronization
+                            ui_tx
+                                .send(UiCommand::PlaybackStateChanged(true))
+                                .expect("Failed to send playback state to ui thread");
+                        } else {
+                            // Loading failed during seek - notify UI and set to stopped
+                            tracing::warn!("Failed to reload audio file during seek");
+                            ui_tx
+                                .send(UiCommand::AudioFinished)
+                                .expect("Failed to send audio finished to ui thread");
+                            state = PlayerState::Stopped;
+                        }
                     }
                 }
                 PlayerState::LoadFile(ref path) => {
@@ -310,12 +346,26 @@ fn main() {
 
                     current_track_path = Some((*path).clone());
                     load_file(path, &mut audio_engine_state, &mut decoder, 0);
-                    // TODO - Get total u64 track duration and send to Ui
-                    ui_tx
-                        .send(UiCommand::TotalTrackDuration(audio_engine_state.duration))
-                        .expect("Failed to send play to audio thread");
 
-                    state = PlayerState::Playing;
+                    // Check if the load was successful before proceeding
+                    if audio_engine_state.reader.is_some()
+                        && audio_engine_state.track_info.is_some()
+                    {
+                        // TODO - Get total u64 track duration and send to Ui
+                        ui_tx
+                            .send(UiCommand::TotalTrackDuration(audio_engine_state.duration))
+                            .expect("Failed to send play to audio thread");
+
+                        state = PlayerState::Playing;
+                    } else {
+                        // Loading failed - notify UI and set to stopped
+                        tracing::warn!("Failed to load audio file: {:?}", path);
+                        ui_tx
+                            .send(UiCommand::AudioFinished)
+                            .expect("Failed to send audio finished to ui thread");
+                        state = PlayerState::Stopped;
+                        current_track_path = None;
+                    }
                 }
                 PlayerState::Paused => {
                     std::thread::sleep(std::time::Duration::from_millis(50));
@@ -532,11 +582,41 @@ fn load_file(
             audio_engine_state.seek = seek;
 
             // Configure everything for playback.
-            _ = setup_audio_reader(audio_engine_state);
+            if let Err(err) = setup_audio_reader(audio_engine_state) {
+                tracing::warn!("Failed to setup audio reader: {}", err);
+                // Reset the audio engine state to prevent crashes
+                audio_engine_state.reader = None;
+                audio_engine_state.track_info = None;
+                audio_engine_state.decode_opts = None;
+                audio_engine_state.seek = None;
+                audio_engine_state.duration = 0;
+                *decoder = None;
+                return;
+            }
 
-            let reader = audio_engine_state.reader.as_mut().unwrap();
-            let play_opts = audio_engine_state.track_info.unwrap();
-            let decode_opts = audio_engine_state.decode_opts.unwrap();
+            let reader = match audio_engine_state.reader.as_mut() {
+                Some(reader) => reader,
+                None => {
+                    tracing::warn!("Reader is None after setup");
+                    return;
+                }
+            };
+
+            let play_opts = match audio_engine_state.track_info {
+                Some(opts) => opts,
+                None => {
+                    tracing::warn!("Track info is None after setup");
+                    return;
+                }
+            };
+
+            let decode_opts = match audio_engine_state.decode_opts {
+                Some(opts) => opts,
+                None => {
+                    tracing::warn!("Decode opts is None after setup");
+                    return;
+                }
+            };
 
             let track = match reader
                 .tracks()
@@ -577,7 +657,16 @@ fn load_file(
         Err(err) => {
             // The input was not supported by any format reader.
             tracing::warn!("the audio format is not supported: {}", err);
-            // Err(err);
+
+            // Reset the audio engine state to prevent crashes
+            audio_engine_state.reader = None;
+            audio_engine_state.track_info = None;
+            audio_engine_state.decode_opts = None;
+            audio_engine_state.seek = None;
+            audio_engine_state.duration = 0;
+
+            // Clear any existing decoder
+            *decoder = None;
         }
     }
 }
@@ -585,7 +674,13 @@ fn load_file(
 fn setup_audio_reader(audio_engine_state: &mut AudioEngineState) -> Result<i32> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
-    let reader = audio_engine_state.reader.as_mut().unwrap();
+    let reader = match audio_engine_state.reader.as_mut() {
+        Some(reader) => reader,
+        None => {
+            tracing::warn!("No reader available in setup_audio_reader");
+            return Err(Error::Unsupported("No reader available"));
+        }
+    };
     let seek = &audio_engine_state.seek;
 
     let track = audio_engine_state
@@ -616,7 +711,12 @@ fn setup_audio_reader(audio_engine_state: &mut AudioEngineState) -> Result<i32> 
             Err(Error::ResetRequired) => {
                 tracing::warn!("reset required...");
                 // print_tracks(reader.tracks());
-                track_id = first_supported_track(reader.tracks()).unwrap().id;
+                if let Some(track) = first_supported_track(reader.tracks()) {
+                    track_id = track.id;
+                } else {
+                    tracing::warn!("No supported tracks found after reset");
+                    return Err(Error::Unsupported("No supported tracks after reset"));
+                }
                 0
             }
             Err(err) => {
