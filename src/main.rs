@@ -209,12 +209,20 @@ fn main() {
                             && (packet.ts > last_ts + 100 || packet.ts < last_ts)
                         // Update every 100ms if changed by more than 100ms or went backwards
                         {
+                            // Convert packet timestamp from timebase units to milliseconds
+                            let timestamp_ms = if audio_engine_state.timebase > 0 {
+                                ((packet.ts() as f64 / audio_engine_state.timebase as f64) * 1000.0)
+                                    as u64
+                            } else {
+                                packet.ts()
+                            };
+
                             ui_tx
-                                .send(UiCommand::CurrentTimestamp(packet.ts))
+                                .send(UiCommand::CurrentTimestamp(timestamp_ms))
                                 .expect("Failed to send timestamp to ui thread");
 
                             timer = std::time::Instant::now();
-                            last_ts = packet.ts;
+                            last_ts = packet.ts();
                         }
 
                         // Decode the packet into audio samples.
@@ -642,23 +650,40 @@ fn load_file(
 
             // Get the selected track's timebase and duration.
             let tb = track.codec_params.time_base;
-            let dur = track
-                .codec_params
-                .n_frames
-                .map(|frames| track.codec_params.start_ts + frames);
+            let sample_rate = track.codec_params.sample_rate;
+            tracing::debug!(
+                "Codec params - time_base: {:?}, sample_rate: {:?}",
+                tb,
+                sample_rate
+            );
 
-            // Store the timebase
-            if let Some(time_base) = tb {
-                audio_engine_state.timebase = time_base.numer as u64 / time_base.denom as u64;
+            // Store the timebase - use sample rate as the most reliable source
+            if let Some(sample_rate) = track.codec_params.sample_rate {
+                audio_engine_state.timebase = sample_rate as u64;
+                tracing::debug!("Using sample rate {} as timebase", sample_rate);
+            } else if let Some(time_base) = tb {
+                // Fallback to timebase calculation if sample_rate is not available
+                let tb_hz = time_base.numer as f64 / time_base.denom as f64;
+                audio_engine_state.timebase = tb_hz as u64;
+                tracing::debug!(
+                    "Using timebase calculation: {} Hz ({} / {})",
+                    tb_hz,
+                    time_base.numer,
+                    time_base.denom
+                );
+            } else {
+                tracing::warn!("No timebase or sample rate available, using default 44100");
+                audio_engine_state.timebase = 44100; // Common default for audio
             }
 
             // Convert duration to milliseconds
-            if let Some(duration) = dur {
-                if let Some(time_base) = tb {
-                    let timebase_hz = time_base.numer as f64 / time_base.denom as f64;
-                    audio_engine_state.duration = ((duration as f64 / timebase_hz) * 1000.0) as u64;
+            // For MP3, n_frames is typically the total number of samples
+            if let Some(n_frames) = track.codec_params.n_frames {
+                let timebase_hz = audio_engine_state.timebase as f64;
+                if timebase_hz > 0.0 {
+                    audio_engine_state.duration = ((n_frames as f64 / timebase_hz) * 1000.0) as u64;
                 } else {
-                    audio_engine_state.duration = duration;
+                    audio_engine_state.duration = n_frames;
                 }
             }
 
