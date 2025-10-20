@@ -50,9 +50,11 @@ impl Player {
         self.selected_track = track;
 
         if let Some(track) = &self.selected_track {
-            self.audio_tx
-                .send(AudioCommand::LoadFile(track.path()))
-                .expect("Failed to send select to audio thread");
+            if let Err(e) = self.audio_tx.send(AudioCommand::LoadFile(track.path())) {
+                tracing::error!("Failed to send select to audio thread: {}", e);
+                // Audio thread is likely dead, mark as stopped
+                self.track_state = TrackState::Stopped;
+            }
         }
     }
 
@@ -62,9 +64,11 @@ impl Player {
 
     pub fn seek_to(&mut self, seek_to_timestamp: u64) {
         self.seek_to_timestamp = seek_to_timestamp;
-        self.audio_tx
-            .send(AudioCommand::Seek(seek_to_timestamp))
-            .expect("Failed to send seek to audio thread");
+        if let Err(e) = self.audio_tx.send(AudioCommand::Seek(seek_to_timestamp)) {
+            tracing::error!("Failed to send seek to audio thread: {}", e);
+            // Audio thread is likely dead, mark as stopped
+            self.track_state = TrackState::Stopped;
+        }
     }
 
     // TODO: Should return Result
@@ -72,9 +76,10 @@ impl Player {
         match &self.track_state {
             TrackState::Playing | TrackState::Paused => {
                 self.track_state = TrackState::Stopped;
-                self.audio_tx
-                    .send(AudioCommand::Stop)
-                    .expect("Failed to send stop to audio thread");
+                if let Err(e) = self.audio_tx.send(AudioCommand::Stop) {
+                    tracing::error!("Failed to send stop to audio thread: {}", e);
+                    // Audio thread is likely dead, state already set to stopped
+                }
             }
             _ => (),
         }
@@ -87,15 +92,17 @@ impl Player {
                 TrackState::Unstarted | TrackState::Stopped | TrackState::Playing => {
                     self.track_state = TrackState::Playing;
 
-                    self.audio_tx
-                        .send(AudioCommand::Play)
-                        .expect("Failed to send play to audio thread");
+                    if let Err(e) = self.audio_tx.send(AudioCommand::Play) {
+                        tracing::error!("Failed to send play to audio thread: {}", e);
+                        self.track_state = TrackState::Stopped;
+                    }
                 }
                 TrackState::Paused => {
                     self.track_state = TrackState::Playing;
-                    self.audio_tx
-                        .send(AudioCommand::Play)
-                        .expect("Failed to send play to audio thread");
+                    if let Err(e) = self.audio_tx.send(AudioCommand::Play) {
+                        tracing::error!("Failed to send play to audio thread: {}", e);
+                        self.track_state = TrackState::Stopped;
+                    }
                 }
             }
         }
@@ -106,15 +113,17 @@ impl Player {
         match self.track_state {
             TrackState::Playing => {
                 self.track_state = TrackState::Paused;
-                self.audio_tx
-                    .send(AudioCommand::Pause)
-                    .expect("Failed to send pause to audio thread");
+                if let Err(e) = self.audio_tx.send(AudioCommand::Pause) {
+                    tracing::error!("Failed to send pause to audio thread: {}", e);
+                    self.track_state = TrackState::Stopped;
+                }
             }
             TrackState::Paused => {
                 self.track_state = TrackState::Playing;
-                self.audio_tx
-                    .send(AudioCommand::Play)
-                    .expect("Failed to send play to audio thread");
+                if let Err(e) = self.audio_tx.send(AudioCommand::Play) {
+                    tracing::error!("Failed to send play to audio thread: {}", e);
+                    self.track_state = TrackState::Stopped;
+                }
             }
             _ => (),
         }
@@ -177,9 +186,10 @@ impl Player {
         if !is_processing_ui_change.load(Ordering::Acquire) {
             is_processing_ui_change.store(true, Ordering::Release);
             self.volume = volume;
-            self.audio_tx
-                .send(AudioCommand::SetVolume(volume))
-                .expect("Failed to send play to audio thread");
+            if let Err(e) = self.audio_tx.send(AudioCommand::SetVolume(volume)) {
+                tracing::error!("Failed to send volume to audio thread: {}", e);
+                self.track_state = TrackState::Stopped;
+            }
         }
     }
 
