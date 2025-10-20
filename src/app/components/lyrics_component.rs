@@ -86,13 +86,14 @@ impl LyricsComponent {
                 // Highlight current line
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::YELLOW)
-                        .size(16.0),
+                        .color(egui::Color32::BLACK)
+                        .size(16.0)
+                        .strong(),
                 ));
             } else {
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::from_rgb(200, 200, 200))
+                        .color(egui::Color32::BLACK)
                         .size(14.0),
                 ));
             }
@@ -109,7 +110,7 @@ impl LyricsComponent {
             } else {
                 ui.add(egui::Label::new(
                     egui::RichText::new(line)
-                        .color(egui::Color32::from_rgb(200, 200, 200))
+                        .color(egui::Color32::BLACK)
                         .size(14.0),
                 ));
             }

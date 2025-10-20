@@ -93,8 +93,6 @@ impl eframe::App for App {
                 .default_width(300.0)
                 .resizable(true)
                 .show(ctx, |ui| {
-                    ui.heading("Lyrics");
-                    ui.separator();
                     LyricsComponent::add(self, ui);
                 });
         }
