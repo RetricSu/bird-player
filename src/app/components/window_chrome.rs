@@ -45,6 +45,7 @@ impl AppComponent for WindowChrome {
             });
 
             // Add Playback menu
+            let mut fetch_lyrics = false;
             ui.menu_button(t("playback"), |ui| {
                 if let Some(player) = &mut ctx.player {
                     if let Some(_selected_track) = &player.selected_track {
@@ -62,12 +63,14 @@ impl AppComponent for WindowChrome {
                         if ui.button(t("previous")).clicked() {
                             if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
                                 player.previous(&ctx.playlists[playing_playlist_idx]);
+                                fetch_lyrics = true;
                             }
                             ui.close_menu();
                         }
                         if ui.button(t("next")).clicked() {
                             if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
                                 player.next(&ctx.playlists[playing_playlist_idx]);
+                                fetch_lyrics = true;
                             }
                             ui.close_menu();
                         }
@@ -102,6 +105,23 @@ impl AppComponent for WindowChrome {
                             let _ = ui.button(crate::app::tf("play_mode", &["➡"]));
                         });
                     }
+                }
+            });
+
+            if fetch_lyrics {
+                ctx.fetch_lyrics_for_current_track();
+            }
+
+            // Add View menu
+            ui.menu_button(t("view"), |ui| {
+                let lyrics_text = if ctx.show_lyrics_panel {
+                    t("hide_lyrics")
+                } else {
+                    t("show_lyrics")
+                };
+                if ui.button(lyrics_text).clicked() {
+                    ctx.show_lyrics_panel = !ctx.show_lyrics_panel;
+                    ui.close_menu();
                 }
             });
 

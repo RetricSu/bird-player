@@ -60,6 +60,11 @@ pub fn init() {
     en.insert("play_mode".to_string(), "Play Mode: {}".to_string());
     en.insert("restore_window".to_string(), "Restore Window".to_string());
 
+    // View menu
+    en.insert("view".to_string(), "View".to_string());
+    en.insert("show_lyrics".to_string(), "Show Lyrics".to_string());
+    en.insert("hide_lyrics".to_string(), "Hide Lyrics".to_string());
+
     // Help menu
     en.insert("help".to_string(), "Help".to_string());
     en.insert("about".to_string(), "About".to_string());
@@ -150,6 +155,12 @@ pub fn init() {
     zh.insert("next".to_string(), "下一首".to_string());
     zh.insert("play_mode".to_string(), "播放模式: {}".to_string());
     zh.insert("restore_window".to_string(), "复原窗口".to_string());
+
+    // View menu
+    zh.insert("view".to_string(), "视图".to_string());
+    zh.insert("show_lyrics".to_string(), "显示歌词".to_string());
+    zh.insert("hide_lyrics".to_string(), "隐藏歌词".to_string());
+
     // Help menu
     zh.insert("help".to_string(), "帮助".to_string());
     zh.insert("about".to_string(), "关于".to_string());

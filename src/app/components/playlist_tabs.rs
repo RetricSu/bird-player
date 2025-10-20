@@ -9,7 +9,7 @@ impl AppComponent for PlaylistTabs {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
             // Add playlist tabs
             for (idx, playlist) in ctx.playlists.iter_mut().enumerate() {
                 let is_selected = ctx.current_playlist_idx == Some(idx);

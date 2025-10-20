@@ -2,9 +2,9 @@ use eframe::egui;
 
 use super::{App, LibraryCommand};
 use crate::app::components::{
-    footer::Footer, library_component::LibraryComponent, player_component::PlayerComponent,
-    playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs, window_chrome::WindowChrome,
-    AppComponent,
+    footer::Footer, library_component::LibraryComponent, lyrics_component::LyricsComponent,
+    player_component::PlayerComponent, playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs,
+    window_chrome::WindowChrome, AppComponent,
 };
 
 impl eframe::App for App {
@@ -49,6 +49,46 @@ impl eframe::App for App {
             }
         }
 
+        // Check for pending lyrics response
+        if let Some(lyrics_rx) = &self.pending_lyrics_rx {
+            match lyrics_rx.try_recv() {
+                Ok(lyrics) => {
+                    tracing::debug!("📡 Lyrics response received");
+                    self.current_lyrics = lyrics;
+                    self.pending_lyrics_rx = None; // Clear the receiver
+                                                   // Show the lyrics panel when lyrics are loaded
+                    if let Some(lyrics_data) = &self.current_lyrics {
+                        if lyrics_data.instrumental
+                            || !lyrics_data.lines.is_empty()
+                            || lyrics_data.plain_lyrics.is_some()
+                        {
+                            self.show_lyrics_panel = true;
+                        }
+                    }
+                    if let Some(lyrics_data) = &self.current_lyrics {
+                        if lyrics_data.instrumental {
+                            tracing::info!("✅ Found instrumental track");
+                        } else if !lyrics_data.lines.is_empty()
+                            || lyrics_data.plain_lyrics.is_some()
+                        {
+                            tracing::info!("✅ Lyrics loaded successfully");
+                        } else {
+                            tracing::warn!("⚠️  Lyrics record found but no content available");
+                        }
+                    } else {
+                        tracing::warn!("❌ No lyrics found");
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    // No response yet, continue
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    tracing::error!("📡 Lyrics service disconnected");
+                    self.pending_lyrics_rx = None;
+                }
+            }
+        }
+
         if let Some(selected_track) = &self.player.as_mut().unwrap().selected_track {
             let display = format!(
                 "{} - {} [ Music Player ]",
@@ -87,9 +127,23 @@ impl eframe::App for App {
                 });
         });
 
+        // Lyrics panel (right side, can be toggled)
+        if self.show_lyrics_panel {
+            egui::SidePanel::right("Lyrics Panel")
+                .default_width(300.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    LyricsComponent::add(self, ui);
+                });
+        }
+
         egui::CentralPanel::default().show(ctx, |_ui| {
             egui::TopBottomPanel::top("Playlist Tabs").show(ctx, |ui| {
-                PlaylistTabs::add(self, ui);
+                egui::ScrollArea::horizontal()
+                    .auto_shrink([false, true]) // Don't shrink horizontally, allow vertical shrinking
+                    .show(ui, |ui| {
+                        PlaylistTabs::add(self, ui);
+                    });
             });
 
             egui::CentralPanel::default().show(ctx, |ui| {
