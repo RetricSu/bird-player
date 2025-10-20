@@ -899,7 +899,7 @@ impl App {
                     );
                     self.current_lyrics = Some(cached_lyrics);
                     // Show the lyrics panel when cached lyrics are loaded
-                    if self.current_lyrics.as_ref().map_or(false, |lyrics| {
+                    if self.current_lyrics.as_ref().is_some_and(|lyrics| {
                         !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some()
                     }) {
                         self.show_lyrics_panel = true;
