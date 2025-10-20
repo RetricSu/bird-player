@@ -13,20 +13,17 @@ impl AppComponent for LyricsComponent {
         egui::ScrollArea::vertical().show(ui, |ui| {
             if let Some(lyrics) = &ctx.current_lyrics {
                 // Show track info
-                ui.heading(&lyrics.track_name);
-                ui.label(format!("by {}", &lyrics.artist_name));
+                ui.label(format!("Lyrics：{}", &lyrics.track_name));
+                ui.label(format!("Artist：{}", &lyrics.artist_name));
                 if let Some(album) = &lyrics.album_name {
-                    ui.label(format!("from {}", album));
+                    ui.label(format!("From：{}", album));
                 }
                 ui.separator();
 
                 // Show lyrics
                 if lyrics.instrumental {
                     ui.add(egui::Label::new(
-                        egui::RichText::new("♪ Instrumental ♪")
-                            .color(egui::Color32::from_rgb(150, 150, 150))
-                            .size(16.0)
-                            .italics(),
+                        egui::RichText::new("♪ Instrumental ♪").italics(),
                     ));
                 } else if !lyrics.lines.is_empty() {
                     // Show synced lyrics with current line highlighting
@@ -35,22 +32,16 @@ impl AppComponent for LyricsComponent {
                     Self::show_plain_lyrics(ui, plain_lyrics);
                 } else {
                     ui.add(egui::Label::new(
-                        egui::RichText::new("No lyrics available")
-                            .color(egui::Color32::from_rgb(150, 150, 150))
-                            .italics(),
+                        egui::RichText::new("No lyrics available").italics(),
                     ));
                 }
             } else {
                 ui.vertical_centered(|ui| {
                     ui.add(egui::Label::new(
-                        egui::RichText::new("No lyrics loaded")
-                            .color(egui::Color32::from_rgb(150, 150, 150))
-                            .italics(),
+                        egui::RichText::new("No lyrics loaded").italics(),
                     ));
                     ui.add(egui::Label::new(
-                        egui::RichText::new("Select a track to view lyrics")
-                            .color(egui::Color32::from_rgb(150, 150, 150))
-                            .italics(),
+                        egui::RichText::new("Select a track to view lyrics").italics(),
                     ));
                 });
             }
@@ -86,16 +77,12 @@ impl LyricsComponent {
                 // Highlight current line
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::BLACK)
+                        .color(egui::Color32::BLUE)
                         .size(16.0)
                         .strong(),
                 ));
             } else {
-                ui.add(egui::Label::new(
-                    egui::RichText::new(label)
-                        .color(egui::Color32::BLACK)
-                        .size(14.0),
-                ));
+                ui.add(egui::Label::new(egui::RichText::new(label)));
             }
 
             // Add some spacing between lines
@@ -108,11 +95,7 @@ impl LyricsComponent {
             if line.trim().is_empty() {
                 ui.add_space(8.0);
             } else {
-                ui.add(egui::Label::new(
-                    egui::RichText::new(line)
-                        .color(egui::Color32::BLACK)
-                        .size(14.0),
-                ));
+                ui.add(egui::Label::new(egui::RichText::new(line)));
             }
         }
     }
