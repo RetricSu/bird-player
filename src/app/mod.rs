@@ -24,7 +24,7 @@ pub const DEFAULT_WINDOW_HEIGHT: f32 = 468.0;
 mod app_impl;
 mod components;
 pub mod i18n;
-mod library;
+pub mod library;
 pub mod lyrics;
 pub mod player;
 mod playlist;
@@ -72,6 +72,7 @@ pub struct AppSettings {
     // UI state
     pub library_folders_expanded: bool,
     pub default_window_height: f64,
+    pub show_lyrics_panel: bool,
 }
 
 impl Default for AppSettings {
@@ -85,6 +86,7 @@ impl Default for AppSettings {
             was_playing: None,
             library_folders_expanded: false,
             default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
+            show_lyrics_panel: false,
         }
     }
 }
@@ -178,6 +180,9 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub pending_lyrics_rx: Option<std::sync::mpsc::Receiver<Option<lyrics::Lyrics>>>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub should_fetch_lyrics_on_init: bool,
 }
 
 impl Default for App {
@@ -214,6 +219,7 @@ impl Default for App {
             current_lyrics: None,
             show_lyrics_panel: false,
             pending_lyrics_rx: None,
+            should_fetch_lyrics_on_init: false,
         }
     }
 }
@@ -239,6 +245,7 @@ impl App {
             app.was_playing = settings.was_playing;
             app.library_folders_expanded = settings.library_folders_expanded;
             app.default_window_height = settings.default_window_height;
+            app.show_lyrics_panel = settings.show_lyrics_panel;
         }
 
         // Set the language from the loaded config
@@ -433,6 +440,12 @@ impl App {
         // Initialize lyrics service
         self.lyrics_service = Some(lyrics::LyricsService::new());
 
+        // Fetch lyrics for restored track if needed
+        if self.should_fetch_lyrics_on_init {
+            self.fetch_lyrics_for_current_track();
+            self.should_fetch_lyrics_on_init = false;
+        }
+
         self.heavy_data_loaded = true;
         tracing::info!("Heavy data loading completed");
     }
@@ -457,6 +470,7 @@ impl App {
             was_playing: self.was_playing,
             library_folders_expanded: self.library_folders_expanded,
             default_window_height: self.default_window_height,
+            show_lyrics_panel: self.show_lyrics_panel,
         };
 
         // Save app settings to confy
