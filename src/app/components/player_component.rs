@@ -67,10 +67,15 @@ impl AppComponent for PlayerComponent {
                     }
                     UiCommand::AudioFinished => {
                         tracing::info!("Track finished, getting next...");
+                        let mut fetch_lyrics = false;
                         if let Some(current_playlist_idx) = ctx.current_playlist_idx {
                             if let Some(player) = &mut ctx.player {
                                 player.next(&ctx.playlists[current_playlist_idx]);
+                                fetch_lyrics = true;
                             }
+                        }
+                        if fetch_lyrics {
+                            ctx.fetch_lyrics_for_current_track();
                         }
                     }
                     UiCommand::PlaybackStateChanged(is_playing) => {
@@ -405,6 +410,7 @@ impl AppComponent for PlayerComponent {
                                 }
 
                                 // Handle button clicks if a track is selected
+                                let mut fetch_lyrics = false;
                                 if has_selected_track {
                                     if let Some(player) = &mut ctx.player {
                                         if mode_btn.clicked() {
@@ -424,6 +430,7 @@ impl AppComponent for PlayerComponent {
                                             player.previous(
                                                 &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
                                             );
+                                            fetch_lyrics = true;
                                         }
 
                                         if next_btn.clicked() && ctx.playing_playlist_idx.is_some()
@@ -431,8 +438,13 @@ impl AppComponent for PlayerComponent {
                                             player.next(
                                                 &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
                                             );
+                                            fetch_lyrics = true;
                                         }
                                     }
+                                }
+
+                                if fetch_lyrics {
+                                    ctx.fetch_lyrics_for_current_track();
                                 }
                             });
                         });

@@ -10,9 +10,7 @@ impl AppComponent for Footer {
         ui.horizontal(|ui| {
             // Playlist operation buttons
             if let Some(current_playlist_idx) = ctx.current_playlist_idx {
-                let playlist = &mut ctx.playlists[current_playlist_idx];
-                let selection_count = playlist.selected_indices.len();
-                let _has_tracks = !playlist.tracks.is_empty();
+                let selection_count = ctx.playlists[current_playlist_idx].selected_indices.len();
 
                 // Track search state in memory
                 let search_active_id = ui.id().with("search_active");
@@ -49,6 +47,7 @@ impl AppComponent for Footer {
                     let show_dropdown_id = ui.id().with("show_search_dropdown");
 
                     ui.vertical(|ui| {
+                        let playlist = &mut ctx.playlists[current_playlist_idx];
                         ui.horizontal(|ui| {
                             // Add the search text field
                             let response = ui.add(
@@ -175,6 +174,9 @@ impl AppComponent for Footer {
                                             ui.set_max_height(200.0);
 
                                             eframe::egui::ScrollArea::vertical().show(ui, |ui| {
+                                                let playlist =
+                                                    &mut ctx.playlists[current_playlist_idx];
+                                                let mut fetch_lyrics = false;
                                                 for (idx, title, artist, album) in results {
                                                     let result_text = format!(
                                                         "{} - {} ({})",
@@ -207,6 +209,8 @@ impl AppComponent for Footer {
                                                         player.select_track(Some(track));
                                                         player.play();
 
+                                                        fetch_lyrics = true;
+
                                                         // Hide the dropdown
                                                         ui.memory_mut(|mem| {
                                                             mem.data.insert_temp(
@@ -215,6 +219,10 @@ impl AppComponent for Footer {
                                                             );
                                                         });
                                                     }
+                                                }
+
+                                                if fetch_lyrics {
+                                                    ctx.fetch_lyrics_for_current_track();
                                                 }
                                             });
                                         });
@@ -263,6 +271,7 @@ impl AppComponent for Footer {
 
                     // Clear Selection button (disabled if no selection)
                     if ui.button("Clear Selection").clicked() {
+                        let playlist = &mut ctx.playlists[current_playlist_idx];
                         playlist.clear_selection();
                     }
                 }
