@@ -49,6 +49,46 @@ impl eframe::App for App {
             }
         }
 
+        // Check for pending lyrics response
+        if let Some(lyrics_rx) = &self.pending_lyrics_rx {
+            match lyrics_rx.try_recv() {
+                Ok(lyrics) => {
+                    tracing::debug!("📡 Lyrics response received");
+                    self.current_lyrics = lyrics;
+                    self.pending_lyrics_rx = None; // Clear the receiver
+                                                   // Show the lyrics panel when lyrics are loaded
+                    if let Some(lyrics_data) = &self.current_lyrics {
+                        if lyrics_data.instrumental
+                            || !lyrics_data.lines.is_empty()
+                            || lyrics_data.plain_lyrics.is_some()
+                        {
+                            self.show_lyrics_panel = true;
+                        }
+                    }
+                    if let Some(lyrics_data) = &self.current_lyrics {
+                        if lyrics_data.instrumental {
+                            tracing::info!("✅ Found instrumental track");
+                        } else if !lyrics_data.lines.is_empty()
+                            || lyrics_data.plain_lyrics.is_some()
+                        {
+                            tracing::info!("✅ Lyrics loaded successfully");
+                        } else {
+                            tracing::warn!("⚠️  Lyrics record found but no content available");
+                        }
+                    } else {
+                        tracing::warn!("❌ No lyrics found");
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    // No response yet, continue
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    tracing::error!("📡 Lyrics service disconnected");
+                    self.pending_lyrics_rx = None;
+                }
+            }
+        }
+
         if let Some(selected_track) = &self.player.as_mut().unwrap().selected_track {
             let display = format!(
                 "{} - {} [ Music Player ]",

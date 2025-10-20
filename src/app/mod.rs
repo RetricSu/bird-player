@@ -175,6 +175,9 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub show_lyrics_panel: bool,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub pending_lyrics_rx: Option<std::sync::mpsc::Receiver<Option<lyrics::Lyrics>>>,
 }
 
 impl Default for App {
@@ -210,6 +213,7 @@ impl Default for App {
             lyrics_service: None,
             current_lyrics: None,
             show_lyrics_panel: false,
+            pending_lyrics_rx: None,
         }
     }
 }
@@ -851,6 +855,15 @@ impl App {
 
     /// Fetch lyrics for the currently selected track
     pub fn fetch_lyrics_for_current_track(&mut self) {
+        // If there's already a pending lyrics request, don't start a new one
+        if self.pending_lyrics_rx.is_some() {
+            tracing::debug!("📡 Lyrics fetch already in progress, skipping");
+            return;
+        }
+
+        // Clear current lyrics when starting a new fetch
+        self.current_lyrics = None;
+
         if let Some(player) = &self.player {
             if let Some(track) = &player.selected_track {
                 if let Some(lyrics_service) = &self.lyrics_service {
@@ -876,51 +889,11 @@ impl App {
                     tracing::debug!("💿 Album: {:?}", album);
                     tracing::debug!("⏱️  Duration: {:?}", duration);
 
-                    let artist_clone = artist.clone();
-                    let title_clone = title.clone();
                     let response_rx = lyrics_service.fetch_lyrics(artist, title, album, duration);
 
-                    // Store the response receiver - we'll check it in the update loop
-                    // For now, we'll handle this synchronously since it's a simple fetch
-                    match response_rx.recv() {
-                        Ok(lyrics) => {
-                            self.current_lyrics = lyrics;
-                            if let Some(lyrics_data) = &self.current_lyrics {
-                                if lyrics_data.instrumental {
-                                    tracing::info!(
-                                        "✅ Found instrumental track for '{}' by '{}'",
-                                        title_clone,
-                                        artist_clone
-                                    );
-                                } else if !lyrics_data.lines.is_empty()
-                                    || lyrics_data.plain_lyrics.is_some()
-                                {
-                                    tracing::info!(
-                                        "✅ Lyrics loaded successfully for '{}' by '{}'",
-                                        title_clone,
-                                        artist_clone
-                                    );
-                                } else {
-                                    tracing::warn!("⚠️  Lyrics record found but no content available for '{}' by '{}'", title_clone, artist_clone);
-                                }
-                            } else {
-                                tracing::warn!(
-                                    "❌ No lyrics found for '{}' by '{}'",
-                                    title_clone,
-                                    artist_clone
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                "❌ Failed to receive lyrics response for '{}' by '{}': {}",
-                                title_clone,
-                                artist_clone,
-                                e
-                            );
-                            self.current_lyrics = None;
-                        }
-                    }
+                    // Store the response receiver - we'll check it asynchronously in the update loop
+                    self.pending_lyrics_rx = Some(response_rx);
+                    tracing::debug!("📡 Lyrics fetch initiated, waiting for response...");
                 } else {
                     tracing::warn!("⚠️  Lyrics service not available");
                 }
