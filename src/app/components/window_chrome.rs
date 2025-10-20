@@ -105,6 +105,19 @@ impl AppComponent for WindowChrome {
                 }
             });
 
+            // Add View menu
+            ui.menu_button(t("view"), |ui| {
+                let lyrics_text = if ctx.show_lyrics_panel {
+                    t("hide_lyrics")
+                } else {
+                    t("show_lyrics")
+                };
+                if ui.button(lyrics_text).clicked() {
+                    ctx.show_lyrics_panel = !ctx.show_lyrics_panel;
+                    ui.close_menu();
+                }
+            });
+
             ui.menu_button(t("help"), |ui| {
                 if ui.button(t("about")).clicked() {
                     ctx.show_about_dialog = true;

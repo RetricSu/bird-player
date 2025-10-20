@@ -25,6 +25,7 @@ mod app_impl;
 mod components;
 pub mod i18n;
 mod library;
+pub mod lyrics;
 pub mod player;
 mod playlist;
 mod style;
@@ -164,6 +165,16 @@ pub struct App {
     // New field to track if heavy data has been loaded
     #[serde(skip_serializing, skip_deserializing)]
     pub heavy_data_loaded: bool,
+
+    // Lyrics functionality
+    #[serde(skip_serializing, skip_deserializing)]
+    pub lyrics_service: Option<lyrics::LyricsService>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub current_lyrics: Option<lyrics::Lyrics>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub show_lyrics_panel: bool,
 }
 
 impl Default for App {
@@ -196,6 +207,9 @@ impl Default for App {
             show_about_dialog: false,
             default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
             heavy_data_loaded: false,
+            lyrics_service: None,
+            current_lyrics: None,
+            show_lyrics_panel: false,
         }
     }
 }
@@ -412,6 +426,9 @@ impl App {
         // Restore player state after heavy data is loaded
         crate::restore_player_state(self);
 
+        // Initialize lyrics service
+        self.lyrics_service = Some(lyrics::LyricsService::new());
+
         self.heavy_data_loaded = true;
         tracing::info!("Heavy data loading completed");
     }
@@ -527,6 +544,14 @@ impl App {
 
                     let library_item = match tag {
                         Ok(tag) => {
+                            tracing::debug!(
+                                "📄 Successfully read ID3 tag from: {}",
+                                entry.path().display()
+                            );
+                            tracing::debug!("🏷️  ID3 Title: {:?}", tag.title());
+                            tracing::debug!("🏷️  ID3 Artist: {:?}", tag.artist());
+                            tracing::debug!("🏷️  ID3 Album: {:?}", tag.album());
+
                             let mut item = LibraryItem::new(entry.path().to_path_buf(), path_id);
 
                             // Get filename without extension as fallback title
@@ -537,17 +562,10 @@ impl App {
                                 .unwrap_or("Unknown Title")
                                 .to_string();
 
-                            // Use filename as title if ID3 tag is missing or contains invalid UTF-8
-                            let title = tag
-                                .title()
-                                .and_then(|t| {
-                                    if t.chars().any(|c| !c.is_ascii() && !c.is_alphabetic()) {
-                                        None
-                                    } else {
-                                        Some(t)
-                                    }
-                                })
-                                .unwrap_or(&filename_title);
+                            // Use filename as title if ID3 tag is missing
+                            let title = tag.title().unwrap_or(&filename_title);
+
+                            tracing::debug!("📝 Final title used: '{}'", title);
 
                             item = item
                                 .set_title(Some(title))
@@ -828,6 +846,77 @@ impl App {
                     tracing::error!("Failed to clean up duplicate pictures: {}", e);
                 }
             }
+        }
+    }
+
+    /// Fetch lyrics for the currently selected track
+    pub fn fetch_lyrics_for_current_track(&mut self) {
+        if let Some(player) = &self.player {
+            if let Some(track) = &player.selected_track {
+                if let Some(lyrics_service) = &self.lyrics_service {
+                    let artist = track
+                        .artist()
+                        .unwrap_or_else(|| "Unknown Artist".to_string());
+                    let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
+                    let album = track.album();
+                    let duration = if player.duration > 0 {
+                        Some(player.duration)
+                    } else {
+                        None
+                    };
+
+                    tracing::info!(
+                        "🎵 Triggered lyrics fetch for track: '{}' by '{}'",
+                        title,
+                        artist
+                    );
+                    tracing::debug!("📁 Track file: '{}'", track.path().display());
+                    tracing::debug!("🏷️  Raw artist from track: {:?}", track.artist());
+                    tracing::debug!("🏷️  Raw title from track: {:?}", track.title());
+                    tracing::debug!("💿 Album: {:?}", album);
+                    tracing::debug!("⏱️  Duration: {:?}", duration);
+
+                    let artist_clone = artist.clone();
+                    let title_clone = title.clone();
+                    let response_rx = lyrics_service.fetch_lyrics(artist, title, album, duration);
+
+                    // Store the response receiver - we'll check it in the update loop
+                    // For now, we'll handle this synchronously since it's a simple fetch
+                    match response_rx.recv() {
+                        Ok(lyrics) => {
+                            self.current_lyrics = lyrics;
+                            if self.current_lyrics.is_some() {
+                                tracing::info!(
+                                    "✅ Lyrics loaded successfully for '{}' by '{}'",
+                                    title_clone,
+                                    artist_clone
+                                );
+                            } else {
+                                tracing::warn!(
+                                    "❌ No lyrics found for '{}' by '{}'",
+                                    title_clone,
+                                    artist_clone
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "❌ Failed to receive lyrics response for '{}' by '{}': {}",
+                                title_clone,
+                                artist_clone,
+                                e
+                            );
+                            self.current_lyrics = None;
+                        }
+                    }
+                } else {
+                    tracing::warn!("⚠️  Lyrics service not available");
+                }
+            } else {
+                tracing::debug!("No track currently selected for lyrics fetch");
+            }
+        } else {
+            tracing::warn!("⚠️  Player not available for lyrics fetch");
         }
     }
 }

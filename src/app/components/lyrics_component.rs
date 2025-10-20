@@ -1,0 +1,97 @@
+use eframe::egui;
+
+use super::AppComponent;
+use crate::app::lyrics::Lyrics;
+use crate::app::App;
+
+pub struct LyricsComponent;
+
+impl AppComponent for LyricsComponent {
+    type Context = App;
+
+    fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            if let Some(lyrics) = &ctx.current_lyrics {
+                // Show track info
+                ui.heading(&lyrics.track_name);
+                ui.label(format!("by {}", &lyrics.artist_name));
+                if let Some(album) = &lyrics.album_name {
+                    ui.label(format!("from {}", album));
+                }
+                ui.separator();
+
+                // Show lyrics
+                if lyrics.instrumental {
+                    ui.label("♪ Instrumental ♪");
+                } else if !lyrics.lines.is_empty() {
+                    // Show synced lyrics with current line highlighting
+                    Self::show_synced_lyrics(ui, lyrics, ctx);
+                } else if let Some(plain_lyrics) = &lyrics.plain_lyrics {
+                    Self::show_plain_lyrics(ui, plain_lyrics);
+                } else {
+                    ui.label("No lyrics available");
+                }
+            } else {
+                ui.vertical_centered(|ui| {
+                    ui.label("No lyrics loaded");
+                    ui.label("Select a track to view lyrics");
+                });
+            }
+        });
+    }
+}
+
+impl LyricsComponent {
+    fn show_synced_lyrics(ui: &mut eframe::egui::Ui, lyrics: &Lyrics, ctx: &App) {
+        let current_time_ms = if let Some(player) = &ctx.player {
+            player.seek_to_timestamp
+        } else {
+            0
+        };
+
+        for (_index, line) in lyrics.lines.iter().enumerate() {
+            let is_current_line =
+                if let (Some(start), Some(end)) = (line.start_time_ms, line.end_time_ms) {
+                    current_time_ms >= start && current_time_ms < end
+                } else if let Some(start) = line.start_time_ms {
+                    current_time_ms >= start
+                } else {
+                    false
+                };
+
+            let label = if line.text.trim().is_empty() {
+                "♪".to_string()
+            } else {
+                line.text.clone()
+            };
+
+            if is_current_line {
+                // Highlight current line
+                ui.add(egui::Label::new(
+                    egui::RichText::new(label)
+                        .color(egui::Color32::YELLOW)
+                        .size(16.0),
+                ));
+            } else {
+                ui.add(egui::Label::new(
+                    egui::RichText::new(label)
+                        .color(egui::Color32::WHITE)
+                        .size(14.0),
+                ));
+            }
+
+            // Add some spacing between lines
+            ui.add_space(4.0);
+        }
+    }
+
+    fn show_plain_lyrics(ui: &mut eframe::egui::Ui, plain_lyrics: &str) {
+        for line in plain_lyrics.lines() {
+            if line.trim().is_empty() {
+                ui.add_space(8.0);
+            } else {
+                ui.label(line);
+            }
+        }
+    }
+}

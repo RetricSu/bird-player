@@ -790,6 +790,9 @@ impl AppComponent for PlaylistTable {
                     ctx.player.as_mut().unwrap().play();
                     // Set the current playlist as the playing playlist
                     ctx.playing_playlist_idx = Some(current_playlist_idx);
+
+                    // Fetch lyrics for the newly selected track
+                    ctx.fetch_lyrics_for_current_track();
                 }
             }
 

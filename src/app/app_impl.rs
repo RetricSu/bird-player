@@ -2,9 +2,9 @@ use eframe::egui;
 
 use super::{App, LibraryCommand};
 use crate::app::components::{
-    footer::Footer, library_component::LibraryComponent, player_component::PlayerComponent,
-    playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs, window_chrome::WindowChrome,
-    AppComponent,
+    footer::Footer, library_component::LibraryComponent, lyrics_component::LyricsComponent,
+    player_component::PlayerComponent, playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs,
+    window_chrome::WindowChrome, AppComponent,
 };
 
 impl eframe::App for App {
@@ -86,6 +86,18 @@ impl eframe::App for App {
                     LibraryComponent::add(self, ui);
                 });
         });
+
+        // Lyrics panel (right side, can be toggled)
+        if self.show_lyrics_panel {
+            egui::SidePanel::right("Lyrics Panel")
+                .default_width(300.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    ui.heading("Lyrics");
+                    ui.separator();
+                    LyricsComponent::add(self, ui);
+                });
+        }
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             egui::TopBottomPanel::top("Playlist Tabs").show(ctx, |ui| {
