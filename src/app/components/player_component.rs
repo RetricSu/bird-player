@@ -300,7 +300,9 @@ impl AppComponent for PlayerComponent {
                                     ));
                                 };
 
-                                ui.add_enabled_ui(false, |ui| ui.button(t("lyrics")));
+                                if ui.button(t("lyrics")).clicked() {
+                                    ctx.show_lyrics_panel = !ctx.show_lyrics_panel;
+                                };
 
                                 if ui.button(t("mini")).clicked() {
                                     // Hide library and playlist
