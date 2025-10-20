@@ -22,19 +22,36 @@ impl AppComponent for LyricsComponent {
 
                 // Show lyrics
                 if lyrics.instrumental {
-                    ui.label("♪ Instrumental ♪");
+                    ui.add(egui::Label::new(
+                        egui::RichText::new("♪ Instrumental ♪")
+                            .color(egui::Color32::from_rgb(150, 150, 150))
+                            .size(16.0)
+                            .italics(),
+                    ));
                 } else if !lyrics.lines.is_empty() {
                     // Show synced lyrics with current line highlighting
                     Self::show_synced_lyrics(ui, lyrics, ctx);
                 } else if let Some(plain_lyrics) = &lyrics.plain_lyrics {
                     Self::show_plain_lyrics(ui, plain_lyrics);
                 } else {
-                    ui.label("No lyrics available");
+                    ui.add(egui::Label::new(
+                        egui::RichText::new("No lyrics available")
+                            .color(egui::Color32::from_rgb(150, 150, 150))
+                            .italics(),
+                    ));
                 }
             } else {
                 ui.vertical_centered(|ui| {
-                    ui.label("No lyrics loaded");
-                    ui.label("Select a track to view lyrics");
+                    ui.add(egui::Label::new(
+                        egui::RichText::new("No lyrics loaded")
+                            .color(egui::Color32::from_rgb(150, 150, 150))
+                            .italics(),
+                    ));
+                    ui.add(egui::Label::new(
+                        egui::RichText::new("Select a track to view lyrics")
+                            .color(egui::Color32::from_rgb(150, 150, 150))
+                            .italics(),
+                    ));
                 });
             }
         });
@@ -75,7 +92,7 @@ impl LyricsComponent {
             } else {
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::WHITE)
+                        .color(egui::Color32::from_rgb(200, 200, 200))
                         .size(14.0),
                 ));
             }
@@ -90,7 +107,11 @@ impl LyricsComponent {
             if line.trim().is_empty() {
                 ui.add_space(8.0);
             } else {
-                ui.label(line);
+                ui.add(egui::Label::new(
+                    egui::RichText::new(line)
+                        .color(egui::Color32::from_rgb(200, 200, 200))
+                        .size(14.0),
+                ));
             }
         }
     }

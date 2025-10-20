@@ -885,12 +885,24 @@ impl App {
                     match response_rx.recv() {
                         Ok(lyrics) => {
                             self.current_lyrics = lyrics;
-                            if self.current_lyrics.is_some() {
-                                tracing::info!(
-                                    "✅ Lyrics loaded successfully for '{}' by '{}'",
-                                    title_clone,
-                                    artist_clone
-                                );
+                            if let Some(lyrics_data) = &self.current_lyrics {
+                                if lyrics_data.instrumental {
+                                    tracing::info!(
+                                        "✅ Found instrumental track for '{}' by '{}'",
+                                        title_clone,
+                                        artist_clone
+                                    );
+                                } else if !lyrics_data.lines.is_empty()
+                                    || lyrics_data.plain_lyrics.is_some()
+                                {
+                                    tracing::info!(
+                                        "✅ Lyrics loaded successfully for '{}' by '{}'",
+                                        title_clone,
+                                        artist_clone
+                                    );
+                                } else {
+                                    tracing::warn!("⚠️  Lyrics record found but no content available for '{}' by '{}'", title_clone, artist_clone);
+                                }
                             } else {
                                 tracing::warn!(
                                     "❌ No lyrics found for '{}' by '{}'",

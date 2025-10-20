@@ -21,7 +21,9 @@ pub struct Lyrics {
     pub album_name: Option<String>,
     pub duration: Option<f64>,
     pub instrumental: bool,
+    #[serde(rename = "plainLyrics")]
     pub plain_lyrics: Option<String>,
+    #[serde(rename = "syncedLyrics")]
     pub synced_lyrics: Option<String>,
     #[serde(skip)]
     pub lines: Vec<LyricsLine>,
@@ -167,6 +169,9 @@ impl LyricsService {
                                     let api_artist_lower = lyrics.artist_name.to_lowercase();
                                     let api_title_lower = lyrics.track_name.to_lowercase();
 
+                                    tracing::debug!("🔍 Checking match: API '{}' vs search '{}' | API '{}' vs search '{}'", 
+                                        api_artist_lower, artist_lower, api_title_lower, title_lower);
+
                                     if api_artist_lower == artist_lower
                                         && api_title_lower == title_lower
                                     {
@@ -196,7 +201,9 @@ impl LyricsService {
                                                 );
                                             }
                                         } else {
-                                            tracing::warn!("⚠️  Lyrics found but no content available (instrumental: {})", lyrics.instrumental);
+                                            tracing::warn!("⚠️  Lyrics record found but no content available (instrumental: {})", lyrics.instrumental);
+                                            // Don't return lyrics if there's no actual content
+                                            continue;
                                         }
 
                                         return Some(lyrics);
