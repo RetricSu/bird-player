@@ -139,7 +139,11 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             egui::TopBottomPanel::top("Playlist Tabs").show(ctx, |ui| {
-                PlaylistTabs::add(self, ui);
+                egui::ScrollArea::horizontal()
+                    .auto_shrink([false, true]) // Don't shrink horizontally, allow vertical shrinking
+                    .show(ui, |ui| {
+                        PlaylistTabs::add(self, ui);
+                    });
             });
 
             egui::CentralPanel::default().show(ctx, |ui| {
