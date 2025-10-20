@@ -180,5 +180,12 @@ impl eframe::App for App {
                 }
             });
         });
+
+        // Request repaint during playback for smooth synced lyrics updates
+        if let Some(player) = &self.player {
+            if matches!(player.track_state, crate::app::player::TrackState::Playing) {
+                ctx.request_repaint();
+            }
+        }
     }
 }

@@ -18,6 +18,19 @@ impl AppComponent for LyricsComponent {
                 if let Some(album) = &lyrics.album_name {
                     ui.label(format!("From：{}", album));
                 }
+
+                // Show lyrics type indicator
+                let lyrics_type = if !lyrics.lines.is_empty() {
+                    "Synced Lyrics"
+                } else if lyrics.plain_lyrics.is_some() {
+                    "Plain Text Lyrics"
+                } else if lyrics.instrumental {
+                    "Instrumental"
+                } else {
+                    "No Lyrics"
+                };
+                ui.label(egui::RichText::new(lyrics_type).color(egui::Color32::from_rgb(100, 150, 255)).italics());
+
                 ui.separator();
 
                 // Show lyrics
@@ -73,16 +86,21 @@ impl LyricsComponent {
                 line.text.clone()
             };
 
-            if is_current_line {
-                // Highlight current line
+            let response = if is_current_line {
+                // Highlight current line and scroll to it
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::BLUE)
+                        .color(egui::Color32::YELLOW)
                         .size(16.0)
                         .strong(),
-                ));
+                ))
             } else {
-                ui.add(egui::Label::new(egui::RichText::new(label)));
+                ui.add(egui::Label::new(egui::RichText::new(label)))
+            };
+
+            // Scroll to current line to keep it visible
+            if is_current_line {
+                response.scroll_to_me(Some(egui::Align::Center));
             }
 
             // Add some spacing between lines

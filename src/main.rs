@@ -202,11 +202,11 @@ fn main() {
                             break 'once Ok(());
                         }
 
-                        // Only send timestamp updates every second and only if the timestamp has changed significantly
+                        // Send timestamp updates more frequently for smooth synced lyrics
                         let current_time = timer.elapsed();
-                        if current_time > std::time::Duration::from_secs(1)
-                            && (packet.ts > last_ts + 1000 || packet.ts < last_ts)
-                        // Only update if changed by more than 1 second or went backwards
+                        if current_time > std::time::Duration::from_millis(100)
+                            && (packet.ts > last_ts + 100 || packet.ts < last_ts)
+                        // Update every 100ms if changed by more than 100ms or went backwards
                         {
                             ui_tx
                                 .send(UiCommand::CurrentTimestamp(packet.ts))
