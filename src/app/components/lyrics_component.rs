@@ -29,7 +29,11 @@ impl AppComponent for LyricsComponent {
                 } else {
                     "No Lyrics"
                 };
-                ui.label(egui::RichText::new(lyrics_type).color(egui::Color32::from_rgb(100, 150, 255)).italics());
+                ui.label(
+                    egui::RichText::new(lyrics_type)
+                        .color(egui::Color32::from_rgb(100, 150, 255))
+                        .italics(),
+                );
 
                 ui.separator();
 

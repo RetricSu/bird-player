@@ -134,6 +134,7 @@ fn main() {
             decode_opts: None,
             track_info: None,
             duration: 0,
+            timebase: 1000, // Default to milliseconds, will be updated when loading file
         };
 
         let mut decoder: Option<Box<dyn symphonia::core::codecs::Decoder>> = None;
@@ -555,6 +556,7 @@ struct AudioEngineState {
     pub decode_opts: Option<DecoderOptions>,
     pub track_info: Option<PlayTrackOptions>,
     pub duration: u64,
+    pub timebase: u64, // Timebase in Hz (ticks per second)
 }
 
 fn load_file(
@@ -639,20 +641,31 @@ fn load_file(
             );
 
             // Get the selected track's timebase and duration.
-            let _tb = track.codec_params.time_base;
+            let tb = track.codec_params.time_base;
             let dur = track
                 .codec_params
                 .n_frames
                 .map(|frames| track.codec_params.start_ts + frames);
 
+            // Store the timebase
+            if let Some(time_base) = tb {
+                audio_engine_state.timebase = time_base.numer as u64 / time_base.denom as u64;
+            }
+
+            // Convert duration to milliseconds
             if let Some(duration) = dur {
-                audio_engine_state.duration = duration;
+                if let Some(time_base) = tb {
+                    let timebase_hz = time_base.numer as f64 / time_base.denom as f64;
+                    audio_engine_state.duration = ((duration as f64 / timebase_hz) * 1000.0) as u64;
+                } else {
+                    audio_engine_state.duration = duration;
+                }
             }
 
             tracing::info!(
-                "Track Duration: {}, TimeBase: {}",
-                dur.unwrap_or(0),
-                _tb.unwrap()
+                "Track Duration: {} ms, TimeBase: {} Hz",
+                audio_engine_state.duration,
+                audio_engine_state.timebase
             );
         }
         Err(err) => {
