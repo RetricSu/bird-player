@@ -134,6 +134,7 @@ fn main() {
             decode_opts: None,
             track_info: None,
             duration: 0,
+            timebase: 1000, // Default to milliseconds, will be updated when loading file
         };
 
         let mut decoder: Option<Box<dyn symphonia::core::codecs::Decoder>> = None;
@@ -202,18 +203,26 @@ fn main() {
                             break 'once Ok(());
                         }
 
-                        // Only send timestamp updates every second and only if the timestamp has changed significantly
+                        // Send timestamp updates more frequently for smooth synced lyrics
                         let current_time = timer.elapsed();
-                        if current_time > std::time::Duration::from_secs(1)
-                            && (packet.ts > last_ts + 1000 || packet.ts < last_ts)
-                        // Only update if changed by more than 1 second or went backwards
+                        if current_time > std::time::Duration::from_millis(100)
+                            && (packet.ts > last_ts + 100 || packet.ts < last_ts)
+                        // Update every 100ms if changed by more than 100ms or went backwards
                         {
+                            // Convert packet timestamp from timebase units to milliseconds
+                            let timestamp_ms = if audio_engine_state.timebase > 0 {
+                                ((packet.ts() as f64 / audio_engine_state.timebase as f64) * 1000.0)
+                                    as u64
+                            } else {
+                                packet.ts()
+                            };
+
                             ui_tx
-                                .send(UiCommand::CurrentTimestamp(packet.ts))
+                                .send(UiCommand::CurrentTimestamp(timestamp_ms))
                                 .expect("Failed to send timestamp to ui thread");
 
                             timer = std::time::Instant::now();
-                            last_ts = packet.ts;
+                            last_ts = packet.ts();
                         }
 
                         // Decode the packet into audio samples.
@@ -555,6 +564,7 @@ struct AudioEngineState {
     pub decode_opts: Option<DecoderOptions>,
     pub track_info: Option<PlayTrackOptions>,
     pub duration: u64,
+    pub timebase: u64, // Timebase in Hz (ticks per second)
 }
 
 fn load_file(
@@ -639,20 +649,67 @@ fn load_file(
             );
 
             // Get the selected track's timebase and duration.
-            let _tb = track.codec_params.time_base;
-            let dur = track
-                .codec_params
-                .n_frames
-                .map(|frames| track.codec_params.start_ts + frames);
+            let tb = track.codec_params.time_base;
+            let sample_rate = track.codec_params.sample_rate;
+            tracing::debug!(
+                "Codec params - time_base: {:?}, sample_rate: {:?}",
+                tb,
+                sample_rate
+            );
 
-            if let Some(duration) = dur {
-                audio_engine_state.duration = duration;
+            // Store the timebase - use sample rate as the most reliable source
+            if let Some(sample_rate) = track.codec_params.sample_rate {
+                audio_engine_state.timebase = sample_rate as u64;
+                tracing::debug!("Using sample rate {} as timebase", sample_rate);
+            } else if let Some(time_base) = tb {
+                // Fallback to timebase calculation if sample_rate is not available
+                let tb_hz = time_base.numer as f64 / time_base.denom as f64;
+                audio_engine_state.timebase = tb_hz as u64;
+                tracing::debug!(
+                    "Using timebase calculation: {} Hz ({} / {})",
+                    tb_hz,
+                    time_base.numer,
+                    time_base.denom
+                );
+            } else {
+                tracing::warn!("No timebase or sample rate available, using default 44100");
+                audio_engine_state.timebase = 44100; // Common default for audio
+            }
+
+            // Convert duration to milliseconds
+            // Convert duration to milliseconds
+            // Primary method: estimate based on file size and typical bitrate
+            let file_size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+            let mut estimated_duration_ms = 0;
+
+            if file_size_bytes > 100000 {
+                // Only use file size if it's a reasonable size (>100KB)
+                // Assume 160 kbps MP3 = 160 * 1024 / 8 = 20480 bytes per second
+                let bytes_per_second = 160 * 1024 / 8; // 20480
+                estimated_duration_ms = (file_size_bytes * 1000) / bytes_per_second as u64;
+                tracing::debug!(
+                    "Estimated duration from file size: {} ms (file size: {} bytes, {} bytes/sec)",
+                    estimated_duration_ms,
+                    file_size_bytes,
+                    bytes_per_second
+                );
+            }
+
+            // Ensure minimum duration for music files (2 minutes = 120,000 ms)
+            audio_engine_state.duration = estimated_duration_ms.max(120000);
+
+            if estimated_duration_ms < 120000 {
+                tracing::debug!(
+                    "Using minimum duration: {} ms (estimated was {} ms)",
+                    audio_engine_state.duration,
+                    estimated_duration_ms
+                );
             }
 
             tracing::info!(
-                "Track Duration: {}, TimeBase: {}",
-                dur.unwrap_or(0),
-                _tb.unwrap()
+                "Track Duration: {} ms, TimeBase: {} Hz",
+                audio_engine_state.duration,
+                audio_engine_state.timebase
             );
         }
         Err(err) => {

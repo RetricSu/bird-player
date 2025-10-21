@@ -113,7 +113,7 @@ impl AppComponent for PlaylistTable {
                     ui.set_min_width(available_width);
 
                     // Define column proportions (sum should be 1.0)
-                    let column_proportions = [0.05, 0.35, 0.20, 0.25, 0.15];
+                    let column_proportions = [0.05, 0.30, 0.18, 0.20, 0.12, 0.15];
                     let num_columns = 5; // Changed from 6 to 5 (we don't need empty columns)
 
                     // Use a single Grid for all rows (including header) to ensure alignment
@@ -151,9 +151,16 @@ impl AppComponent for PlaylistTable {
                                 ui.strong(t("column_album"));
                             });
 
-                            // Genre column
+                            // Lyrics column
                             ui.scope(|ui| {
                                 let col_width = available_width * column_proportions[4];
+                                ui.set_min_width(col_width);
+                                ui.strong(t("column_lyrics"));
+                            });
+
+                            // Genre column
+                            ui.scope(|ui| {
+                                let col_width = available_width * column_proportions[5];
                                 ui.set_min_width(col_width);
                                 ui.strong(t("column_genre"));
                             });
@@ -645,11 +652,45 @@ impl AppComponent for PlaylistTable {
                                     });
                                 });
 
+                                // Lyrics column
+                                ui.scope(|ui| {
+                                    // Use the row_id to create a unique widget ID for this column
+                                    ui.push_id(row_id.with("lyrics_col"), |ui| {
+                                        let col_width = available_width * column_proportions[4];
+                                        ui.set_min_width(col_width);
+
+                                        // Check if track has lyrics
+                                        let has_lyrics = crate::app::lyrics::LyricsService::read_lyrics_from_file(
+                                            track.path(),
+                                            &track_artist,
+                                            &track_title,
+                                        )
+                                        .is_some();
+
+                                        if has_lyrics {
+                                            // Show lyrics status with remove button
+                                            ui.horizontal(|ui| {
+                                                ui.label("🎵");
+                                                if ui.small_button("❌").on_hover_text(t("remove_lyrics")).clicked() {
+                                                    // Remove lyrics from the file
+                                                    if let Err(e) = crate::app::lyrics::LyricsService::remove_lyrics_from_file(track.path()) {
+                                                        tracing::error!("Failed to remove lyrics from file: {}", e);
+                                                    } else {
+                                                        tracing::info!("Successfully removed lyrics from file: {:?}", track.path());
+                                                    }
+                                                }
+                                            });
+                                        } else {
+                                            ui.label("―");
+                                        }
+                                    });
+                                });
+
                                 // Genre column
                                 ui.scope(|ui| {
                                     // Use the row_id to create a unique widget ID for this column
                                     ui.push_id(row_id.with("genre_col"), |ui| {
-                                        let col_width = available_width * column_proportions[4];
+                                        let col_width = available_width * column_proportions[5];
                                         ui.set_min_width(col_width);
 
                                         // Genre - make editable

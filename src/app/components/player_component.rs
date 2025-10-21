@@ -201,13 +201,11 @@ impl AppComponent for PlayerComponent {
                     // Time Slider
                     ui.horizontal(|ui| {
                         let format_time = |timestamp: u64| -> String {
-                            let seconds = timestamp / 1000;
-                            let minutes = seconds / 60;
-                            let hours = minutes / 60;
-                            let _seconds_remainder = seconds % 60;
-                            let minutes_remainder = minutes % 60;
+                            let total_seconds = timestamp / 1000;
+                            let minutes = total_seconds / 60;
+                            let seconds = total_seconds % 60;
 
-                            format!("{:02}:{:02}", hours, minutes_remainder)
+                            format!("{:02}:{:02}", minutes, seconds)
                         };
 
                         let mut current_seek = seek_to_timestamp;

@@ -267,11 +267,21 @@ impl LyricsService {
                 // Check for unsynchronized lyrics (USLT) frames
                 if let Some(lyrics_frame) = tag.lyrics().next() {
                     let text = lyrics_frame.text.clone();
-                    tracing::debug!("📖 Found lyrics in ID3 tag ({} characters)", text.len());
+                    let is_synced = lyrics_frame.description == "SyncedLyrics"
+                        || text.contains("[00:")
+                        || text.contains("[01:")
+                        || text.contains("[02:")
+                        || text.contains("[03:")
+                        || text.contains("[04:")
+                        || text.contains("[05:");
 
-                    // Create a basic Lyrics struct from the ID3 lyrics
-                    // We don't have all the metadata, so we'll create a minimal structure
-                    Some(Lyrics {
+                    tracing::debug!(
+                        "📖 Found lyrics in ID3 tag ({} characters, synced: {})",
+                        text.len(),
+                        is_synced
+                    );
+
+                    let mut lyrics = Lyrics {
                         id: 0, // Not applicable for cached lyrics
                         name: "Cached Lyrics".to_string(),
                         track_name: title.to_string(),
@@ -279,10 +289,27 @@ impl LyricsService {
                         album_name: None,
                         duration: None,
                         instrumental: false,
-                        plain_lyrics: Some(text),
+                        plain_lyrics: None,
                         synced_lyrics: None,
-                        lines: Vec::new(), // We could potentially store synced lyrics differently
-                    })
+                        lines: Vec::new(),
+                    };
+
+                    if is_synced {
+                        // Store as synced lyrics and parse the lines
+                        lyrics.synced_lyrics = Some(text);
+                        lyrics.lines =
+                            Lyrics::parse_synced_lyrics(lyrics.synced_lyrics.as_ref().unwrap());
+                        tracing::debug!(
+                            "🎵 Parsed {} synced lyric lines from cache",
+                            lyrics.lines.len()
+                        );
+                    } else {
+                        // Store as plain lyrics
+                        lyrics.plain_lyrics = Some(text);
+                        tracing::debug!("📝 Loaded plain lyrics from cache");
+                    }
+
+                    Some(lyrics)
                 } else {
                     tracing::debug!("📖 No lyrics found in ID3 tag");
                     None
@@ -316,29 +343,53 @@ impl LyricsService {
         // Remove existing lyrics frames
         tag.remove_all_lyrics();
 
-        // Determine which lyrics to store (prefer plain over synced for simplicity)
-        let lyrics_text = if let Some(plain) = &lyrics.plain_lyrics {
-            plain.clone()
-        } else if let Some(synced) = &lyrics.synced_lyrics {
-            // For synced lyrics, we could store them as-is, but for now just store the plain version
-            // In a more advanced implementation, we could store synced lyrics in a custom frame
-            synced.clone()
+        // Determine which lyrics to store (prefer synced over plain for better experience)
+        let (lyrics_text, is_synced) = if let Some(synced) = &lyrics.synced_lyrics {
+            (synced.clone(), true)
+        } else if let Some(plain) = &lyrics.plain_lyrics {
+            (plain.clone(), false)
         } else {
             tracing::warn!("📝 No lyrics content to write to file");
             return Ok(()); // Nothing to write
         };
 
         // Add the lyrics as unsynchronized lyrics
+        // For synced lyrics, we store the raw LRC format which can be detected when reading
         use id3::frame::Lyrics;
+        let description = if is_synced { "SyncedLyrics" } else { "Lyrics" };
         tag.add_frame(Lyrics {
             lang: "eng".to_string(),
-            description: "Lyrics".to_string(),
+            description: description.to_string(),
             text: lyrics_text,
         });
 
         // Write the tag back to the file
         tag.write_to_path(path, id3::Version::Id3v24)?;
         tracing::info!("📝 Successfully wrote lyrics to ID3 tag");
+        Ok(())
+    }
+
+    /// Remove lyrics from ID3 tag of an audio file
+    pub fn remove_lyrics_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<(), id3::Error> {
+        // Read existing tag
+        let mut tag = match id3::Tag::read_from_path(&path) {
+            Ok(tag) => tag,
+            Err(e) => {
+                if let id3::ErrorKind::NoTag = e.kind {
+                    // No tag means no lyrics to remove
+                    return Ok(());
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+
+        // Remove all lyrics frames
+        tag.remove_all_lyrics();
+
+        // Write the tag back to the file
+        tag.write_to_path(path, id3::Version::Id3v24)?;
+        tracing::info!("🗑️ Successfully removed lyrics from ID3 tag");
         Ok(())
     }
 }

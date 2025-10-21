@@ -126,6 +126,7 @@ pub fn init() {
     en.insert("column_title".to_string(), "Title".to_string());
     en.insert("column_artist".to_string(), "Artist".to_string());
     en.insert("column_album".to_string(), "Album".to_string());
+    en.insert("column_lyrics".to_string(), "Lyrics".to_string());
     en.insert("column_genre".to_string(), "Genre".to_string());
     en.insert("edit_title".to_string(), "Edit title".to_string());
     en.insert("edit_artist".to_string(), "Edit artist".to_string());
@@ -135,6 +136,7 @@ pub fn init() {
         "remove_from_playlist".to_string(),
         "Remove from playlist".to_string(),
     );
+    en.insert("remove_lyrics".to_string(), "Remove lyrics".to_string());
     en.insert("unknown_title".to_string(), "unknown title".to_string());
     en.insert("unknown_artist".to_string(), "unknown artist".to_string());
     en.insert("unknown_album".to_string(), "unknown album".to_string());
@@ -213,6 +215,7 @@ pub fn init() {
     zh.insert("column_title".to_string(), "标题".to_string());
     zh.insert("column_artist".to_string(), "艺术家".to_string());
     zh.insert("column_album".to_string(), "专辑".to_string());
+    zh.insert("column_lyrics".to_string(), "歌词".to_string());
     zh.insert("column_genre".to_string(), "类型".to_string());
     zh.insert("edit_title".to_string(), "编辑标题".to_string());
     zh.insert("edit_artist".to_string(), "编辑艺术家".to_string());
@@ -222,6 +225,7 @@ pub fn init() {
         "remove_from_playlist".to_string(),
         "从播放列表中移除".to_string(),
     );
+    zh.insert("remove_lyrics".to_string(), "移除歌词".to_string());
     zh.insert("unknown_title".to_string(), "未知标题".to_string());
     zh.insert("unknown_artist".to_string(), "未知艺术家".to_string());
     zh.insert("unknown_album".to_string(), "未知专辑".to_string());
