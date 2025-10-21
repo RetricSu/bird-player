@@ -661,7 +661,7 @@ impl AppComponent for PlaylistTable {
 
                                         // Check if track has lyrics
                                         let has_lyrics = crate::app::lyrics::LyricsService::read_lyrics_from_file(
-                                            &track.path(),
+                                            track.path(),
                                             &track_artist,
                                             &track_title,
                                         )
@@ -673,7 +673,7 @@ impl AppComponent for PlaylistTable {
                                                 ui.label("🎵");
                                                 if ui.small_button("❌").on_hover_text(t("remove_lyrics")).clicked() {
                                                     // Remove lyrics from the file
-                                                    if let Err(e) = crate::app::lyrics::LyricsService::remove_lyrics_from_file(&track.path()) {
+                                                    if let Err(e) = crate::app::lyrics::LyricsService::remove_lyrics_from_file(track.path()) {
                                                         tracing::error!("Failed to remove lyrics from file: {}", e);
                                                     } else {
                                                         tracing::info!("Successfully removed lyrics from file: {:?}", track.path());
