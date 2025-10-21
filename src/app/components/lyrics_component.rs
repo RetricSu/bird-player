@@ -94,7 +94,7 @@ impl LyricsComponent {
                 // Highlight current line and scroll to it
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::YELLOW)
+                        .color(egui::Color32::BLUE)
                         .size(16.0)
                         .strong(),
                 ))

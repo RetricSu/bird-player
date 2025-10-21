@@ -677,14 +677,33 @@ fn load_file(
             }
 
             // Convert duration to milliseconds
-            // For MP3, n_frames is typically the total number of samples
-            if let Some(n_frames) = track.codec_params.n_frames {
-                let timebase_hz = audio_engine_state.timebase as f64;
-                if timebase_hz > 0.0 {
-                    audio_engine_state.duration = ((n_frames as f64 / timebase_hz) * 1000.0) as u64;
-                } else {
-                    audio_engine_state.duration = n_frames;
-                }
+            // Convert duration to milliseconds
+            // Primary method: estimate based on file size and typical bitrate
+            let file_size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            let mut estimated_duration_ms = 0;
+
+            if file_size_bytes > 100000 {
+                // Only use file size if it's a reasonable size (>100KB)
+                // Assume 160 kbps MP3 = 160 * 1024 / 8 = 20480 bytes per second
+                let bytes_per_second = 160 * 1024 / 8; // 20480
+                estimated_duration_ms = (file_size_bytes * 1000) / bytes_per_second as u64;
+                tracing::debug!(
+                    "Estimated duration from file size: {} ms (file size: {} bytes, {} bytes/sec)",
+                    estimated_duration_ms,
+                    file_size_bytes,
+                    bytes_per_second
+                );
+            }
+
+            // Ensure minimum duration for music files (2 minutes = 120,000 ms)
+            audio_engine_state.duration = estimated_duration_ms.max(120000);
+
+            if estimated_duration_ms < 120000 {
+                tracing::debug!(
+                    "Using minimum duration: {} ms (estimated was {} ms)",
+                    audio_engine_state.duration,
+                    estimated_duration_ms
+                );
             }
 
             tracing::info!(
