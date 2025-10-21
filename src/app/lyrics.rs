@@ -298,7 +298,7 @@ impl LyricsService {
                         // Store as synced lyrics and parse the lines
                         lyrics.synced_lyrics = Some(text);
                         lyrics.lines =
-                            Lyrics::parse_synced_lyrics(&lyrics.synced_lyrics.as_ref().unwrap());
+                            Lyrics::parse_synced_lyrics(lyrics.synced_lyrics.as_ref().unwrap());
                         tracing::debug!(
                             "🎵 Parsed {} synced lyric lines from cache",
                             lyrics.lines.len()

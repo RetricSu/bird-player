@@ -679,7 +679,7 @@ fn load_file(
             // Convert duration to milliseconds
             // Convert duration to milliseconds
             // Primary method: estimate based on file size and typical bitrate
-            let file_size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            let file_size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
             let mut estimated_duration_ms = 0;
 
             if file_size_bytes > 100000 {
