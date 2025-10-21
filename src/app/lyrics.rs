@@ -368,6 +368,30 @@ impl LyricsService {
         tracing::info!("📝 Successfully wrote lyrics to ID3 tag");
         Ok(())
     }
+
+    /// Remove lyrics from ID3 tag of an audio file
+    pub fn remove_lyrics_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<(), id3::Error> {
+        // Read existing tag
+        let mut tag = match id3::Tag::read_from_path(&path) {
+            Ok(tag) => tag,
+            Err(e) => {
+                if let id3::ErrorKind::NoTag = e.kind {
+                    // No tag means no lyrics to remove
+                    return Ok(());
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+
+        // Remove all lyrics frames
+        tag.remove_all_lyrics();
+
+        // Write the tag back to the file
+        tag.write_to_path(path, id3::Version::Id3v24)?;
+        tracing::info!("🗑️ Successfully removed lyrics from ID3 tag");
+        Ok(())
+    }
 }
 
 impl Default for LyricsService {

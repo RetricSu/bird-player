@@ -95,7 +95,7 @@ impl LyricsComponent {
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
                         .color(egui::Color32::BLUE)
-                        .size(16.0)
+                        .size(14.0)
                         .strong(),
                 ))
             } else {
