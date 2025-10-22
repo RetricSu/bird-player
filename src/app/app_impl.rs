@@ -57,6 +57,23 @@ impl eframe::App for App {
                     self.current_lyrics = lyrics;
                     self.pending_lyrics_rx = None; // Clear the receiver
 
+                    let track_key = self
+                        .player
+                        .as_ref()
+                        .and_then(|player| {
+                            player.selected_track.as_ref().map(|track| track.key())
+                        });
+                    let lyrics_text_owned = self
+                        .current_lyrics
+                        .as_ref()
+                        .and_then(|lyrics_data| {
+                            lyrics_data
+                                .synced_lyrics
+                                .as_deref()
+                                .or_else(|| lyrics_data.plain_lyrics.as_deref())
+                                .map(|text| text.to_string())
+                        });
+
                     if self.current_lyrics.is_some() {
                         self.lyrics_fetch_state = LyricsFetchState::Loaded;
                     } else {
@@ -103,6 +120,10 @@ impl eframe::App for App {
                         }
                     } else {
                         tracing::warn!("❌ No lyrics found");
+                    }
+
+                    if let Some(track_key) = track_key {
+                        self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {

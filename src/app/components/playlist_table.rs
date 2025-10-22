@@ -95,6 +95,7 @@ impl AppComponent for PlaylistTable {
 
             // Prepare a list of tracks to update after rendering
             let mut tracks_to_update: Vec<(usize, String, String)> = Vec::new();
+            let mut tracks_to_clear_lyrics: Vec<usize> = Vec::new();
 
             // Track which track to play/stop
             let mut track_to_play: Option<usize> = None;
@@ -659,13 +660,7 @@ impl AppComponent for PlaylistTable {
                                         let col_width = available_width * column_proportions[4];
                                         ui.set_min_width(col_width);
 
-                                        // Check if track has lyrics
-                                        let has_lyrics = crate::app::lyrics::LyricsService::read_lyrics_from_file(
-                                            track.path(),
-                                            &track_artist,
-                                            &track_title,
-                                        )
-                                        .is_some();
+                                        let has_lyrics = track.has_lyrics();
 
                                         if has_lyrics {
                                             // Show lyrics status with remove button
@@ -673,10 +668,12 @@ impl AppComponent for PlaylistTable {
                                                 ui.label("🎵");
                                                 if ui.small_button("❌").on_hover_text(t("remove_lyrics")).clicked() {
                                                     // Remove lyrics from the file
+                                                    let track_key = track.key();
                                                     if let Err(e) = crate::app::lyrics::LyricsService::remove_lyrics_from_file(track.path()) {
                                                         tracing::error!("Failed to remove lyrics from file: {}", e);
                                                     } else {
                                                         tracing::info!("Successfully removed lyrics from file: {:?}", track.path());
+                                                        tracks_to_clear_lyrics.push(track_key);
                                                     }
                                                 }
                                             });
@@ -806,6 +803,11 @@ impl AppComponent for PlaylistTable {
                             }
                         });
                 });
+
+            // Apply queued lyric removals after rendering rows
+            for key in tracks_to_clear_lyrics {
+                ctx.update_track_lyrics(key, None);
+            }
 
             // Toggle selection for track if needed
             if let Some(idx) = toggle_selection {

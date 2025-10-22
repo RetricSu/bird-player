@@ -709,6 +709,78 @@ impl App {
         });
     }
 
+    pub fn update_track_lyrics(&mut self, track_key: usize, lyrics: Option<&str>) {
+        let lyrics_owned = self.library.update_item_lyrics(track_key, lyrics);
+
+        for playlist in &mut self.playlists {
+            for item in playlist.tracks.iter_mut() {
+                if item.key() == track_key {
+                    item.replace_lyrics(lyrics_owned.clone());
+                }
+            }
+
+            if let Some(selected) = playlist.selected.as_mut() {
+                if selected.key() == track_key {
+                    selected.replace_lyrics(lyrics_owned.clone());
+                }
+            }
+        }
+
+        if let Some(player) = &mut self.player {
+            if let Some(selected_track) = player.selected_track.as_mut() {
+                if selected_track.key() == track_key {
+                    selected_track.replace_lyrics(lyrics_owned.clone());
+
+                    if lyrics_owned.is_none() {
+                        self.current_lyrics = None;
+                    }
+                }
+            }
+        }
+
+        if let Some(ref db) = self.database {
+            let conn_arc = db.connection();
+            let lyrics_param = lyrics_owned.as_deref();
+
+            let update_result = {
+                match conn_arc.lock() {
+                    Ok(conn_guard) => conn_guard.execute(
+                        "UPDATE library_items SET lyrics = ?1 WHERE key = ?2",
+                        rusqlite::params![lyrics_param, track_key.to_string()],
+                    ),
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to acquire database lock for lyrics update on track {}: {}",
+                            track_key,
+                            e
+                        );
+                        return;
+                    }
+                }
+            };
+
+            match update_result {
+                Ok(rows) if rows == 0 => {
+                    if let Err(e) = self.library.save_to_db(&conn_arc) {
+                        tracing::error!(
+                            "Failed to persist lyrics update for track {}: {}",
+                            track_key,
+                            e
+                        );
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to update lyrics in database for track {}: {}",
+                        track_key,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
     pub fn update_track_metadata(
         &mut self,
         track: &mut LibraryItem,
@@ -897,8 +969,11 @@ impl App {
         self.current_lyrics = None;
         self.lyrics_fetch_state = LyricsFetchState::Idle;
 
-        if let Some(player) = &self.player {
-            if let Some(track) = &player.selected_track {
+        if let Some((player_duration, track)) = self
+            .player
+            .as_ref()
+            .and_then(|player| player.selected_track.clone().map(|track| (player.duration, track)))
+        {
                 let artist = track
                     .artist()
                     .unwrap_or_else(|| "Unknown Artist".to_string());
@@ -924,14 +999,27 @@ impl App {
                     }) {
                         self.show_lyrics_panel = true;
                     }
+                    let lyrics_text_owned = self
+                        .current_lyrics
+                        .as_ref()
+                        .and_then(|lyrics| {
+                            lyrics
+                                .synced_lyrics
+                                .as_deref()
+                                .or_else(|| lyrics.plain_lyrics.as_deref())
+                                .map(|text| text.to_string())
+                        });
+                    let track_key = track.key();
+                    drop(track);
+                    self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
                     return; // Don't fetch from API if we have cached lyrics
                 }
 
                 // If no cached lyrics, proceed with API fetch
                 if let Some(lyrics_service) = &self.lyrics_service {
                     let album = track.album();
-                    let duration = if player.duration > 0 {
-                        Some(player.duration)
+                    let duration = if player_duration > 0 {
+                        Some(player_duration)
                     } else {
                         None
                     };
@@ -958,9 +1046,8 @@ impl App {
                     self.lyrics_fetch_state =
                         LyricsFetchState::Failed("Lyrics service not available".to_string());
                 }
-            } else {
-                tracing::debug!("No track currently selected for lyrics fetch");
-            }
+        } else if self.player.is_some() {
+            tracing::debug!("No track currently selected for lyrics fetch");
         } else {
             tracing::warn!("⚠️  Player not available for lyrics fetch");
             self.lyrics_fetch_state = LyricsFetchState::Failed("Player not available".to_string());

@@ -47,5 +47,3 @@
 - assets also houses theming resources used by the UI; doc contains rustdoc output from previous builds.
 - rust-toolchain.toml pins the toolchain, ensuring consistent builds; build.rs injects `version_info` for about dialogs.
 - Cargo.toml enables optional `pulseaudio` feature and applies a git patch for `confy` to support YAML-backed settings.
-
-Let me know if you want a walkthrough of a particular flow (e.g., playlist persistence, synced lyric rendering, or adding new backends) or pointers on extending the UI.

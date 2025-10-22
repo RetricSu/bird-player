@@ -127,6 +127,26 @@ impl Library {
         self.library_view.containers.append(&mut new);
     }
 
+    pub fn update_item_lyrics(&mut self, key: usize, lyrics: Option<&str>) -> Option<String> {
+        let lyrics_owned = lyrics.map(|text| text.to_string());
+
+        for item in self.items.iter_mut() {
+            if item.key() == key {
+                item.replace_lyrics(lyrics_owned.clone());
+            }
+        }
+
+        for container in self.library_view.containers.iter_mut() {
+            for item in container.items.iter_mut() {
+                if item.key() == key {
+                    item.replace_lyrics(lyrics_owned.clone());
+                }
+            }
+        }
+
+        lyrics_owned
+    }
+
     // Database methods
 
     pub fn save_to_db(&self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
@@ -533,14 +553,23 @@ impl LibraryItem {
     }
 
     pub fn set_lyrics(&mut self, lyrics: Option<&str>) -> Self {
-        if let Some(lyrics) = lyrics {
-            self.lyrics = Some(lyrics.to_string());
-        }
+        self.lyrics = lyrics.map(|lyrics| lyrics.to_string());
         self.to_owned()
+    }
+
+    pub fn replace_lyrics(&mut self, lyrics: Option<String>) {
+        self.lyrics = lyrics;
     }
 
     pub fn lyrics(&self) -> Option<String> {
         self.lyrics.clone()
+    }
+
+    pub fn has_lyrics(&self) -> bool {
+        self.lyrics
+            .as_ref()
+            .map(|text| !text.trim().is_empty())
+            .unwrap_or(false)
     }
 }
 
