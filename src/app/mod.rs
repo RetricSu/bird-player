@@ -33,6 +33,20 @@ mod style;
 // Re-export the i18n functions for convenience
 pub use i18n::{get_language, set_language, t, tf, Language};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LyricsFetchState {
+    Idle,
+    Loading,
+    Loaded,
+    Failed(String),
+}
+
+impl Default for LyricsFetchState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
 pub enum AudioCommand {
     Stop,
     Play,
@@ -183,6 +197,9 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub should_fetch_lyrics_on_init: bool,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub lyrics_fetch_state: LyricsFetchState,
 }
 
 impl Default for App {
@@ -220,6 +237,7 @@ impl Default for App {
             show_lyrics_panel: false,
             pending_lyrics_rx: None,
             should_fetch_lyrics_on_init: false,
+            lyrics_fetch_state: LyricsFetchState::Idle,
         }
     }
 }
@@ -877,6 +895,7 @@ impl App {
 
         // Clear current lyrics when starting a new fetch
         self.current_lyrics = None;
+        self.lyrics_fetch_state = LyricsFetchState::Idle;
 
         if let Some(player) = &self.player {
             if let Some(track) = &player.selected_track {
@@ -898,6 +917,7 @@ impl App {
                         track.path().display()
                     );
                     self.current_lyrics = Some(cached_lyrics);
+                    self.lyrics_fetch_state = LyricsFetchState::Loaded;
                     // Show the lyrics panel when cached lyrics are loaded
                     if self.current_lyrics.as_ref().is_some_and(|lyrics| {
                         !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some()
@@ -931,15 +951,19 @@ impl App {
 
                     // Store the response receiver - we'll check it asynchronously in the update loop
                     self.pending_lyrics_rx = Some(response_rx);
+                    self.lyrics_fetch_state = LyricsFetchState::Loading;
                     tracing::debug!("📡 Lyrics fetch initiated, waiting for response...");
                 } else {
                     tracing::warn!("⚠️  Lyrics service not available");
+                    self.lyrics_fetch_state =
+                        LyricsFetchState::Failed("Lyrics service not available".to_string());
                 }
             } else {
                 tracing::debug!("No track currently selected for lyrics fetch");
             }
         } else {
             tracing::warn!("⚠️  Player not available for lyrics fetch");
+            self.lyrics_fetch_state = LyricsFetchState::Failed("Player not available".to_string());
         }
     }
 }

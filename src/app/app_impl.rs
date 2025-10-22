@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use super::{App, LibraryCommand};
+use super::{App, LibraryCommand, LyricsFetchState};
 use crate::app::components::{
     footer::Footer, library_component::LibraryComponent, lyrics_component::LyricsComponent,
     player_component::PlayerComponent, playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs,
@@ -57,6 +57,13 @@ impl eframe::App for App {
                     self.current_lyrics = lyrics;
                     self.pending_lyrics_rx = None; // Clear the receiver
 
+                    if self.current_lyrics.is_some() {
+                        self.lyrics_fetch_state = LyricsFetchState::Loaded;
+                    } else {
+                        self.lyrics_fetch_state =
+                            LyricsFetchState::Failed("No lyrics found for this track".to_string());
+                    }
+
                     // Store the fetched lyrics in the ID3 tag for future use
                     if let Some(lyrics_data) = &self.current_lyrics {
                         if let Some(player) = &self.player {
@@ -104,6 +111,8 @@ impl eframe::App for App {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     tracing::error!("📡 Lyrics service disconnected");
                     self.pending_lyrics_rx = None;
+                    self.lyrics_fetch_state =
+                        LyricsFetchState::Failed("Lyrics service disconnected".to_string());
                 }
             }
         }
