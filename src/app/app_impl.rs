@@ -60,19 +60,14 @@ impl eframe::App for App {
                     let track_key = self
                         .player
                         .as_ref()
-                        .and_then(|player| {
-                            player.selected_track.as_ref().map(|track| track.key())
-                        });
-                    let lyrics_text_owned = self
-                        .current_lyrics
-                        .as_ref()
-                        .and_then(|lyrics_data| {
-                            lyrics_data
-                                .synced_lyrics
-                                .as_deref()
-                                .or_else(|| lyrics_data.plain_lyrics.as_deref())
-                                .map(|text| text.to_string())
-                        });
+                        .and_then(|player| player.selected_track.as_ref().map(|track| track.key()));
+                    let lyrics_text_owned = self.current_lyrics.as_ref().and_then(|lyrics_data| {
+                        lyrics_data
+                            .synced_lyrics
+                            .as_deref()
+                            .or_else(|| lyrics_data.plain_lyrics.as_deref())
+                            .map(|text| text.to_string())
+                    });
 
                     if self.current_lyrics.is_some() {
                         self.lyrics_fetch_state = LyricsFetchState::Loaded;

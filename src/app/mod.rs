@@ -969,83 +969,81 @@ impl App {
         self.current_lyrics = None;
         self.lyrics_fetch_state = LyricsFetchState::Idle;
 
-        if let Some((player_duration, track)) = self
-            .player
-            .as_ref()
-            .and_then(|player| player.selected_track.clone().map(|track| (player.duration, track)))
-        {
-                let artist = track
-                    .artist()
-                    .unwrap_or_else(|| "Unknown Artist".to_string());
-                let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
+        if let Some((player_duration, track)) = self.player.as_ref().and_then(|player| {
+            player
+                .selected_track
+                .clone()
+                .map(|track| (player.duration, track))
+        }) {
+            let artist = track
+                .artist()
+                .unwrap_or_else(|| "Unknown Artist".to_string());
+            let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
 
-                // First, try to read lyrics from the ID3 tag
-                if let Some(cached_lyrics) =
-                    crate::app::lyrics::LyricsService::read_lyrics_from_file(
-                        track.path(),
-                        &artist,
-                        &title,
-                    )
+            // First, try to read lyrics from the ID3 tag
+            if let Some(cached_lyrics) = crate::app::lyrics::LyricsService::read_lyrics_from_file(
+                track.path(),
+                &artist,
+                &title,
+            ) {
+                tracing::info!(
+                    "✅ Found cached lyrics in ID3 tag for '{}'",
+                    track.path().display()
+                );
+                self.current_lyrics = Some(cached_lyrics);
+                self.lyrics_fetch_state = LyricsFetchState::Loaded;
+                // Show the lyrics panel when cached lyrics are loaded
+                if self
+                    .current_lyrics
+                    .as_ref()
+                    .is_some_and(|lyrics| !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some())
                 {
-                    tracing::info!(
-                        "✅ Found cached lyrics in ID3 tag for '{}'",
-                        track.path().display()
-                    );
-                    self.current_lyrics = Some(cached_lyrics);
-                    self.lyrics_fetch_state = LyricsFetchState::Loaded;
-                    // Show the lyrics panel when cached lyrics are loaded
-                    if self.current_lyrics.as_ref().is_some_and(|lyrics| {
-                        !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some()
-                    }) {
-                        self.show_lyrics_panel = true;
-                    }
-                    let lyrics_text_owned = self
-                        .current_lyrics
-                        .as_ref()
-                        .and_then(|lyrics| {
-                            lyrics
-                                .synced_lyrics
-                                .as_deref()
-                                .or_else(|| lyrics.plain_lyrics.as_deref())
-                                .map(|text| text.to_string())
-                        });
-                    let track_key = track.key();
-                    drop(track);
-                    self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
-                    return; // Don't fetch from API if we have cached lyrics
+                    self.show_lyrics_panel = true;
                 }
+                let lyrics_text_owned = self.current_lyrics.as_ref().and_then(|lyrics| {
+                    lyrics
+                        .synced_lyrics
+                        .as_deref()
+                        .or_else(|| lyrics.plain_lyrics.as_deref())
+                        .map(|text| text.to_string())
+                });
+                let track_key = track.key();
+                drop(track);
+                self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
+                return; // Don't fetch from API if we have cached lyrics
+            }
 
-                // If no cached lyrics, proceed with API fetch
-                if let Some(lyrics_service) = &self.lyrics_service {
-                    let album = track.album();
-                    let duration = if player_duration > 0 {
-                        Some(player_duration)
-                    } else {
-                        None
-                    };
-
-                    tracing::info!(
-                        "🎵 No cached lyrics found, fetching from API for track: '{}' by '{}'",
-                        title,
-                        artist
-                    );
-                    tracing::debug!("📁 Track file: '{}'", track.path().display());
-                    tracing::debug!("🏷️  Raw artist from track: {:?}", track.artist());
-                    tracing::debug!("🏷️  Raw title from track: {:?}", track.title());
-                    tracing::debug!("💿 Album: {:?}", album);
-                    tracing::debug!("⏱️  Duration: {:?}", duration);
-
-                    let response_rx = lyrics_service.fetch_lyrics(artist, title, album, duration);
-
-                    // Store the response receiver - we'll check it asynchronously in the update loop
-                    self.pending_lyrics_rx = Some(response_rx);
-                    self.lyrics_fetch_state = LyricsFetchState::Loading;
-                    tracing::debug!("📡 Lyrics fetch initiated, waiting for response...");
+            // If no cached lyrics, proceed with API fetch
+            if let Some(lyrics_service) = &self.lyrics_service {
+                let album = track.album();
+                let duration = if player_duration > 0 {
+                    Some(player_duration)
                 } else {
-                    tracing::warn!("⚠️  Lyrics service not available");
-                    self.lyrics_fetch_state =
-                        LyricsFetchState::Failed("Lyrics service not available".to_string());
-                }
+                    None
+                };
+
+                tracing::info!(
+                    "🎵 No cached lyrics found, fetching from API for track: '{}' by '{}'",
+                    title,
+                    artist
+                );
+                tracing::debug!("📁 Track file: '{}'", track.path().display());
+                tracing::debug!("🏷️  Raw artist from track: {:?}", track.artist());
+                tracing::debug!("🏷️  Raw title from track: {:?}", track.title());
+                tracing::debug!("💿 Album: {:?}", album);
+                tracing::debug!("⏱️  Duration: {:?}", duration);
+
+                let response_rx = lyrics_service.fetch_lyrics(artist, title, album, duration);
+
+                // Store the response receiver - we'll check it asynchronously in the update loop
+                self.pending_lyrics_rx = Some(response_rx);
+                self.lyrics_fetch_state = LyricsFetchState::Loading;
+                tracing::debug!("📡 Lyrics fetch initiated, waiting for response...");
+            } else {
+                tracing::warn!("⚠️  Lyrics service not available");
+                self.lyrics_fetch_state =
+                    LyricsFetchState::Failed("Lyrics service not available".to_string());
+            }
         } else if self.player.is_some() {
             tracing::debug!("No track currently selected for lyrics fetch");
         } else {

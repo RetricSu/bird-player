@@ -173,10 +173,22 @@ impl LyricsComponent {
             return ManualUploadResult::Failed("Player not available".to_string());
         };
 
-        let Some(track) = &player.selected_track else {
-            return ManualUploadResult::Failed(
-                "Select a track before uploading lyrics".to_string(),
-            );
+        let (track_key, track_path, artist, title, album) = {
+            let Some(track) = &player.selected_track else {
+                return ManualUploadResult::Failed(
+                    "Select a track before uploading lyrics".to_string(),
+                );
+            };
+
+            (
+                track.key(),
+                track.path(),
+                track
+                    .artist()
+                    .unwrap_or_else(|| "Unknown Artist".to_string()),
+                track.title().unwrap_or_else(|| "Unknown Title".to_string()),
+                track.album(),
+            )
         };
 
         let Some(path) = rfd::FileDialog::new()
@@ -193,12 +205,6 @@ impl LyricsComponent {
                 return ManualUploadResult::Failed(format!("Failed to read lyrics file: {}", err));
             }
         };
-
-        let artist = track
-            .artist()
-            .unwrap_or_else(|| "Unknown Artist".to_string());
-        let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
-        let album = track.album();
 
         let mut manual_lyrics = Lyrics {
             id: 0,
@@ -225,12 +231,19 @@ impl LyricsComponent {
         ctx.show_lyrics_panel = true;
         ctx.pending_lyrics_rx = None;
 
-        match LyricsService::write_lyrics_to_file(track.path(), &manual_lyrics) {
-            Ok(_) => ManualUploadResult::Updated,
+        match LyricsService::write_lyrics_to_file(&track_path, &manual_lyrics) {
+            Ok(_) => {
+                let lyrics_text = manual_lyrics
+                    .synced_lyrics
+                    .as_deref()
+                    .or_else(|| manual_lyrics.plain_lyrics.as_deref());
+                ctx.update_track_lyrics(track_key, lyrics_text);
+                ManualUploadResult::Updated
+            }
             Err(err) => {
                 tracing::error!(
                     "Failed to write manual lyrics to ID3 tag for '{}': {}",
-                    track.path().display(),
+                    track_path.display(),
                     err
                 );
                 ManualUploadResult::Failed(format!(
