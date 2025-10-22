@@ -236,7 +236,7 @@ impl LyricsComponent {
                 let lyrics_text = manual_lyrics
                     .synced_lyrics
                     .as_deref()
-                    .or_else(|| manual_lyrics.plain_lyrics.as_deref());
+                    .or(manual_lyrics.plain_lyrics.as_deref());
                 ctx.update_track_lyrics(track_key, lyrics_text);
                 ManualUploadResult::Updated
             }

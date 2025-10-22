@@ -65,7 +65,7 @@ impl eframe::App for App {
                         lyrics_data
                             .synced_lyrics
                             .as_deref()
-                            .or_else(|| lyrics_data.plain_lyrics.as_deref())
+                            .or(lyrics_data.plain_lyrics.as_deref())
                             .map(|text| text.to_string())
                     });
 

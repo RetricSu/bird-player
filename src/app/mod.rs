@@ -760,7 +760,7 @@ impl App {
             };
 
             match update_result {
-                Ok(rows) if rows == 0 => {
+                Ok(0) => {
                     if let Err(e) = self.library.save_to_db(&conn_arc) {
                         tracing::error!(
                             "Failed to persist lyrics update for track {}: {}",
@@ -1004,7 +1004,7 @@ impl App {
                     lyrics
                         .synced_lyrics
                         .as_deref()
-                        .or_else(|| lyrics.plain_lyrics.as_deref())
+                        .or(lyrics.plain_lyrics.as_deref())
                         .map(|text| text.to_string())
                 });
                 let track_key = track.key();

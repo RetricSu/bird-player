@@ -20,7 +20,7 @@ A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, fe
 ## TODO
 
 - [ ] Improve the resource usage and make it small and fast
-- [ ] Add support for more audio formats
+- [ ] Add support for more audio formats and use `https://docs.rs/lofty/latest/lofty/` to manage metadata
 - [ ] Add support for batch tag editing
 - [x] Add support for lyrics searching and displaying
 - [ ] Add support for speed control
