@@ -2,7 +2,7 @@ use super::language_selector::LanguageSelector;
 use super::AppComponent;
 use crate::app::constants::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 use crate::app::t;
-use crate::app::version_info;
+use crate::app::version::version_info;
 use crate::app::App;
 use eframe::egui::{self, Color32, RichText, Window};
 use rfd;
