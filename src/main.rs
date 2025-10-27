@@ -4,10 +4,9 @@ pub use crate::app::player::Player;
 pub use crate::app::App;
 pub use crate::app::*;
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use std::thread;
 
 use eframe::egui;
 
@@ -87,84 +86,9 @@ fn main() {
         native_options
     };
 
-    // Audio output setup - 使用状态机模式重构
-    let _audio_thread = thread::spawn(move || {
-        use audio::state_machine::*;
-
-        // 初始化音频上下文
-        let mut ctx = AudioContext {
-            engine: AudioEngineState {
-                reader: None,
-                audio_output: None,
-                track_num: None,
-                seek: None,
-                decode_opts: None,
-                track_info: None,
-                duration: 0,
-                timebase: 1000,
-            },
-            decoder: None,
-            volume: 1.0,
-            current_track_path: None,
-            ui_tx,
-            timer: std::time::Instant::now(),
-            last_ts: 0,
-        };
-
-        // 创建状态机
-        let mut state_machine = StateMachine::new();
-
-        loop {
-            // 处理命令并转换状态
-            if let Ok(cmd) = audio_rx.try_recv() {
-                let new_state: Option<Box<dyn State>> = match cmd {
-                    AudioCommand::Seek(seconds) => {
-                        tracing::info!("Processing SEEK command for {} seconds", seconds);
-                        Some(Box::new(SeekToState::new(seconds)))
-                    }
-                    AudioCommand::Stop => {
-                        tracing::info!("Processing STOP command");
-                        Some(Box::new(StoppedState))
-                    }
-                    AudioCommand::Pause => {
-                        tracing::info!("Processing PAUSE command");
-                        Some(Box::new(PausedState))
-                    }
-                    AudioCommand::Play => {
-                        tracing::info!("Processing PLAY command");
-                        Some(Box::new(PlayingState))
-                    }
-                    AudioCommand::LoadFile(path) => {
-                        tracing::info!("Processing LOAD FILE command for path: {:?}", &path);
-                        Some(Box::new(LoadFileState::new(path)))
-                    }
-                    AudioCommand::SetVolume(vol) => {
-                        tracing::info!("Processing SET VOLUME command to: {:?}", &vol);
-                        ctx.volume = vol;
-                        is_processing_ui_change_thread.store(false, Ordering::Relaxed);
-                        None
-                    }
-                    _ => {
-                        tracing::warn!("Unhandled case in audio command loop");
-                        None
-                    }
-                };
-
-                if let Some(state) = new_state {
-                    state_machine.transition_to(state, &mut ctx);
-                }
-            }
-
-            // 更新当前状态
-            state_machine.update(&mut ctx);
-
-            // 根据状态决定是否让出 CPU
-            let current_state = state_machine.current_state_name();
-            if current_state != "Playing" {
-                std::thread::yield_now();
-            }
-        }
-    }); // Audio Thread end
+    // Spawn audio playback thread
+    let _audio_thread =
+        audio::thread::spawn_audio_thread(audio_rx, ui_tx, is_processing_ui_change_thread);
 
     eframe::run_native(
         "Bird Player",
