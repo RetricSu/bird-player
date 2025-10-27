@@ -218,19 +218,19 @@ mod cpal {
 
     use log::{error, info};
 
-    trait AudioOutputSample:
+    trait ScalableSample:
         cpal::Sample + ConvertibleSample + IntoSample<f32> + RawSample + std::marker::Send + 'static
     {
         fn mul(&self, n: f32) -> Self; // for adjusting volume
     }
 
-    impl AudioOutputSample for f32 {
+    impl ScalableSample for f32 {
         fn mul(&self, n: f32) -> Self {
             self * n
         }
     }
 
-    impl AudioOutputSample for i16 {
+    impl ScalableSample for i16 {
         fn mul(&self, n: f32) -> Self {
             // the result might overflow, so we clamp it for safety
             const MAX: f32 = i16::MAX as f32;
@@ -240,7 +240,7 @@ mod cpal {
         }
     }
 
-    impl AudioOutputSample for u16 {
+    impl ScalableSample for u16 {
         fn mul(&self, n: f32) -> Self {
             // the result might overflow, so we clamp it for safety
             const MAX: f32 = u16::MAX as f32;
@@ -250,9 +250,9 @@ mod cpal {
         }
     }
 
-    pub struct CpalAudioOutput;
+    pub struct CpalOutputDevice;
 
-    impl CpalAudioOutput {
+    impl CpalOutputDevice {
         pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
             let host = cpal::default_host();
             let device = host.default_output_device().ok_or_else(|| {
@@ -268,27 +268,27 @@ mod cpal {
             // Select proper playback routine based on sample format.
             match config.sample_format() {
                 cpal::SampleFormat::F32 => {
-                    CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device)
+                    CpalStreamController::<f32>::try_open(spec, duration, &device)
                 }
                 cpal::SampleFormat::I16 => {
-                    CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device)
+                    CpalStreamController::<i16>::try_open(spec, duration, &device)
                 }
                 cpal::SampleFormat::U16 => {
-                    CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device)
+                    CpalStreamController::<u16>::try_open(spec, duration, &device)
                 }
                 _ => panic!("Unsupported sample format"),
             }
         }
     }
 
-    struct CpalAudioOutputImpl<T: AudioOutputSample> {
-        ring_buf_producer: rb::Producer<T>,
-        sample_buf: SampleBuffer<T>,
+    struct CpalStreamController<T: ScalableSample> {
+        sample_sender: rb::Producer<T>,
+        interleaved_buffer: SampleBuffer<T>,
         stream: cpal::Stream,
-        resampler: Option<Resampler<T>>,
+        rate_converter: Option<Resampler<T>>,
     }
 
-    impl<T: cpal::SizedSample + AudioOutputSample> CpalAudioOutputImpl<T>
+    impl<T: cpal::SizedSample + ScalableSample> CpalStreamController<T>
     where
         f32: cpal::FromSample<T>,
     {
@@ -299,7 +299,6 @@ mod cpal {
         ) -> Result<Box<dyn AudioOutput>> {
             let num_channels = spec.channels.count();
 
-            // Output audio stream config.
             let config = if cfg!(not(target_os = "windows")) {
                 cpal::StreamConfig {
                     channels: num_channels as cpal::ChannelCount,
@@ -364,43 +363,43 @@ mod cpal {
                 None
             };
 
-            Ok(Box::new(CpalAudioOutputImpl {
-                ring_buf_producer,
-                sample_buf,
+            Ok(Box::new(CpalStreamController {
+                sample_sender: ring_buf_producer,
+                interleaved_buffer: sample_buf,
                 stream,
-                resampler,
+                rate_converter: resampler,
             }))
         }
     }
 
-    impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T>
+    impl<T: ScalableSample> AudioOutput for CpalStreamController<T>
     where
         f32: cpal::FromSample<T>,
     {
-        fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()> {
+        fn write(&mut self, incoming_audio: AudioBufferRef<'_>, volume: f32) -> Result<()> {
             // Do nothing if there are no audio frames.
-            if decoded.frames() == 0 {
+            if incoming_audio.frames() == 0 {
                 return Ok(());
             }
 
-            let mut samples = if let Some(resampler) = &mut self.resampler {
+            let mut samples = if let Some(resampler) = &mut self.rate_converter {
                 // Resampling is required. The resampler will return interleaved samples in the
                 // correct sample format.
-                match resampler.resample(decoded) {
+                match resampler.resample(incoming_audio) {
                     Some(resampled) => resampled,
                     None => return Ok(()),
                 }
             } else {
                 // Resampling is not required. Interleave the sample for cpal using a sample buffer.
-                self.sample_buf.copy_interleaved_ref(decoded);
-                self.sample_buf.samples()
+                self.interleaved_buffer.copy_interleaved_ref(incoming_audio);
+                self.interleaved_buffer.samples()
             };
 
             // Now handle audio output with volume adjustment
             // Using a fixed-size buffer to avoid allocations in the hot path
             // This buffer is used to batch samples with volume applied
             const BATCH_SIZE: usize = 1024;
-            let mut volume_adjusted_samples = [T::MID; BATCH_SIZE];
+            let mut scaled_batch = [T::MID; BATCH_SIZE];
 
             while !samples.is_empty() {
                 // Calculate how many samples to process in this batch
@@ -408,28 +407,28 @@ mod cpal {
 
                 // Apply volume to batch
                 for i in 0..batch_count {
-                    volume_adjusted_samples[i] = samples[i].mul(volume);
+                    scaled_batch[i] = samples[i].mul(volume);
                 }
 
                 // Write the volume-adjusted batch to the ring buffer
                 match self
-                    .ring_buf_producer
-                    .write_blocking(&volume_adjusted_samples[..batch_count])
+                    .sample_sender
+                    .write_blocking(&scaled_batch[..batch_count])
                 {
                     Some(written) => {
                         // If not all samples were written, try again with the remaining ones
                         if written < batch_count {
                             // Move remaining unwritten samples to the beginning of the batch
                             for i in 0..(batch_count - written) {
-                                volume_adjusted_samples[i] = volume_adjusted_samples[written + i];
+                                scaled_batch[i] = scaled_batch[written + i];
                             }
 
                             // Continuously try to write the remaining samples
                             let mut remaining = batch_count - written;
                             while remaining > 0 {
                                 if let Some(written) = self
-                                    .ring_buf_producer
-                                    .write_blocking(&volume_adjusted_samples[..remaining])
+                                    .sample_sender
+                                    .write_blocking(&scaled_batch[..remaining])
                                 {
                                     if written == 0 {
                                         // If we can't write any more, break to avoid infinite loop
@@ -438,8 +437,7 @@ mod cpal {
 
                                     // Move remaining samples again
                                     for i in 0..(remaining - written) {
-                                        volume_adjusted_samples[i] =
-                                            volume_adjusted_samples[written + i];
+                                        scaled_batch[i] = scaled_batch[written + i];
                                     }
                                     remaining -= written;
                                 } else {
@@ -464,11 +462,11 @@ mod cpal {
         fn flush(&mut self) {
             // If there is a resampler, then it may need to be flushed
             // depending on the number of samples it has.
-            if let Some(resampler) = &mut self.resampler {
-                let mut remaining_samples = resampler.flush().unwrap_or_default();
+            if let Some(resampler) = &mut self.rate_converter {
+                let mut pending_samples = resampler.flush().unwrap_or_default();
 
-                while let Some(written) = self.ring_buf_producer.write_blocking(remaining_samples) {
-                    remaining_samples = &remaining_samples[written..];
+                while let Some(written) = self.sample_sender.write_blocking(pending_samples) {
+                    pending_samples = &pending_samples[written..];
                 }
             }
 
@@ -480,5 +478,5 @@ mod cpal {
 
 #[cfg(any(not(target_os = "linux"), not(feature = "pulseaudio")))]
 pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-    cpal::CpalAudioOutput::try_open(spec, duration)
+    cpal::CpalOutputDevice::try_open(spec, duration)
 }
