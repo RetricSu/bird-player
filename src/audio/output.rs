@@ -38,8 +38,8 @@ mod constants {
     pub const TARGET_LATENCY_MS: usize = 170;
     /// The watermark level considered "almost underflow" in the callback, log once below it
     pub const UNDERRUN_LOG_WATERMARK: usize = 256;
-    /// The batch size (in frames) for each write to the ring buffer
-    pub const WRITE_CHUNK_FRAMES: usize = 128;
+    /// the batch size for writing samples into the ring buffer
+    pub const WRITE_BATCH_SIZE: usize = 1024;
 }
 
 #[cfg(all(target_os = "linux", feature = "pulseaudio"))]
@@ -481,32 +481,42 @@ mod cpal {
     }
 
     // auxiliary function to write all samples from an iterator into the ring buffer
-    fn write_all_iter<T, I>(sender: &mut rb::Producer<T>, iter: I) -> usize
+    fn write_all_iter<T, I>(sender: &mut rb::Producer<T>, mut iter: I)
     where
         T: ScalableSample,
         I: Iterator<Item = T>,
     {
-        let mut written = 0;
-        let mut buf = [T::MID; super::constants::WRITE_CHUNK_FRAMES];
-        let mut chunk_len = 0;
+        let mut batch = Vec::with_capacity(super::constants::WRITE_BATCH_SIZE);
 
-        for sample in iter {
-            buf[chunk_len] = sample;
-            chunk_len += 1;
-            if chunk_len == buf.len() {
-                let n = sender.write_blocking(&buf).unwrap_or(0);
-                written += n;
-                if n < chunk_len {
-                    return written; // ring is full
+        for sample in iter.by_ref() {
+            batch.push(sample);
+            if batch.len() == super::constants::WRITE_BATCH_SIZE {
+                // Write batch with retry on partial writes
+                let mut remaining = &batch[..];
+                while !remaining.is_empty() {
+                    let n = sender.write(remaining).unwrap_or(0);
+                    if n == 0 {
+                        std::thread::sleep(std::time::Duration::from_micros(100));
+                    } else {
+                        remaining = &remaining[n..];
+                    }
                 }
-                chunk_len = 0;
+                batch.clear();
             }
         }
-        if chunk_len > 0 {
-            let n = sender.write_blocking(&buf[..chunk_len]).unwrap_or(0);
-            written += n;
+
+        // Write remaining samples
+        if !batch.is_empty() {
+            let mut remaining = &batch[..];
+            while !remaining.is_empty() {
+                let n = sender.write(remaining).unwrap_or(0);
+                if n == 0 {
+                    std::thread::sleep(std::time::Duration::from_micros(100));
+                } else {
+                    remaining = &remaining[n..];
+                }
+            }
         }
-        written
     }
 }
 
