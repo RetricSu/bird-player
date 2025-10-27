@@ -24,6 +24,7 @@ pub enum AudioOutputError {
     OpenStreamError,
     PlayStreamError,
     StreamClosedError,
+    ResampleError,
 }
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
@@ -390,97 +391,74 @@ mod cpal {
                 return Ok(());
             }
 
-            let mut samples = if let Some(resampler) = &mut self.rate_converter {
-                // Resampling is required. The resampler will return interleaved samples in the
-                // correct sample format.
-                match resampler.resample(incoming_audio) {
-                    Some(resampled) => resampled,
-                    None => return Ok(()),
-                }
+            // 1. retrieve samples (resampled or original)
+            let samples = if let Some(res) = &mut self.rate_converter {
+                res.resample(incoming_audio)
+                    .ok_or(AudioOutputError::ResampleError)?
             } else {
-                // Resampling is not required. Interleave the sample for cpal using a sample buffer.
                 self.interleaved_buffer.copy_interleaved_ref(incoming_audio);
                 self.interleaved_buffer.samples()
             };
 
-            // Now handle audio output with volume adjustment
-            // Using a fixed-size buffer to avoid allocations in the hot path
-            // This buffer is used to batch samples with volume applied
-            const BATCH_SIZE: usize = 1024;
-            let mut scaled_batch = [T::MID; BATCH_SIZE];
-
-            while !samples.is_empty() {
-                // Calculate how many samples to process in this batch
-                let batch_count = std::cmp::min(BATCH_SIZE, samples.len());
-
-                // Apply volume to batch
-                for i in 0..batch_count {
-                    scaled_batch[i] = samples[i].mul(volume);
-                }
-
-                // Write the volume-adjusted batch to the ring buffer
-                match self
-                    .sample_sender
-                    .write_blocking(&scaled_batch[..batch_count])
-                {
-                    Some(written) => {
-                        // If not all samples were written, try again with the remaining ones
-                        if written < batch_count {
-                            // Move remaining unwritten samples to the beginning of the batch
-                            for i in 0..(batch_count - written) {
-                                scaled_batch[i] = scaled_batch[written + i];
-                            }
-
-                            // Continuously try to write the remaining samples
-                            let mut remaining = batch_count - written;
-                            while remaining > 0 {
-                                if let Some(written) = self
-                                    .sample_sender
-                                    .write_blocking(&scaled_batch[..remaining])
-                                {
-                                    if written == 0 {
-                                        // If we can't write any more, break to avoid infinite loop
-                                        break;
-                                    }
-
-                                    // Move remaining samples again
-                                    for i in 0..(remaining - written) {
-                                        scaled_batch[i] = scaled_batch[written + i];
-                                    }
-                                    remaining -= written;
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Advance to the next batch of samples
-                        samples = &samples[batch_count..];
-                    }
-                    None => {
-                        // If we can't write at all, break out
-                        break;
+            // 2. volume scaling + write all at once
+            use std::iter;
+            let volume_iter = iter::from_fn({
+                let mut idx = 0;
+                move || {
+                    if idx == samples.len() {
+                        None
+                    } else {
+                        let v = samples[idx].mul(volume);
+                        idx += 1;
+                        Some(v)
                     }
                 }
-            }
+            });
 
+            write_all_iter(&mut self.sample_sender, volume_iter);
             Ok(())
         }
 
         fn flush(&mut self) {
-            // If there is a resampler, then it may need to be flushed
-            // depending on the number of samples it has.
-            if let Some(resampler) = &mut self.rate_converter {
-                let mut pending_samples = resampler.flush().unwrap_or_default();
-
-                while let Some(written) = self.sample_sender.write_blocking(pending_samples) {
-                    pending_samples = &pending_samples[written..];
+            // 1. flush all remaining samples from the resampler
+            if let Some(res) = &mut self.rate_converter {
+                while let Some(pending) = res.flush() {
+                    write_all_iter(&mut self.sample_sender, pending.iter().copied());
                 }
             }
 
-            // Flush is best-effort, ignore the returned result.
+            // 2. pause output, best effort, ignore errors
             let _ = self.stream.pause();
         }
+    }
+
+    // auxiliary function to write all samples from an iterator into the ring buffer
+    fn write_all_iter<T, I>(sender: &mut rb::Producer<T>, iter: I) -> usize
+    where
+        T: ScalableSample,
+        I: Iterator<Item = T>,
+    {
+        let mut written = 0;
+        let mut buf = [T::MID; 128];
+        let mut chunk_len = 0;
+
+        for sample in iter {
+            buf[chunk_len] = sample;
+            chunk_len += 1;
+            if chunk_len == buf.len() {
+                let n = sender.write_blocking(&buf).unwrap_or(0);
+                written += n;
+                if n < chunk_len {
+                    return written; // ring is full
+                }
+                chunk_len = 0;
+            }
+        }
+        if chunk_len > 0 {
+            let n = sender.write_blocking(&buf[..chunk_len]).unwrap_or(0);
+            written += n;
+        }
+        written
     }
 }
 
