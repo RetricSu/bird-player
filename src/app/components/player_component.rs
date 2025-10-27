@@ -217,22 +217,19 @@ impl AppComponent for PlayerComponent {
 
                         // Update in real-time while dragging (just the timestamp, not seeking the audio)
                         if time_slider.dragged() && has_selected_track {
-                            if let Some(player) = &mut ctx.player {
-                                player.set_seek_to_timestamp(current_seek);
-                            }
+                            ctx.player_mut_ref().set_seek_to_timestamp(current_seek);
                         }
 
                         // Only perform the actual seek when drag is stopped
                         if time_slider.drag_stopped() && has_selected_track {
-                            if let Some(player) = &mut ctx.player {
-                                // We already updated seek_to_timestamp during dragging,
-                                // now actually seek the audio playback
-                                player.seek_to(current_seek);
+                            let player = ctx.player_mut_ref();
+                            // We already updated seek_to_timestamp during dragging,
+                            // now actually seek the audio playback
+                            player.seek_to(current_seek);
 
-                                // When seeking, make sure the track state is set to Playing
-                                // This ensures the UI buttons match the actual state
-                                player.track_state = crate::app::player::TrackState::Playing;
-                            }
+                            // When seeking, make sure the track state is set to Playing
+                            // This ensures the UI buttons match the actual state
+                            player.track_state = crate::app::player::TrackState::Playing;
                         }
 
                         ui.label(format_time(current_seek));
@@ -357,15 +354,12 @@ impl AppComponent for PlayerComponent {
 
                                                 // Play the next track if available
                                                 if let Some(next_track) = next_track {
-                                                    if let Some(player) = &mut ctx.player {
-                                                        player.select_track(Some(next_track));
-                                                        player.play();
-                                                    }
+                                                    let player = ctx.player_mut_ref();
+                                                    player.select_track(Some(next_track));
+                                                    player.play();
                                                 } else {
                                                     // If no tracks left, clear the selected track
-                                                    if let Some(player) = &mut ctx.player {
-                                                        player.select_track(None);
-                                                    }
+                                                    ctx.player_mut_ref().select_track(None);
                                                 }
                                             }
                                         }
@@ -388,51 +382,61 @@ impl AppComponent for PlayerComponent {
                                 );
 
                                 if volume_slider.dragged() {
-                                    if let Some(is_processing_ui_change) =
-                                        &ctx.is_processing_ui_change
-                                    {
-                                        // Only send if the volume is actually changing
-                                        if current_volume != previous_vol {
-                                            if let Some(player) = &mut ctx.player {
-                                                player.set_volume(
-                                                    current_volume,
-                                                    is_processing_ui_change,
-                                                );
-                                            }
-                                        }
+                                    // Only send if the volume is actually changing
+                                    if current_volume != previous_vol {
+                                        let is_processing_ui_change = ctx.is_processing_ui_change();
+                                        ctx.player_mut_ref()
+                                            .set_volume(current_volume, &is_processing_ui_change);
                                     }
                                 }
 
                                 // Handle button clicks if a track is selected
                                 let mut fetch_lyrics = false;
                                 if has_selected_track {
-                                    if let Some(player) = &mut ctx.player {
-                                        if mode_btn.clicked() {
-                                            player.toggle_playback_mode();
-                                        }
+                                    // Check which action to take
+                                    let mut action = None;
 
-                                        if play_pause_btn.clicked() {
-                                            if is_playing {
-                                                player.pause();
-                                            } else {
-                                                player.play();
+                                    if mode_btn.clicked() {
+                                        action = Some("toggle_mode");
+                                    } else if play_pause_btn.clicked() {
+                                        action = Some(if is_playing { "pause" } else { "play" });
+                                    } else if prev_btn.clicked()
+                                        && ctx.playing_playlist_idx.is_some()
+                                    {
+                                        action = Some("previous");
+                                        fetch_lyrics = true;
+                                    } else if next_btn.clicked()
+                                        && ctx.playing_playlist_idx.is_some()
+                                    {
+                                        action = Some("next");
+                                        fetch_lyrics = true;
+                                    }
+
+                                    // Execute the action
+                                    if let Some(action) = action {
+                                        match action {
+                                            "toggle_mode" => {
+                                                ctx.player_mut_ref().toggle_playback_mode();
                                             }
-                                        }
-
-                                        if prev_btn.clicked() && ctx.playing_playlist_idx.is_some()
-                                        {
-                                            player.previous(
-                                                &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
-                                            );
-                                            fetch_lyrics = true;
-                                        }
-
-                                        if next_btn.clicked() && ctx.playing_playlist_idx.is_some()
-                                        {
-                                            player.next(
-                                                &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
-                                            );
-                                            fetch_lyrics = true;
+                                            "pause" => {
+                                                ctx.player_mut_ref().pause();
+                                            }
+                                            "play" => {
+                                                ctx.player_mut_ref().play();
+                                            }
+                                            "previous" => {
+                                                if let Some(idx) = ctx.playing_playlist_idx {
+                                                    let playlist_clone = ctx.playlists[idx].clone();
+                                                    ctx.player_mut_ref().previous(&playlist_clone);
+                                                }
+                                            }
+                                            "next" => {
+                                                if let Some(idx) = ctx.playing_playlist_idx {
+                                                    let playlist_clone = ctx.playlists[idx].clone();
+                                                    ctx.player_mut_ref().next(&playlist_clone);
+                                                }
+                                            }
+                                            _ => {}
                                         }
                                     }
                                 }

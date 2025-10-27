@@ -37,15 +37,11 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
-        if let Some(lib_cmd_rx) = &self.library_cmd_rx {
-            if let Ok(lib_cmd) = lib_cmd_rx.try_recv() {
-                match lib_cmd {
-                    LibraryCommand::AddItem(lib_item) => self.library.add_item(lib_item),
-                    LibraryCommand::AddView(lib_view) => self.library.add_view(lib_view),
-                    LibraryCommand::AddPathId(path_id) => {
-                        self.library.set_path_to_imported(path_id)
-                    }
-                }
+        if let Ok(lib_cmd) = self.lib_cmd_rx().try_recv() {
+            match lib_cmd {
+                LibraryCommand::AddItem(lib_item) => self.library.add_item(lib_item),
+                LibraryCommand::AddView(lib_view) => self.library.add_view(lib_view),
+                LibraryCommand::AddPathId(path_id) => self.library.set_path_to_imported(path_id),
             }
         }
 
@@ -58,9 +54,9 @@ impl eframe::App for App {
                     self.pending_lyrics_rx = None; // Clear the receiver
 
                     let track_key = self
-                        .player
+                        .runtime
                         .as_ref()
-                        .and_then(|player| player.selected_track.as_ref().map(|track| track.key()));
+                        .and_then(|rt| rt.player.selected_track.as_ref().map(|track| track.key()));
                     let lyrics_text_owned = self.current_lyrics.as_ref().and_then(|lyrics_data| {
                         lyrics_data
                             .synced_lyrics
@@ -78,7 +74,8 @@ impl eframe::App for App {
 
                     // Store the fetched lyrics in the ID3 tag for future use
                     if let Some(lyrics_data) = &self.current_lyrics {
-                        if let Some(player) = &self.player {
+                        if self.runtime.is_some() {
+                            let player = self.player_ref();
                             if let Some(track) = &player.selected_track {
                                 if let Err(e) =
                                     crate::app::lyrics::LyricsService::write_lyrics_to_file(
@@ -207,7 +204,8 @@ impl eframe::App for App {
         });
 
         // Request repaint during playback for smooth synced lyrics updates
-        if let Some(player) = &self.player {
+        if self.runtime.is_some() {
+            let player = self.player_ref();
             if matches!(player.track_state, crate::app::player::TrackState::Playing) {
                 ctx.request_repaint();
             }

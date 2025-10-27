@@ -145,22 +145,10 @@ pub struct App {
     pub runtime: Option<crate::BirdRuntime>,
 
     #[serde(skip_serializing, skip_deserializing)]
-    pub player: Option<Player>,
-
-    #[serde(skip_serializing, skip_deserializing)]
     pub playlist_idx_to_remove: Option<usize>,
 
     #[serde(skip_serializing, skip_deserializing)]
     pub playlist_being_renamed: Option<usize>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub library_cmd_tx: Option<Sender<LibraryCommand>>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub library_cmd_rx: Option<Receiver<LibraryCommand>>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub database: Option<Arc<crate::db::Database>>,
 
     pub quit: bool,
 
@@ -171,9 +159,6 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub is_library_cfg_open: bool,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub is_processing_ui_change: Option<Arc<AtomicBool>>,
 
     #[serde(skip_serializing, skip_deserializing)]
     pub show_library_and_playlist: bool,
@@ -225,17 +210,12 @@ impl Default for App {
             was_playing: None,
             boot_cfg: None,
             runtime: None,
-            player: None,
             playlist_idx_to_remove: None,
             playlist_being_renamed: None,
-            library_cmd_tx: None,
-            library_cmd_rx: None,
-            database: None,
             quit: false,
             is_maximized: false,
             lib_config_selections: Default::default(),
             is_library_cfg_open: false,
-            is_processing_ui_change: None,
             show_library_and_playlist: true,
             library_folders_expanded: false,
             show_about_dialog: false,
@@ -273,12 +253,14 @@ impl App {
             .lib_cmd_rx
     }
 
-    pub fn is_processing_ui_change(&self) -> &Arc<AtomicBool> {
-        &self
-            .boot_cfg
-            .as_ref()
-            .expect("boot_cfg not initialized")
-            .is_processing_ui_change
+    pub fn is_processing_ui_change(&self) -> Arc<AtomicBool> {
+        Arc::clone(
+            &self
+                .boot_cfg
+                .as_ref()
+                .expect("boot_cfg not initialized")
+                .is_processing_ui_change,
+        )
     }
 
     // 便捷访问器 - runtime
@@ -532,17 +514,20 @@ impl App {
         }
 
         // Save library and playlists to SQLite if database is available
-        if let Some(ref db) = &self.database {
-            // Save library
-            if let Err(e) = self.library.save_to_db(&db.connection()) {
-                tracing::error!("Failed to save library to database: {}", e);
-            }
+        let db_conn = {
+            let db = self.db();
+            db.connection()
+        };
 
-            // Save playlists with ID updates
-            for playlist in &mut self.playlists {
-                if let Err(e) = playlist.save_to_db_and_update_id(&db.connection()) {
-                    tracing::error!("Failed to save playlist to database: {}", e);
-                }
+        // Save library
+        if let Err(e) = self.library.save_to_db(&db_conn) {
+            tracing::error!("Failed to save library to database: {}", e);
+        }
+
+        // Save playlists with ID updates
+        for playlist in &mut self.playlists {
+            if let Err(e) = playlist.save_to_db_and_update_id(&db_conn) {
+                tracing::error!("Failed to save playlist to database: {}", e);
             }
         }
     }
@@ -763,7 +748,8 @@ impl App {
             }
         }
 
-        if let Some(player) = &mut self.player {
+        if self.runtime.is_some() {
+            let player = self.player_mut_ref();
             if let Some(selected_track) = player.selected_track.as_mut() {
                 if selected_track.key() == track_key {
                     selected_track.replace_lyrics(lyrics_owned.clone());
@@ -775,45 +761,44 @@ impl App {
             }
         }
 
-        if let Some(ref db) = self.database {
-            let conn_arc = db.connection();
-            let lyrics_param = lyrics_owned.as_deref();
+        let db = self.db();
+        let conn_arc = db.connection();
+        let lyrics_param = lyrics_owned.as_deref();
 
-            let update_result = {
-                match conn_arc.lock() {
-                    Ok(conn_guard) => conn_guard.execute(
-                        "UPDATE library_items SET lyrics = ?1 WHERE key = ?2",
-                        rusqlite::params![lyrics_param, track_key.to_string()],
-                    ),
-                    Err(e) => {
-                        tracing::error!(
-                            "Failed to acquire database lock for lyrics update on track {}: {}",
-                            track_key,
-                            e
-                        );
-                        return;
-                    }
-                }
-            };
-
-            match update_result {
-                Ok(0) => {
-                    if let Err(e) = self.library.save_to_db(&conn_arc) {
-                        tracing::error!(
-                            "Failed to persist lyrics update for track {}: {}",
-                            track_key,
-                            e
-                        );
-                    }
-                }
-                Ok(_) => {}
+        let update_result = {
+            match conn_arc.lock() {
+                Ok(conn_guard) => conn_guard.execute(
+                    "UPDATE library_items SET lyrics = ?1 WHERE key = ?2",
+                    rusqlite::params![lyrics_param, track_key.to_string()],
+                ),
                 Err(e) => {
                     tracing::error!(
-                        "Failed to update lyrics in database for track {}: {}",
+                        "Failed to acquire database lock for lyrics update on track {}: {}",
+                        track_key,
+                        e
+                    );
+                    return;
+                }
+            }
+        };
+
+        match update_result {
+            Ok(0) => {
+                if let Err(e) = self.library.save_to_db(&conn_arc) {
+                    tracing::error!(
+                        "Failed to persist lyrics update for track {}: {}",
                         track_key,
                         e
                     );
                 }
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!(
+                    "Failed to update lyrics in database for track {}: {}",
+                    track_key,
+                    e
+                );
             }
         }
     }
@@ -882,75 +867,77 @@ impl App {
 
         // Update the database if file update was successful
         if file_update_success {
-            if let Some(ref db) = self.database {
-                let conn = db.connection();
-                let result = {
-                    let mut conn_guard = conn.lock().unwrap();
-                    let tx = conn_guard.transaction().ok();
+            let db = self.db();
+            let conn = db.connection();
+            let result = {
+                let mut conn_guard = conn.lock().unwrap();
+                let tx = conn_guard.transaction().ok();
 
-                    if let Some(tx) = tx {
-                        let update_result = tx.execute(
-                            &format!("UPDATE library_items SET {} = ?1 WHERE key = ?2", field),
-                            rusqlite::params![value, track.key().to_string()],
-                        );
+                if let Some(tx) = tx {
+                    let update_result = tx.execute(
+                        &format!("UPDATE library_items SET {} = ?1 WHERE key = ?2", field),
+                        rusqlite::params![value, track.key().to_string()],
+                    );
 
-                        match update_result.and_then(|_| tx.commit()) {
-                            Ok(_) => {
-                                tracing::info!(
-                                    "Successfully updated {} in database for track {}",
-                                    field,
-                                    track.key()
-                                );
-                                true
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    "Failed to update {} in database for track {}: {}",
-                                    field,
-                                    track.key(),
-                                    e
-                                );
-                                false
-                            }
+                    match update_result.and_then(|_| tx.commit()) {
+                        Ok(_) => {
+                            tracing::info!(
+                                "Successfully updated {} in database for track {}",
+                                field,
+                                track.key()
+                            );
+                            true
                         }
-                    } else {
-                        tracing::error!("Failed to start database transaction for metadata update");
-                        false
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to update {} in database for track {}: {}",
+                                field,
+                                track.key(),
+                                e
+                            );
+                            false
+                        }
                     }
+                } else {
+                    tracing::error!("Failed to start database transaction for metadata update");
+                    false
+                }
+            };
+
+            // If database update was successful, update all instances of this track
+            if result {
+                // Get database connection Arc first
+                let db_conn = {
+                    let db = self.db();
+                    db.connection()
                 };
 
-                // If database update was successful, update all instances of this track
-                if result {
-                    // Update all instances of this track in all playlists
-                    for playlist in &mut self.playlists {
-                        for playlist_track in playlist.tracks.iter_mut() {
-                            if playlist_track.key() == track.key() {
-                                let updated_track = match field {
-                                    "title" => playlist_track.set_title(Some(value)),
-                                    "artist" => playlist_track.set_artist(Some(value)),
-                                    "album" => playlist_track.set_album(Some(value)),
-                                    "genre" => playlist_track.set_genre(Some(value)),
-                                    _ => playlist_track.clone(),
-                                };
-                                *playlist_track = updated_track;
-                            }
+                // Update all instances of this track in all playlists
+                for playlist in &mut self.playlists {
+                    for playlist_track in playlist.tracks.iter_mut() {
+                        if playlist_track.key() == track.key() {
+                            let updated_track = match field {
+                                "title" => playlist_track.set_title(Some(value)),
+                                "artist" => playlist_track.set_artist(Some(value)),
+                                "album" => playlist_track.set_album(Some(value)),
+                                "genre" => playlist_track.set_genre(Some(value)),
+                                _ => playlist_track.clone(),
+                            };
+                            *playlist_track = updated_track;
                         }
                     }
-
-                    // Reload the library from the database to get updated metadata
-                    if let Ok(updated_library) = library::Library::load_from_db(&db.connection()) {
-                        self.library = updated_library;
-                    }
-
-                    // Save the updated state to ensure persistence
-                    self.save_state();
                 }
 
-                result
-            } else {
-                tracing::warn!("No database connection available for metadata update");
-                file_update_success
+                // Reload the library from the database to get updated metadata
+                if let Ok(updated_library) = library::Library::load_from_db(&db_conn) {
+                    self.library = updated_library;
+                }
+
+                // Save the updated state to ensure persistence
+                self.save_state();
             }
+
+            result
         } else {
             false
         }
@@ -969,27 +956,26 @@ impl App {
     }
 
     pub fn cleanup_duplicate_pictures(&self) {
-        if let Some(ref db) = self.database {
-            let conn = db.connection();
-            let conn_guard = conn.lock().unwrap();
+        let db = self.db();
+        let conn = db.connection();
+        let conn_guard = conn.lock().unwrap();
 
-            tracing::info!("Cleaning up duplicate pictures in database...");
+        tracing::info!("Cleaning up duplicate pictures in database...");
 
-            // Delete all duplicate pictures, keeping only the first one for each library_item_id
-            let result = conn_guard.execute(
-                "DELETE FROM pictures WHERE id NOT IN (
-                    SELECT MIN(id) FROM pictures GROUP BY library_item_id, mime_type, picture_type, description, file_path
-                )",
-                [],
-            );
+        // Delete all duplicate pictures, keeping only the first one for each library_item_id
+        let result = conn_guard.execute(
+            "DELETE FROM pictures WHERE id NOT IN (
+                SELECT MIN(id) FROM pictures GROUP BY library_item_id, mime_type, picture_type, description, file_path
+            )",
+            [],
+        );
 
-            match result {
-                Ok(rows_deleted) => {
-                    tracing::info!("Cleaned up {} duplicate picture records", rows_deleted);
-                }
-                Err(e) => {
-                    tracing::error!("Failed to clean up duplicate pictures: {}", e);
-                }
+        match result {
+            Ok(rows_deleted) => {
+                tracing::info!("Cleaned up {} duplicate picture records", rows_deleted);
+            }
+            Err(e) => {
+                tracing::error!("Failed to clean up duplicate pictures: {}", e);
             }
         }
     }
