@@ -1,5 +1,4 @@
 use crate::app::icon::get_app_icon;
-use crate::app::library::LibraryItem;
 pub use crate::app::player::Player;
 pub use crate::app::App;
 pub use crate::app::*;
@@ -105,84 +104,4 @@ fn main() {
         }),
     )
     .expect("eframe failed: I should change main to return a result and use anyhow");
-}
-
-// Function to restore player state from saved settings
-pub fn restore_player_state(app: &mut App) {
-    tracing::info!("Restoring player state...");
-    tracing::info!("Last track path: {:?}", app.last_track_path);
-    tracing::info!("Last position: {:?}", app.last_position);
-    tracing::info!("Was playing: {:?}", app.was_playing);
-    tracing::info!("Number of playlists: {}", app.playlists.len());
-
-    // Restore volume if it was saved
-    let volume_to_restore = app.last_volume;
-    if let Some(volume) = volume_to_restore {
-        let is_processing = app.is_processing_ui_change().clone();
-        let player = app.player_mut_ref();
-        player.set_volume(volume, &is_processing);
-        tracing::info!("Restored volume: {}", volume);
-    }
-
-    // Restore playback mode if it was saved
-    if let Some(mode) = app.last_playback_mode {
-        let player = app.player_mut_ref();
-        player.playback_mode = mode;
-        tracing::info!("Restored playback mode: {:?}", mode);
-    }
-
-    // If there was a playing track, try to find and load it
-    let track_path_clone = app.last_track_path.clone();
-    if let Some(track_path) = track_path_clone {
-        // Search through all playlists for the track
-        let mut found_track: Option<(usize, LibraryItem)> = None;
-        for (playlist_idx, playlist) in app.playlists.iter().enumerate() {
-            if let Some(track) = playlist
-                .tracks
-                .iter()
-                .find(|track| track.path() == track_path)
-            {
-                found_track = Some((playlist_idx, (*track).clone()));
-                break;
-            }
-        }
-
-        if let Some((playlist_idx, track)) = found_track {
-            tracing::info!("Restoring track: {:?}", track_path);
-
-            // Cache values before borrowing player mutably
-            let position_to_restore = app.last_position;
-            let was_playing = app.was_playing;
-
-            let player = app.player_mut_ref();
-            // Set the selected track
-            player.select_track(Some(track));
-
-            // Set the seek position if available
-            if let Some(position) = position_to_restore {
-                tracing::info!("Restoring position: {} ms", position);
-                player.seek_to(position);
-            }
-
-            // Start playback if it was playing when the app was closed
-            if let Some(true) = was_playing {
-                tracing::info!("Resuming playback");
-                player.play();
-                // Set the playlist containing the track as the playing playlist
-                app.playing_playlist_idx = Some(playlist_idx);
-            }
-
-            // Mark that lyrics should be fetched after initialization
-            app.should_fetch_lyrics_on_init = true;
-        } else {
-            tracing::warn!("Cannot find saved track in any playlist: {:?}", track_path);
-        }
-    } else {
-        tracing::info!("No previous track to restore");
-    }
-
-    // Clear the saved state now that we've restored it (or failed to)
-    app.last_track_path = None;
-    app.last_position = None;
-    app.last_playback_mode = None; // Keep the mode in memory
 }
