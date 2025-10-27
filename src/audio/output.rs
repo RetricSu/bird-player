@@ -12,6 +12,10 @@ use std::result;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use symphonia::core::units::Duration;
 
+/// **Blocking PCM stream renderer**  
+///  
+/// - `write` blocks when the internal buffer is full.  
+/// - `flush` drains any remaining frames and pauses the device.
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>, volume: f32) -> Result<()>;
     fn flush(&mut self);
@@ -28,6 +32,15 @@ pub enum AudioOutputError {
 }
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
+
+mod constants {
+    /// ring buffer capacity: 170 ms frames (≈ 8 160 frames at 48 kHz)
+    pub const TARGET_LATENCY_MS: usize = 170;
+    /// The watermark level considered "almost underflow" in the callback, log once below it
+    pub const UNDERRUN_LOG_WATERMARK: usize = 256;
+    /// The batch size (in frames) for each write to the ring buffer
+    pub const WRITE_CHUNK_FRAMES: usize = 128;
+}
 
 #[cfg(all(target_os = "linux", feature = "pulseaudio"))]
 mod pulseaudio {
@@ -350,7 +363,7 @@ mod cpal {
                 config.buffer_size = cpal::BufferSize::Default;
             }
 
-            const TARGET_LATENCY_MS: usize = 170;
+            const TARGET_LATENCY_MS: usize = super::constants::TARGET_LATENCY_MS;
             let rb_capacity_frames = config.sample_rate.0 as usize * TARGET_LATENCY_MS / 1000;
             let sample_ring = SpscRb::new(rb_capacity_frames);
             let (sample_sender, sample_receiver) = (sample_ring.producer(), sample_ring.consumer());
@@ -362,7 +375,7 @@ mod cpal {
                         let frames_needed = output_slice.len();
                         let frames_written = sample_receiver.read(output_slice).unwrap_or(0);
 
-                        const LOW_WATER: usize = 256;
+                        const LOW_WATER: usize = super::constants::UNDERRUN_LOG_WATERMARK;
                         if frames_written + LOW_WATER < frames_needed {
                             static UNDERRUN_COUNT: std::sync::atomic::AtomicUsize =
                                 std::sync::atomic::AtomicUsize::new(0);
@@ -474,7 +487,7 @@ mod cpal {
         I: Iterator<Item = T>,
     {
         let mut written = 0;
-        let mut buf = [T::MID; 128];
+        let mut buf = [T::MID; super::constants::WRITE_CHUNK_FRAMES];
         let mut chunk_len = 0;
 
         for sample in iter {
