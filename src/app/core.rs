@@ -15,23 +15,6 @@ use super::state::{PlayerStateManager, StatePersistence};
 pub use super::library::{LibraryItem, LibraryPathId};
 pub use super::playlist::Playlist;
 
-pub enum AudioCommand {
-    Stop,
-    Play,
-    Pause,
-    Seek(u64),
-    LoadFile(std::path::PathBuf),
-    Select(usize),
-    SetVolume(f32),
-}
-
-pub enum UiCommand {
-    AudioFinished,
-    TotalTrackDuration(u64),
-    CurrentTimestamp(u64),
-    PlaybackStateChanged(bool), // true = playing, false = paused
-}
-
 pub enum LibraryCommand {
     AddView(LibraryView),
     AddItem(LibraryItem),
