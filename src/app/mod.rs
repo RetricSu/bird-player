@@ -17,12 +17,9 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-// Window size constants
-pub const DEFAULT_WINDOW_WIDTH: f32 = 750.0;
-pub const DEFAULT_WINDOW_HEIGHT: f32 = 468.0;
-
 mod app_impl;
 mod components;
+pub mod constants;
 pub mod font;
 pub mod i18n;
 pub mod icon;
@@ -31,6 +28,7 @@ pub mod lyrics;
 pub mod player;
 mod playlist;
 mod style;
+pub mod viewport;
 
 // Re-export the i18n functions for convenience
 pub use i18n::{get_language, set_language, t, tf, Language};
@@ -101,7 +99,7 @@ impl Default for AppSettings {
             last_volume: None,
             was_playing: None,
             library_folders_expanded: false,
-            default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
+            default_window_height: constants::DEFAULT_WINDOW_HEIGHT as f64,
             show_lyrics_panel: false,
         }
     }
@@ -221,7 +219,7 @@ impl Default for App {
             show_library_and_playlist: true,
             library_folders_expanded: false,
             show_about_dialog: false,
-            default_window_height: DEFAULT_WINDOW_HEIGHT as f64,
+            default_window_height: constants::DEFAULT_WINDOW_HEIGHT as f64,
             heavy_data_loaded: false,
             lyrics_service: None,
             current_lyrics: None,

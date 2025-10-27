@@ -69,16 +69,8 @@ fn main() -> Result<()> {
 
     // Try multiple possible icon paths for both development and bundled app scenarios
     let icon = get_app_icon().ok_or("Failed to load app icon")?;
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT])
-            .with_min_inner_size([300.0, 0.0])
-            .with_decorations(false)
-            .with_transparent(true)
-            .with_icon(icon)
-            .with_resizable(true),
-        ..Default::default()
-    };
+    let native_options = app::viewport::build_viewport_with_icon(icon);
+
     eframe::run_native(
         "Bird Player",
         native_options,
