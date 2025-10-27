@@ -13,7 +13,7 @@ impl AppComponent for PlaylistTabs {
             // Add playlist tabs
             for (idx, playlist) in ctx.playlists.iter_mut().enumerate() {
                 let is_selected = ctx.current_playlist_idx == Some(idx);
-                let is_being_renamed = ctx.playlist_being_renamed == Some(idx);
+                let is_being_renamed = ctx.ui_state.playlist_being_renamed == Some(idx);
 
                 if is_being_renamed {
                     // Show text input for renaming
@@ -32,7 +32,7 @@ impl AppComponent for PlaylistTabs {
                         if !name.is_empty() {
                             playlist.set_name(name);
                         }
-                        ctx.playlist_being_renamed = None;
+                        ctx.ui_state.playlist_being_renamed = None;
                     }
                 } else {
                     // Show normal tab button
@@ -55,11 +55,11 @@ impl AppComponent for PlaylistTabs {
                     // Show context menu on right-click
                     tab_response.context_menu(|ui| {
                         if ui.button(t("rename")).clicked() {
-                            ctx.playlist_being_renamed = Some(idx);
+                            ctx.ui_state.playlist_being_renamed = Some(idx);
                             ui.close_menu();
                         }
                         if ui.button(t("delete")).clicked() {
-                            ctx.playlist_idx_to_remove = Some(idx);
+                            ctx.ui_state.playlist_idx_to_remove = Some(idx);
                             ui.close_menu();
                         }
                     });
@@ -75,12 +75,12 @@ impl AppComponent for PlaylistTabs {
                 ctx.playlists.push(new_playlist);
                 let new_idx = ctx.playlists.len() - 1;
                 ctx.current_playlist_idx = Some(new_idx);
-                ctx.playlist_being_renamed = Some(new_idx); // Start renaming the new playlist immediately
+                ctx.ui_state.playlist_being_renamed = Some(new_idx); // Start renaming the new playlist immediately
             }
 
             // Handle playlist removal
-            if let Some(idx) = ctx.playlist_idx_to_remove {
-                ctx.playlist_idx_to_remove = None;
+            if let Some(idx) = ctx.ui_state.playlist_idx_to_remove {
+                ctx.ui_state.playlist_idx_to_remove = None;
 
                 if let Some(mut current_playlist_idx) = ctx.current_playlist_idx {
                     if current_playlist_idx == 0 && idx == 0 {

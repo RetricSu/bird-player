@@ -20,10 +20,10 @@ impl AppComponent for LyricsComponent {
             if ui.button("Upload Lyrics…").clicked() {
                 match Self::handle_manual_upload(ctx) {
                     ManualUploadResult::Updated => {
-                        ctx.lyrics_fetch_state = LyricsFetchState::Loaded;
+                        ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Loaded;
                     }
                     ManualUploadResult::Failed(message) => {
-                        ctx.lyrics_fetch_state = LyricsFetchState::Failed(message);
+                        ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Failed(message);
                     }
                     ManualUploadResult::Cancelled => {}
                 }
@@ -44,7 +44,7 @@ impl AppComponent for LyricsComponent {
 
 impl LyricsComponent {
     fn show_status(ui: &mut egui::Ui, ctx: &App) {
-        match &ctx.lyrics_fetch_state {
+        match &ctx.ui_state.lyrics_fetch_state {
             LyricsFetchState::Loading => {
                 ui.add(egui::Spinner::new().size(14.0));
                 ui.label("Fetching lyrics…");
@@ -60,7 +60,7 @@ impl LyricsComponent {
     }
 
     fn show_body(ctx: &App, ui: &mut egui::Ui) {
-        if let Some(lyrics) = &ctx.current_lyrics {
+        if let Some(lyrics) = ctx.lyrics_manager.current_lyrics() {
             // Show track info
             ui.label(format!("Lyrics：{}", &lyrics.track_name));
             ui.label(format!("Artist：{}", &lyrics.artist_name));
@@ -228,9 +228,9 @@ impl LyricsComponent {
             manual_lyrics.plain_lyrics = Some(content);
         }
 
-        ctx.current_lyrics = Some(manual_lyrics.clone());
-        ctx.show_lyrics_panel = true;
-        ctx.pending_lyrics_rx = None;
+        ctx.lyrics_manager
+            .set_current_lyrics(Some(manual_lyrics.clone()));
+        ctx.ui_state.show_lyrics_panel = true;
 
         match LyricsService::write_lyrics_to_file(&track_path, &manual_lyrics) {
             Ok(_) => {

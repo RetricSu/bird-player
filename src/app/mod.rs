@@ -1,21 +1,13 @@
-use library::{
-    Library, LibraryItem, LibraryItemContainer, LibraryPath, LibraryPathId, LibraryPathStatus,
-    LibraryView, Picture, ViewType,
-};
+use library::{Library, LibraryItem, LibraryPath, LibraryPathId, LibraryView};
 use player::Player;
 use playlist::Playlist;
 use serde::{Deserialize, Serialize};
+use services::{LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService};
+use state::{persistence::AppSettings, ui_state::UiState};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-
-use id3::{Tag, TagLike};
-use rayon::prelude::*;
-
-use rand::Rng;
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
 
 mod app_impl;
 mod components;
@@ -27,25 +19,16 @@ pub mod library;
 pub mod lyrics;
 pub mod player;
 mod playlist;
+pub mod services;
+pub mod state;
 mod style;
 pub mod viewport;
 
 // Re-export the i18n functions for convenience
 pub use i18n::{get_language, set_language, t, tf, Language};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LyricsFetchState {
-    Idle,
-    Loading,
-    Loaded,
-    Failed(String),
-}
-
-impl Default for LyricsFetchState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
+// Re-export commonly used state types
+pub use state::{ui_state::LyricsFetchState, AppState, PlayerStateManager, StatePersistence};
 
 pub enum AudioCommand {
     Stop,
@@ -70,41 +53,6 @@ pub enum LibraryCommand {
     AddPathId(LibraryPathId),
 }
 
-// Struct for storing basic settings in confy
-#[derive(Serialize, Deserialize)]
-pub struct AppSettings {
-    // Language setting
-    pub current_language: i18n::Language,
-
-    // Player state persistence
-    pub last_track_path: Option<PathBuf>,
-    pub last_position: Option<u64>,
-    pub last_playback_mode: Option<player::PlaybackMode>,
-    pub last_volume: Option<f32>,
-    pub was_playing: Option<bool>,
-
-    // UI state
-    pub library_folders_expanded: bool,
-    pub default_window_height: f64,
-    pub show_lyrics_panel: bool,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            current_language: i18n::Language::English,
-            last_track_path: None,
-            last_position: None,
-            last_playback_mode: None,
-            last_volume: None,
-            was_playing: None,
-            library_folders_expanded: false,
-            default_window_height: constants::DEFAULT_WINDOW_HEIGHT as f64,
-            show_lyrics_panel: false,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum TempError {
     MissingAppState,
@@ -116,28 +64,23 @@ impl std::fmt::Display for TempError {
     }
 }
 
+/// Main application struct
+///
+/// Refactored to separate concerns into dedicated state managers
 #[derive(Serialize, Deserialize)]
 pub struct App {
+    // Core data
     pub library: Library,
-
     pub playlists: Vec<Playlist>,
-
     pub current_playlist_idx: Option<usize>,
-
-    // New field to track which playlist is currently playing
     pub playing_playlist_idx: Option<usize>,
-
-    // Language setting
     pub current_language: i18n::Language,
 
-    // New fields for player state persistence
-    pub last_track_path: Option<PathBuf>,
-    pub last_position: Option<u64>,
-    pub last_playback_mode: Option<player::PlaybackMode>,
-    pub last_volume: Option<f32>,
-    pub was_playing: Option<bool>,
+    // Persisted UI settings
+    pub library_folders_expanded: bool,
+    pub default_window_height: f64,
 
-    // 启动配置和运行时 - 在 main 中初始化后一定存在
+    // Runtime state (not serialized)
     #[serde(skip_serializing, skip_deserializing)]
     pub boot_cfg: Option<crate::BirdBootCfg>,
 
@@ -145,88 +88,37 @@ pub struct App {
     pub runtime: Option<crate::BirdRuntime>,
 
     #[serde(skip_serializing, skip_deserializing)]
-    pub playlist_idx_to_remove: Option<usize>,
+    pub player_state: PlayerStateManager,
 
     #[serde(skip_serializing, skip_deserializing)]
-    pub playlist_being_renamed: Option<usize>,
-
-    pub quit: bool,
-
-    pub is_maximized: bool,
+    pub ui_state: UiState,
 
     #[serde(skip_serializing, skip_deserializing)]
-    pub lib_config_selections: std::collections::HashSet<LibraryPathId>,
+    pub lyrics_manager: LyricsManager,
 
-    #[serde(skip_serializing, skip_deserializing)]
-    pub is_library_cfg_open: bool,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub show_library_and_playlist: bool,
-
-    pub library_folders_expanded: bool,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub show_about_dialog: bool,
-
-    pub default_window_height: f64,
-
-    // New field to track if heavy data has been loaded
     #[serde(skip_serializing, skip_deserializing)]
     pub heavy_data_loaded: bool,
 
-    // Lyrics functionality
-    #[serde(skip_serializing, skip_deserializing)]
-    pub lyrics_service: Option<lyrics::LyricsService>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub current_lyrics: Option<lyrics::Lyrics>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub show_lyrics_panel: bool,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub pending_lyrics_rx: Option<std::sync::mpsc::Receiver<Option<lyrics::Lyrics>>>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub should_fetch_lyrics_on_init: bool,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub lyrics_fetch_state: LyricsFetchState,
+    pub quit: bool,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
             library: Library::new(),
-            playlists: vec![],          // Start with empty playlists
-            current_playlist_idx: None, // No playlist selected initially
+            playlists: vec![],
+            current_playlist_idx: None,
             playing_playlist_idx: None,
-            current_language: i18n::Language::English, // Default language
-            // Initialize the new fields
-            last_track_path: None,
-            last_position: None,
-            last_playback_mode: None,
-            last_volume: None,
-            was_playing: None,
+            current_language: i18n::Language::English,
+            library_folders_expanded: false,
+            default_window_height: constants::DEFAULT_WINDOW_HEIGHT as f64,
             boot_cfg: None,
             runtime: None,
-            playlist_idx_to_remove: None,
-            playlist_being_renamed: None,
-            quit: false,
-            is_maximized: false,
-            lib_config_selections: Default::default(),
-            is_library_cfg_open: false,
-            show_library_and_playlist: true,
-            library_folders_expanded: false,
-            show_about_dialog: false,
-            default_window_height: constants::DEFAULT_WINDOW_HEIGHT as f64,
+            player_state: PlayerStateManager::default(),
+            ui_state: UiState::default(),
+            lyrics_manager: LyricsManager::new(),
             heavy_data_loaded: false,
-            lyrics_service: None,
-            current_lyrics: None,
-            show_lyrics_panel: false,
-            pending_lyrics_rx: None,
-            should_fetch_lyrics_on_init: false,
-            lyrics_fetch_state: LyricsFetchState::Idle,
+            quit: false,
         }
     }
 }
@@ -281,33 +173,21 @@ impl App {
     }
 
     pub fn load_basic() -> Result<Self, TempError> {
-        // Still use confy for app settings
-        let config_result = confy::load::<AppSettings>("bird-player", None);
-
-        // Create a new default app - this doesn't have a database set yet
         let mut app = App::default();
 
         // Initialize i18n
         i18n::init();
 
-        if let Ok(settings) = config_result {
-            // Apply settings from confy
+        // Load settings from confy
+        if let Ok(settings) = StatePersistence::load_settings() {
+            // Apply settings
             app.current_language = settings.current_language;
-            app.last_track_path = settings.last_track_path;
-            app.last_position = settings.last_position;
-            app.last_playback_mode = settings.last_playback_mode;
-            app.last_volume = settings.last_volume;
-            app.was_playing = settings.was_playing;
-            app.library_folders_expanded = settings.library_folders_expanded;
-            app.default_window_height = settings.default_window_height;
-            app.show_lyrics_panel = settings.show_lyrics_panel;
+            app.player_state.apply_settings(settings.player);
+            app.ui_state.apply_settings(settings.ui);
         }
 
         // Set the language from the loaded config
         i18n::set_language(app.current_language);
-
-        app.is_maximized = false;
-        app.is_library_cfg_open = false;
 
         Ok(app)
     }
@@ -337,7 +217,7 @@ impl App {
                     app.playlists = playlists;
 
                     // If there was a last played track, try to find its playlist
-                    if let Some(last_track_path) = &app.last_track_path {
+                    if let Some(last_track_path) = &app.player_state.last_track_path {
                         for (idx, playlist) in app.playlists.iter().enumerate() {
                             if playlist
                                 .tracks
@@ -408,28 +288,27 @@ impl App {
 
         tracing::info!("Loading heavy data (library and playlists)...");
 
-        // Load the heavy data (library and playlists) from database
         let db_connection = self.db().connection();
-        // Try to load library from database
-        match Library::load_from_db(&db_connection) {
+
+        // Load library
+        match StatePersistence::load_library(&db_connection) {
             Ok(library) => {
                 self.library = library;
                 tracing::info!("Successfully loaded library from database");
             }
             Err(e) => {
                 tracing::error!("Failed to load library from database: {}", e);
-                // Keep the default empty library
             }
         }
 
-        // Try to load playlists from database
-        match playlist::Playlist::load_all_from_db(&db_connection) {
+        // Load playlists
+        match StatePersistence::load_playlists(&db_connection) {
             Ok(playlists) => {
                 if !playlists.is_empty() {
                     self.playlists = playlists;
 
-                    // If there was a last played track, try to find its playlist
-                    if let Some(last_track_path) = &self.last_track_path {
+                    // Find playlist containing the last played track
+                    if let Some(last_track_path) = &self.player_state.last_track_path {
                         for (idx, playlist) in self.playlists.iter().enumerate() {
                             if playlist
                                 .tracks
@@ -447,13 +326,13 @@ impl App {
                         }
                     }
 
-                    // If no playlist was selected (no last track or track not found), select first playlist
+                    // Select first playlist if none selected
                     if self.current_playlist_idx.is_none() {
                         self.current_playlist_idx = Some(0);
                         tracing::info!("No last played track found, selecting first playlist");
                     }
                 } else {
-                    // Only create a default playlist if no playlists exist in the database
+                    // Create default playlist
                     let mut default_playlist = playlist::Playlist::new();
                     default_playlist.set_name("Default Playlist".to_string());
                     self.playlists = vec![default_playlist];
@@ -463,20 +342,16 @@ impl App {
             }
             Err(e) => {
                 tracing::error!("Failed to load playlists from database: {}", e);
-                // Keep the default playlist
             }
         }
 
         // Restore player state after heavy data is loaded
         self.restore_player_state();
 
-        // Initialize lyrics service
-        self.lyrics_service = Some(lyrics::LyricsService::new());
-
         // Fetch lyrics for restored track if needed
-        if self.should_fetch_lyrics_on_init {
+        if self.ui_state.should_fetch_lyrics_on_init {
             self.fetch_lyrics_for_current_track();
-            self.should_fetch_lyrics_on_init = false;
+            self.ui_state.should_fetch_lyrics_on_init = false;
         }
 
         self.heavy_data_loaded = true;
@@ -493,66 +368,37 @@ impl App {
     }
 
     pub fn save_state(&mut self) {
-        // Split app state - settings go to confy, library and playlists go to SQLite
+        // Build settings from current state
         let settings = AppSettings {
             current_language: self.current_language,
-            last_track_path: self.last_track_path.clone(),
-            last_position: self.last_position,
-            last_playback_mode: self.last_playback_mode,
-            last_volume: self.last_volume,
-            was_playing: self.was_playing,
-            library_folders_expanded: self.library_folders_expanded,
-            default_window_height: self.default_window_height,
-            show_lyrics_panel: self.show_lyrics_panel,
+            player: self.player_state.to_settings(),
+            ui: self.ui_state.to_settings(),
         };
 
-        // Save app settings to confy
-        let store_result = confy::store("bird-player", None, &settings);
-        match store_result {
+        // Save settings to confy
+        match StatePersistence::save_settings(&settings) {
             Ok(_) => tracing::info!("Settings stored successfully"),
             Err(err) => tracing::error!("Failed to store app settings: {}", err),
         }
 
-        // Save library and playlists to SQLite if database is available
-        let db_conn = {
-            let db = self.db();
-            db.connection()
-        };
+        // Save library and playlists to SQLite
+        let db_conn = self.db().connection();
 
         // Save library
-        if let Err(e) = self.library.save_to_db(&db_conn) {
+        if let Err(e) = StatePersistence::save_library(&self.library, &db_conn) {
             tracing::error!("Failed to save library to database: {}", e);
         }
 
-        // Save playlists with ID updates
-        for playlist in &mut self.playlists {
-            if let Err(e) = playlist.save_to_db_and_update_id(&db_conn) {
-                tracing::error!("Failed to save playlist to database: {}", e);
-            }
+        // Save playlists
+        if let Err(e) = StatePersistence::save_playlists(&mut self.playlists, &db_conn) {
+            tracing::error!("Failed to save playlists to database: {}", e);
         }
     }
 
     /// Capture the current player state for persistence
     pub fn update_player_persistence(&mut self) {
-        if self.runtime.is_some() {
-            // Read all values first before modifying self fields
-            let (track_path, position, playback_mode, volume, is_playing) = {
-                let player = self.player_ref();
-                (
-                    player.selected_track.as_ref().map(|track| track.path()),
-                    player.seek_to_timestamp,
-                    player.playback_mode,
-                    player.volume,
-                    matches!(player.track_state, player::TrackState::Playing),
-                )
-            };
-
-            // Now update self fields
-            self.last_track_path = track_path;
-            self.last_position = Some(position);
-            self.last_playback_mode = Some(playback_mode);
-            self.last_volume = Some(volume);
-            self.was_playing = Some(is_playing);
+        if let Some(runtime) = &self.runtime {
+            self.player_state.update_from_player(&runtime.player);
         }
     }
 
@@ -561,257 +407,48 @@ impl App {
     /// This function is called during application startup to restore the player's
     /// last state including volume, playback mode, track position, and playback status.
     pub fn restore_player_state(&mut self) {
-        tracing::info!("Restoring player state...");
-        tracing::info!("Last track path: {:?}", self.last_track_path);
-        tracing::info!("Last position: {:?}", self.last_position);
-        tracing::info!("Was playing: {:?}", self.was_playing);
-        tracing::info!("Number of playlists: {}", self.playlists.len());
+        // Get is_processing first before borrowing anything else
+        let is_processing = self.is_processing_ui_change();
 
-        // Restore volume if it was saved
-        let volume_to_restore = self.last_volume;
-        if let Some(volume) = volume_to_restore {
-            let is_processing = self.is_processing_ui_change().clone();
-            let player = self.player_mut_ref();
-            player.set_volume(volume, &is_processing);
-            tracing::info!("Restored volume: {}", volume);
+        // Split borrows: we need mutable access to player (via runtime)
+        // and mutable access to player_state, and immutable access to playlists.
+        // Since all are different fields, we can do this via pointer manipulation.
+
+        let runtime_ptr =
+            self.runtime.as_mut().expect("runtime not initialized") as *mut crate::BirdRuntime;
+        let player_state_ptr = &mut self.player_state as *mut PlayerStateManager;
+        let playlists_ref = &self.playlists;
+
+        // SAFETY: We're accessing different fields of self, so there's no aliasing.
+        // runtime.player is separate from player_state and playlists.
+        let (playing_playlist_idx, should_fetch_lyrics) = unsafe {
+            PlayerRestoreService::restore_player_state(
+                &mut (*runtime_ptr).player,
+                &mut *player_state_ptr,
+                playlists_ref,
+                is_processing,
+            )
+        };
+
+        if let Some(idx) = playing_playlist_idx {
+            self.playing_playlist_idx = Some(idx);
         }
 
-        // Restore playback mode if it was saved
-        if let Some(mode) = self.last_playback_mode {
-            let player = self.player_mut_ref();
-            player.playback_mode = mode;
-            tracing::info!("Restored playback mode: {:?}", mode);
+        if should_fetch_lyrics {
+            self.ui_state.should_fetch_lyrics_on_init = true;
         }
-
-        // If there was a playing track, try to find and load it
-        let track_path_clone = self.last_track_path.clone();
-        if let Some(track_path) = track_path_clone {
-            // Search through all playlists for the track
-            let mut found_track: Option<(usize, LibraryItem)> = None;
-            for (playlist_idx, playlist) in self.playlists.iter().enumerate() {
-                if let Some(track) = playlist
-                    .tracks
-                    .iter()
-                    .find(|track| track.path() == track_path)
-                {
-                    found_track = Some((playlist_idx, (*track).clone()));
-                    break;
-                }
-            }
-
-            if let Some((playlist_idx, track)) = found_track {
-                tracing::info!("Restoring track: {:?}", track_path);
-
-                // Cache values before borrowing player mutably
-                let position_to_restore = self.last_position;
-                let was_playing = self.was_playing;
-
-                let player = self.player_mut_ref();
-                // Set the selected track
-                player.select_track(Some(track));
-
-                // Set the seek position if available
-                if let Some(position) = position_to_restore {
-                    tracing::info!("Restoring position: {} ms", position);
-                    player.seek_to(position);
-                }
-
-                // Start playback if it was playing when the app was closed
-                if let Some(true) = was_playing {
-                    tracing::info!("Resuming playback");
-                    player.play();
-                    // Set the playlist containing the track as the playing playlist
-                    self.playing_playlist_idx = Some(playlist_idx);
-                }
-
-                // Mark that lyrics should be fetched after initialization
-                self.should_fetch_lyrics_on_init = true;
-            } else {
-                tracing::warn!("Cannot find saved track in any playlist: {:?}", track_path);
-            }
-        } else {
-            tracing::info!("No previous track to restore");
-        }
-
-        // Clear the saved state now that we've restored it (or failed to)
-        self.last_track_path = None;
-        self.last_position = None;
-        self.last_playback_mode = None; // Keep the mode in memory
     }
 
     pub fn quit(&mut self) {
         self.quit = true;
     }
 
-    // Spawns a background thread and imports files
-    // from each unimported library path
+    // Spawns a background thread and imports files from a library path
     fn import_library_paths(&self, lib_path: &LibraryPath) {
-        if lib_path.status() == LibraryPathStatus::Imported {
-            tracing::info!("already imported library path...");
-            return;
-        }
-
-        tracing::info!("adding library path...");
-
         let lib_cmd_tx = self.lib_cmd_tx().clone();
-        let path = lib_path.path().clone();
-        let path_id = lib_path.id();
-        // Store path display string for later use
-        let path_display = path.display().to_string();
-
-        // Get the album art directory path
         let album_art_dir = App::get_album_art_dir();
-        // Ensure the album art directory exists
-        if let Err(err) = fs::create_dir_all(&album_art_dir) {
-            tracing::error!("Failed to create album art directory: {}", err);
-            return;
-        }
 
-        std::thread::spawn(move || {
-            let files = walkdir::WalkDir::new(path)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .skip(1)
-                .filter(|entry| {
-                    entry.file_type().is_file()
-                        && entry.path().extension().unwrap_or(std::ffi::OsStr::new("")) == "mp3"
-                })
-                .collect::<Vec<_>>();
-
-            let items = files
-                .par_iter()
-                .map(|entry| {
-                    let tag = Tag::read_from_path(entry.path());
-
-                    let library_item = match tag {
-                        Ok(tag) => {
-                            tracing::debug!(
-                                "📄 Successfully read ID3 tag from: {}",
-                                entry.path().display()
-                            );
-                            tracing::debug!("🏷️  ID3 Title: {:?}", tag.title());
-                            tracing::debug!("🏷️  ID3 Artist: {:?}", tag.artist());
-                            tracing::debug!("🏷️  ID3 Album: {:?}", tag.album());
-
-                            let mut item = LibraryItem::new(entry.path().to_path_buf(), path_id);
-
-                            // Get filename without extension as fallback title
-                            let filename_title = entry
-                                .path()
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("Unknown Title")
-                                .to_string();
-
-                            // Use filename as title if ID3 tag is missing
-                            let title = tag.title().unwrap_or(&filename_title);
-
-                            tracing::debug!("📝 Final title used: '{}'", title);
-
-                            item = item
-                                .set_title(Some(title))
-                                .set_artist(tag.artist())
-                                .set_album(tag.album())
-                                .set_year(tag.year())
-                                .set_genre(tag.genre())
-                                .set_track_number(tag.get("TRCK").and_then(|frame| {
-                                    frame.content().text().map(|t| {
-                                        t.split('/')
-                                            .next()
-                                            .unwrap_or("0")
-                                            .parse::<u32>()
-                                            .unwrap_or(0)
-                                    })
-                                }))
-                                .set_lyrics(tag.lyrics().next().map(|l| l.text.as_str()));
-
-                            // Extract pictures from ID3 tag
-                            for pic in tag.pictures() {
-                                // Create a unique filename for the picture
-                                let file_name = album_art_dir.join(format!(
-                                    "{}_{}_{}.{}",
-                                    entry
-                                        .path()
-                                        .file_stem()
-                                        .unwrap_or_default()
-                                        .to_string_lossy(),
-                                    u8::from(pic.picture_type),
-                                    rand::thread_rng().gen::<u64>(), // Add random number to ensure uniqueness
-                                    match pic.mime_type.as_str() {
-                                        "image/jpeg" => "jpg",
-                                        "image/png" => "png",
-                                        _ => "jpg", // Default to jpg for unknown types
-                                    }
-                                ));
-
-                                // Save the picture data to a file
-                                if let Ok(mut file) = fs::File::create(&file_name) {
-                                    if file.write_all(&pic.data).is_ok() {
-                                        item.add_picture(Picture::new(
-                                            pic.mime_type.to_string(),
-                                            u8::from(pic.picture_type),
-                                            pic.description.to_string(),
-                                            file_name,
-                                        ));
-                                    }
-                                }
-                            }
-
-                            item
-                        }
-                        Err(_err) => {
-                            tracing::warn!("Couldn't parse to id3: {:?}", &entry.path());
-                            // Get filename without extension as title for failed ID3 reads
-                            let filename_title = entry
-                                .path()
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("Unknown Title")
-                                .to_string();
-
-                            LibraryItem::new(entry.path().to_path_buf(), path_id)
-                                .set_title(Some(&filename_title))
-                        }
-                    };
-
-                    library_item
-                })
-                .collect::<Vec<LibraryItem>>();
-
-            tracing::info!("Done parsing library items");
-
-            // Populate the library with parsed items
-            for item in &items {
-                lib_cmd_tx
-                    .send(LibraryCommand::AddItem((*item).clone()))
-                    .expect("failed to send library item")
-            }
-
-            // The new implementation doesn't need album grouping anymore as we're organizing by folders
-            // We'll still create a view for backward compatibility, but it won't be used
-            // in our updated library_component
-            let mut library_view = LibraryView {
-                view_type: ViewType::Album,
-                containers: Vec::new(),
-            };
-
-            // Create a single container for all items of this path
-            // This maintains compatibility with the existing code
-            let lib_item_container = LibraryItemContainer {
-                name: format!("Folder: {}", path_display),
-                items: items.clone(),
-            };
-
-            library_view.containers.push(lib_item_container);
-
-            lib_cmd_tx
-                .send(LibraryCommand::AddView(library_view))
-                .expect("Failed to send library view");
-
-            lib_cmd_tx
-                .send(LibraryCommand::AddPathId(path_id))
-                .expect("Failed to send library view");
-        });
+        LibraryImportService::import_library_path(lib_path, lib_cmd_tx, album_art_dir);
     }
 
     pub fn update_track_lyrics(&mut self, track_key: usize, lyrics: Option<&str>) {
@@ -838,7 +475,7 @@ impl App {
                     selected_track.replace_lyrics(lyrics_owned.clone());
 
                     if lyrics_owned.is_none() {
-                        self.current_lyrics = None;
+                        self.lyrics_manager.set_current_lyrics(None);
                     }
                 }
             }
@@ -892,138 +529,38 @@ impl App {
         field: &str,
         value: &str,
     ) -> bool {
-        // Get the file path from the LibraryItem
-        let path = track.path();
+        let db_conn = self.db().connection();
 
-        // Try to read the existing tag
-        let mut tag = match id3::Tag::read_from_path(&path) {
-            Ok(tag) => tag,
-            Err(err) => {
-                // If there's no tag, create a new one
-                if let id3::ErrorKind::NoTag = err.kind {
-                    tracing::info!("Creating new ID3 tag for file: {:?}", path);
-                    id3::Tag::new()
-                } else {
-                    tracing::error!("Failed to read ID3 tag for file {:?}: {}", path, err);
-                    return false;
-                }
-            }
-        };
+        // Use the MetadataEditor service
+        let success = MetadataEditor::update_track_metadata(track, field, value, &db_conn);
 
-        // Update the corresponding field in the tag and track
-        match field {
-            "title" => {
-                tag.set_title(value);
-                track.set_title(Some(value));
-            }
-            "artist" => {
-                tag.set_artist(value);
-                track.set_artist(Some(value));
-            }
-            "album" => {
-                tag.set_album(value);
-                track.set_album(Some(value));
-            }
-            "genre" => {
-                tag.set_genre(value);
-                track.set_genre(Some(value));
-            }
-            _ => return false, // Unsupported field
-        }
-
-        // Write the updated tag back to the file
-        let file_update_success = match tag.write_to_path(&path, id3::Version::Id3v24) {
-            Ok(_) => {
-                tracing::info!(
-                    "Successfully updated {} to '{}' for file: {:?}",
-                    field,
-                    value,
-                    path
-                );
-                true
-            }
-            Err(e) => {
-                tracing::error!("Failed to write {} tag for file {:?}: {}", field, path, e);
-                false
-            }
-        };
-
-        // Update the database if file update was successful
-        if file_update_success {
-            let db = self.db();
-            let conn = db.connection();
-            let result = {
-                let mut conn_guard = conn.lock().unwrap();
-                let tx = conn_guard.transaction().ok();
-
-                if let Some(tx) = tx {
-                    let update_result = tx.execute(
-                        &format!("UPDATE library_items SET {} = ?1 WHERE key = ?2", field),
-                        rusqlite::params![value, track.key().to_string()],
-                    );
-
-                    match update_result.and_then(|_| tx.commit()) {
-                        Ok(_) => {
-                            tracing::info!(
-                                "Successfully updated {} in database for track {}",
-                                field,
-                                track.key()
-                            );
-                            true
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                "Failed to update {} in database for track {}: {}",
-                                field,
-                                track.key(),
-                                e
-                            );
-                            false
-                        }
-                    }
-                } else {
-                    tracing::error!("Failed to start database transaction for metadata update");
-                    false
-                }
-            };
-
-            // If database update was successful, update all instances of this track
-            if result {
-                // Get database connection Arc first
-                let db_conn = {
-                    let db = self.db();
-                    db.connection()
-                };
-
-                // Update all instances of this track in all playlists
-                for playlist in &mut self.playlists {
-                    for playlist_track in playlist.tracks.iter_mut() {
-                        if playlist_track.key() == track.key() {
-                            let updated_track = match field {
-                                "title" => playlist_track.set_title(Some(value)),
-                                "artist" => playlist_track.set_artist(Some(value)),
-                                "album" => playlist_track.set_album(Some(value)),
-                                "genre" => playlist_track.set_genre(Some(value)),
-                                _ => playlist_track.clone(),
-                            };
-                            *playlist_track = updated_track;
-                        }
+        if success {
+            // Update all instances of this track in playlists
+            for playlist in &mut self.playlists {
+                for playlist_track in playlist.tracks.iter_mut() {
+                    if playlist_track.key() == track.key() {
+                        let updated_track = match field {
+                            "title" => playlist_track.set_title(Some(value)),
+                            "artist" => playlist_track.set_artist(Some(value)),
+                            "album" => playlist_track.set_album(Some(value)),
+                            "genre" => playlist_track.set_genre(Some(value)),
+                            _ => playlist_track.clone(),
+                        };
+                        *playlist_track = updated_track;
                     }
                 }
-
-                // Reload the library from the database to get updated metadata
-                if let Ok(updated_library) = library::Library::load_from_db(&db_conn) {
-                    self.library = updated_library;
-                }
-
-                // Save the updated state to ensure persistence
-                self.save_state();
             }
 
-            result
-        } else {
-            false
+            // Reload the library from the database
+            if let Ok(updated_library) = library::Library::load_from_db(&db_conn) {
+                self.library = updated_library;
+            }
+
+            // Save the updated state
+            self.save_state();
         }
+
+        success
     }
 
     // Add these new methods for language handling
@@ -1065,99 +602,45 @@ impl App {
 
     /// Fetch lyrics for the currently selected track
     pub fn fetch_lyrics_for_current_track(&mut self) {
-        // If there's already a pending lyrics request, don't start a new one
-        if self.pending_lyrics_rx.is_some() {
-            tracing::debug!("📡 Lyrics fetch already in progress, skipping");
-            return;
-        }
-
-        // Clear current lyrics when starting a new fetch
-        self.current_lyrics = None;
-        self.lyrics_fetch_state = LyricsFetchState::Idle;
-
         if self.runtime.is_none() {
             tracing::warn!("⚠️  Player not available for lyrics fetch");
-            self.lyrics_fetch_state = LyricsFetchState::Failed("Player not available".to_string());
+            self.ui_state.lyrics_fetch_state =
+                LyricsFetchState::Failed("Player not available".to_string());
             return;
         }
 
-        let (player_duration, track) = {
+        // Extract the data we need from player first
+        let (selected_track, selected_track_key) = {
             let player = self.player_ref();
-            match player.selected_track.clone() {
-                Some(track) => (player.duration, track),
-                None => {
-                    tracing::debug!("No track currently selected for lyrics fetch");
-                    return;
-                }
-            }
+            let selected = player.selected_track.clone();
+            let selected_key = player.selected_track.as_ref().map(|t| t.key());
+            (selected, selected_key)
         };
 
-        let artist = track
-            .artist()
-            .unwrap_or_else(|| "Unknown Artist".to_string());
-        let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
+        // Now we can mutate self without holding the player reference
+        let (lyrics_found, should_show_panel) = self.lyrics_manager.fetch_lyrics_for_track_data(
+            selected_track.as_ref(),
+            &mut self.ui_state.lyrics_fetch_state,
+        );
 
-        // First, try to read lyrics from the ID3 tag
-        if let Some(cached_lyrics) =
-            crate::app::lyrics::LyricsService::read_lyrics_from_file(track.path(), &artist, &title)
-        {
-            tracing::info!(
-                "✅ Found cached lyrics in ID3 tag for '{}'",
-                track.path().display()
-            );
-            self.current_lyrics = Some(cached_lyrics);
-            self.lyrics_fetch_state = LyricsFetchState::Loaded;
-            // Show the lyrics panel when cached lyrics are loaded
-            if self
-                .current_lyrics
-                .as_ref()
-                .is_some_and(|lyrics| !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some())
-            {
-                self.show_lyrics_panel = true;
+        if lyrics_found && should_show_panel {
+            self.ui_state.show_lyrics_panel = true;
+
+            // Update track lyrics if we got them from cache
+            // Extract lyrics text and convert to owned String to avoid borrow issues
+            let lyrics_text_owned: Option<String> = {
+                self.lyrics_manager.current_lyrics().and_then(|lyrics| {
+                    lyrics
+                        .synced_lyrics
+                        .as_ref()
+                        .or(lyrics.plain_lyrics.as_ref())
+                        .map(|s| s.to_owned()) // Convert to owned String
+                })
+            }; // Borrow of self.lyrics_manager ends here
+
+            if let (Some(track_key), Some(lyrics_text)) = (selected_track_key, lyrics_text_owned) {
+                self.update_track_lyrics(track_key, Some(&lyrics_text));
             }
-            let lyrics_text_owned = self.current_lyrics.as_ref().and_then(|lyrics| {
-                lyrics
-                    .synced_lyrics
-                    .as_deref()
-                    .or(lyrics.plain_lyrics.as_deref())
-                    .map(|text| text.to_string())
-            });
-            let track_key = track.key();
-            drop(track);
-            self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
-            return; // Don't fetch from API if we have cached lyrics
-        }
-
-        // If no cached lyrics, proceed with API fetch
-        if let Some(lyrics_service) = &self.lyrics_service {
-            let album = track.album();
-            let duration = if player_duration > 0 {
-                Some(player_duration)
-            } else {
-                None
-            };
-
-            tracing::info!(
-                "🎵 No cached lyrics found, fetching from API for track: '{}' by '{}'",
-                title,
-                artist
-            );
-            tracing::debug!("📁 Track file: '{}'", track.path().display());
-            tracing::debug!("🏷️  Raw artist from track: {:?}", track.artist());
-            tracing::debug!("🏷️  Raw title from track: {:?}", track.title());
-            tracing::debug!("💿 Album: {:?}", album);
-            tracing::debug!("⏱️  Duration: {:?}", duration);
-
-            let response_rx = lyrics_service.fetch_lyrics(artist, title, album, duration);
-
-            // Store the response receiver - we'll check it asynchronously in the update loop
-            self.pending_lyrics_rx = Some(response_rx);
-            self.lyrics_fetch_state = LyricsFetchState::Loading;
-            tracing::debug!("📡 Lyrics fetch initiated, waiting for response...");
-        } else {
-            tracing::warn!("⚠️  Lyrics service not available");
-            self.lyrics_fetch_state =
-                LyricsFetchState::Failed("Lyrics service not available".to_string());
         }
     }
 }

@@ -277,9 +277,10 @@ impl AppComponent for PlayerComponent {
                                 ui.add_enabled_ui(false, |ui| ui.button("1.0x"));
 
                                 if ui.button(t("playlist_btn")).clicked() {
-                                    ctx.show_library_and_playlist = !ctx.show_library_and_playlist;
+                                    ctx.ui_state.show_library_and_playlist =
+                                        !ctx.ui_state.show_library_and_playlist;
                                     // Adjust window height based on visibility
-                                    let new_height = if ctx.show_library_and_playlist {
+                                    let new_height = if ctx.ui_state.show_library_and_playlist {
                                         ctx.default_window_height as f32
                                     } else {
                                         200.0 // Compact height when library and playlist are hidden
@@ -290,12 +291,13 @@ impl AppComponent for PlayerComponent {
                                 };
 
                                 if ui.button(t("lyrics")).clicked() {
-                                    ctx.show_lyrics_panel = !ctx.show_lyrics_panel;
+                                    ctx.ui_state.show_lyrics_panel =
+                                        !ctx.ui_state.show_lyrics_panel;
                                 };
 
                                 if ui.button(t("mini")).clicked() {
                                     // Hide library and playlist
-                                    ctx.show_library_and_playlist = false;
+                                    ctx.ui_state.show_library_and_playlist = false;
 
                                     // Set minimal window size
                                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(

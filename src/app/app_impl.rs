@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use super::{App, LibraryCommand, LyricsFetchState};
+use super::{App, LibraryCommand};
 use crate::app::components::{
     footer::Footer, library_component::LibraryComponent, lyrics_component::LyricsComponent,
     player_component::PlayerComponent, playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs,
@@ -46,87 +46,65 @@ impl eframe::App for App {
         }
 
         // Check for pending lyrics response
-        if let Some(lyrics_rx) = &self.pending_lyrics_rx {
-            match lyrics_rx.try_recv() {
-                Ok(lyrics) => {
-                    tracing::debug!("📡 Lyrics response received");
-                    self.current_lyrics = lyrics;
-                    self.pending_lyrics_rx = None; // Clear the receiver
+        let (lyrics_received, should_show_panel) = self
+            .lyrics_manager
+            .check_pending_lyrics(&mut self.ui_state.lyrics_fetch_state);
 
-                    let track_key = self
-                        .runtime
-                        .as_ref()
-                        .and_then(|rt| rt.player.selected_track.as_ref().map(|track| track.key()));
-                    let lyrics_text_owned = self.current_lyrics.as_ref().and_then(|lyrics_data| {
-                        lyrics_data
-                            .synced_lyrics
-                            .as_deref()
-                            .or(lyrics_data.plain_lyrics.as_deref())
-                            .map(|text| text.to_string())
-                    });
+        if lyrics_received {
+            tracing::debug!("📡 Lyrics response received");
 
-                    if self.current_lyrics.is_some() {
-                        self.lyrics_fetch_state = LyricsFetchState::Loaded;
-                    } else {
-                        self.lyrics_fetch_state =
-                            LyricsFetchState::Failed("No lyrics found for this track".to_string());
-                    }
+            let track_key = self
+                .runtime
+                .as_ref()
+                .and_then(|rt| rt.player.selected_track.as_ref().map(|track| track.key()));
 
-                    // Store the fetched lyrics in the ID3 tag for future use
-                    if let Some(lyrics_data) = &self.current_lyrics {
-                        if self.runtime.is_some() {
-                            let player = self.player_ref();
-                            if let Some(track) = &player.selected_track {
-                                if let Err(e) =
-                                    crate::app::lyrics::LyricsService::write_lyrics_to_file(
-                                        track.path(),
-                                        lyrics_data,
-                                    )
-                                {
-                                    tracing::warn!("⚠️  Failed to cache lyrics in ID3 tag: {}", e);
-                                } else {
-                                    tracing::info!("📝 Successfully cached lyrics in ID3 tag");
-                                }
-                            }
-                        }
-                    }
+            let lyrics_text_owned = self
+                .lyrics_manager
+                .current_lyrics()
+                .and_then(|lyrics_data| {
+                    lyrics_data
+                        .synced_lyrics
+                        .as_deref()
+                        .or(lyrics_data.plain_lyrics.as_deref())
+                        .map(|text| text.to_string())
+                });
 
-                    // Show the lyrics panel when lyrics are loaded
-                    if let Some(lyrics_data) = &self.current_lyrics {
-                        if lyrics_data.instrumental
-                            || !lyrics_data.lines.is_empty()
-                            || lyrics_data.plain_lyrics.is_some()
-                        {
-                            self.show_lyrics_panel = true;
-                        }
-                    }
-                    if let Some(lyrics_data) = &self.current_lyrics {
-                        if lyrics_data.instrumental {
-                            tracing::info!("✅ Found instrumental track");
-                        } else if !lyrics_data.lines.is_empty()
-                            || lyrics_data.plain_lyrics.is_some()
-                        {
-                            tracing::info!("✅ Lyrics loaded successfully");
+            if should_show_panel {
+                self.ui_state.show_lyrics_panel = true;
+            }
+
+            // Store the fetched lyrics in the ID3 tag for future use
+            if let Some(lyrics_data) = self.lyrics_manager.current_lyrics() {
+                if self.runtime.is_some() {
+                    let player = self.player_ref();
+                    if let Some(track) = &player.selected_track {
+                        if let Err(e) = crate::app::lyrics::LyricsService::write_lyrics_to_file(
+                            track.path(),
+                            lyrics_data,
+                        ) {
+                            tracing::warn!("⚠️  Failed to cache lyrics in ID3 tag: {}", e);
                         } else {
-                            tracing::warn!("⚠️  Lyrics record found but no content available");
+                            tracing::info!("📝 Successfully cached lyrics in ID3 tag");
                         }
-                    } else {
-                        tracing::warn!("❌ No lyrics found");
                     }
+                }
+            }
 
-                    if let Some(track_key) = track_key {
-                        self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
-                    }
+            // Show the lyrics panel when lyrics are loaded
+            if let Some(lyrics_data) = self.lyrics_manager.current_lyrics() {
+                if lyrics_data.instrumental {
+                    tracing::info!("✅ Found instrumental track");
+                } else if !lyrics_data.lines.is_empty() || lyrics_data.plain_lyrics.is_some() {
+                    tracing::info!("✅ Lyrics loaded successfully");
+                } else {
+                    tracing::warn!("⚠️  Lyrics record found but no content available");
                 }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    // No response yet, continue
-                }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    tracing::error!("📡 Lyrics service disconnected");
-                    self.pending_lyrics_rx = None;
-                    self.lyrics_fetch_state =
-                        LyricsFetchState::Failed("Lyrics service disconnected".to_string());
-                }
+            } else {
+                tracing::warn!("❌ No lyrics found");
+            }
+
+            if let Some(track_key) = track_key {
+                self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
             }
         }
 
@@ -169,7 +147,7 @@ impl eframe::App for App {
         });
 
         // Lyrics panel (right side, can be toggled)
-        if self.show_lyrics_panel {
+        if self.ui_state.show_lyrics_panel {
             egui::SidePanel::right("Lyrics Panel")
                 .default_width(300.0)
                 .resizable(true)

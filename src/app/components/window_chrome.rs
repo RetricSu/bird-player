@@ -120,20 +120,20 @@ impl AppComponent for WindowChrome {
 
             // Add View menu
             ui.menu_button(t("view"), |ui| {
-                let lyrics_text = if ctx.show_lyrics_panel {
+                let lyrics_text = if ctx.ui_state.show_lyrics_panel {
                     t("hide_lyrics")
                 } else {
                     t("show_lyrics")
                 };
                 if ui.button(lyrics_text).clicked() {
-                    ctx.show_lyrics_panel = !ctx.show_lyrics_panel;
+                    ctx.ui_state.show_lyrics_panel = !ctx.ui_state.show_lyrics_panel;
                     ui.close_menu();
                 }
             });
 
             ui.menu_button(t("help"), |ui| {
                 if ui.button(t("about")).clicked() {
-                    ctx.show_about_dialog = true;
+                    ctx.ui_state.show_about_dialog = true;
                     ui.close_menu();
                 }
             });
@@ -161,9 +161,10 @@ impl AppComponent for WindowChrome {
                 );
                 if maximize_response.clicked() {
                     // Toggle maximize
-                    ui.ctx()
-                        .send_viewport_cmd(egui::ViewportCommand::Maximized(!ctx.is_maximized));
-                    ctx.is_maximized = !ctx.is_maximized;
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(
+                        !ctx.ui_state.is_maximized,
+                    ));
+                    ctx.ui_state.is_maximized = !ctx.ui_state.is_maximized;
                 }
 
                 // Minimize button
@@ -189,15 +190,16 @@ impl AppComponent for WindowChrome {
 
                 // Double click to maximize/restore (common UI pattern)
                 if title_bar_response.double_clicked() {
-                    ctx.is_maximized = !ctx.is_maximized;
-                    ui.ctx()
-                        .send_viewport_cmd(egui::ViewportCommand::Maximized(ctx.is_maximized));
+                    ctx.ui_state.is_maximized = !ctx.ui_state.is_maximized;
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(
+                        ctx.ui_state.is_maximized,
+                    ));
                 }
 
                 // This approach explicitly checks for drag start with primary button
                 // which works better across platforms including Ubuntu/Linux
                 if title_bar_response.drag_started_by(egui::PointerButton::Primary)
-                    && !ctx.is_maximized
+                    && !ctx.ui_state.is_maximized
                 {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
@@ -205,7 +207,7 @@ impl AppComponent for WindowChrome {
         });
 
         // Show About dialog if requested
-        if ctx.show_about_dialog {
+        if ctx.ui_state.show_about_dialog {
             Window::new(t("about"))
                 .collapsible(false)
                 .resizable(false)
@@ -227,7 +229,7 @@ impl AppComponent for WindowChrome {
                         ui.label(t("contact_email"));
                         ui.add_space(20.0);
                         if ui.button(t("exit")).clicked() {
-                            ctx.show_about_dialog = false;
+                            ctx.ui_state.show_about_dialog = false;
                         }
                     });
                 });
