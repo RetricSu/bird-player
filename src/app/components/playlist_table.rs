@@ -50,14 +50,13 @@ impl AppComponent for PlaylistTable {
                 .unwrap_or(false);
 
             // Track current playing track position for auto-scrolling
-            let current_track_idx = if let Some(player) = &ctx.player {
+            let current_track_idx = {
+                let player = ctx.player_ref();
                 if let Some(selected_track) = &player.selected_track {
                     ctx.playlists[current_playlist_idx].get_pos(selected_track)
                 } else {
                     None
                 }
-            } else {
-                None
             };
 
             // Get the last played track index
@@ -227,9 +226,7 @@ impl AppComponent for PlaylistTable {
                                 let mut album_text = egui::RichText::new(track_album.clone());
                                 let mut genre_text = egui::RichText::new(track_genre.clone());
 
-                                if let Some(selected_track) =
-                                    &ctx.player.as_ref().unwrap().selected_track
-                                {
+                                if let Some(selected_track) = &ctx.player_ref().selected_track {
                                     if selected_track == track {
                                         let highlight_color = ui.style().visuals.selection.bg_fill;
 
@@ -405,9 +402,7 @@ impl AppComponent for PlaylistTable {
                                                     toggle_selection = Some(idx);
                                                 } else {
                                                     let is_selected = ctx
-                                                        .player
-                                                        .as_ref()
-                                                        .unwrap()
+                                                        .player_ref()
                                                         .selected_track
                                                         .as_ref()
                                                         == Some(track);
@@ -828,9 +823,10 @@ impl AppComponent for PlaylistTable {
             if let Some(idx) = track_to_play {
                 if idx < ctx.playlists[current_playlist_idx].tracks.len() {
                     let track_clone = ctx.playlists[current_playlist_idx].tracks[idx].clone();
-                    ctx.player.as_mut().unwrap().selected_track = Some(track_clone.clone());
-                    ctx.player.as_mut().unwrap().select_track(Some(track_clone));
-                    ctx.player.as_mut().unwrap().play();
+                    let player = ctx.player_mut_ref();
+                    player.selected_track = Some(track_clone.clone());
+                    player.select_track(Some(track_clone));
+                    player.play();
                     // Set the current playlist as the playing playlist
                     ctx.playing_playlist_idx = Some(current_playlist_idx);
 

@@ -21,6 +21,19 @@ mod app;
 mod audio;
 mod db;
 
+// 启动配置 - 启动时一次性搞定
+pub struct BirdBootCfg {
+    pub db: Arc<db::Database>,
+    pub lib_cmd_tx: std::sync::mpsc::Sender<LibraryCommand>,
+    pub lib_cmd_rx: std::sync::mpsc::Receiver<LibraryCommand>,
+    pub is_processing_ui_change: Arc<AtomicBool>,
+}
+
+// 运行期状态 - 运行期一定存在
+pub struct BirdRuntime {
+    pub player: Player,
+}
+
 // New function to load the app icon from multiple possible locations
 fn get_app_icon() -> Option<egui::IconData> {
     // Try different potential paths for both development and bundled app
@@ -54,48 +67,36 @@ fn main() {
     tracing_subscriber::fmt::init();
     tracing::info!("App booting...");
 
-    // Initialize database first
-    let database = match db::Database::new() {
-        Ok(db) => {
-            tracing::info!("Database initialized successfully");
-            Some(Arc::new(db))
-        }
-        Err(e) => {
-            tracing::error!("Failed to initialize database: {}", e);
-            None
-        }
-    };
+    // 初始化启动配置 - 失败直接 panic
+    let database = Arc::new(db::Database::new().expect("Failed to initialize database"));
+    tracing::info!("Database initialized successfully");
 
     let (lib_cmd_tx, lib_cmd_rx) = channel();
+    let is_processing_ui_change = Arc::new(AtomicBool::new(false));
+    let is_processing_ui_change_thread = is_processing_ui_change.clone();
+
+    let boot_cfg = BirdBootCfg {
+        db: database,
+        lib_cmd_tx,
+        lib_cmd_rx,
+        is_processing_ui_change,
+    };
+
+    // 初始化运行时状态
     let (audio_tx, audio_rx) = channel();
     let (ui_tx, ui_rx) = channel();
     let cursor = Arc::new(AtomicU32::new(0));
+
     let player = Player::new(audio_tx, ui_rx, cursor);
 
-    // App setup - properly initialize with database
-    let is_processing_ui_change = Arc::new(AtomicBool::new(false));
+    let runtime = BirdRuntime { player };
 
-    // Create a default app with the database connection - but don't load heavy data yet
-    let temp_app = App {
-        database: database.clone(),
-        ..Default::default()
-    };
+    // 加载 App 基础状态
+    let mut app = App::load_basic().unwrap_or_default();
 
-    // Load basic app state using the temp_app as fallback
-    let mut app = match App::load_basic() {
-        Ok(loaded_app) => {
-            // Ensure database is set in the loaded app
-            let mut app = loaded_app;
-            app.database = database.clone();
-            app
-        }
-        Err(_) => temp_app,
-    };
-
-    app.player = Some(player);
-    app.library_cmd_tx = Some(lib_cmd_tx);
-    app.library_cmd_rx = Some(lib_cmd_rx);
-    app.is_processing_ui_change = Some(is_processing_ui_change.clone());
+    // 设置启动配置和运行时
+    app.boot_cfg = Some(boot_cfg);
+    app.runtime = Some(runtime);
 
     // Try multiple possible icon paths for both development and bundled app scenarios
     let icon_result = get_app_icon();
@@ -144,7 +145,12 @@ fn main() {
 
         loop {
             // Process any pending commands
-            process_audio_cmd(&audio_rx, &mut state, &mut volume, &is_processing_ui_change);
+            process_audio_cmd(
+                &audio_rx,
+                &mut state,
+                &mut volume,
+                &is_processing_ui_change_thread,
+            );
 
             match state {
                 PlayerState::Playing => {
@@ -830,8 +836,6 @@ fn do_verification(finalization: FinalizeResult) -> Result<i32> {
 
 // Function to restore player state from saved settings
 pub fn restore_player_state(app: &mut App) {
-    let player = app.player.as_mut().unwrap();
-
     tracing::info!("Restoring player state...");
     tracing::info!("Last track path: {:?}", app.last_track_path);
     tracing::info!("Last position: {:?}", app.last_position);
@@ -839,30 +843,31 @@ pub fn restore_player_state(app: &mut App) {
     tracing::info!("Number of playlists: {}", app.playlists.len());
 
     // Restore volume if it was saved
-    if let Some(volume) = app.last_volume {
-        let is_processing = app
-            .is_processing_ui_change
-            .clone()
-            .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+    let volume_to_restore = app.last_volume;
+    if let Some(volume) = volume_to_restore {
+        let is_processing = app.is_processing_ui_change().clone();
+        let player = app.player_mut_ref();
         player.set_volume(volume, &is_processing);
         tracing::info!("Restored volume: {}", volume);
     }
 
     // Restore playback mode if it was saved
     if let Some(mode) = app.last_playback_mode {
+        let player = app.player_mut_ref();
         player.playback_mode = mode;
         tracing::info!("Restored playback mode: {:?}", mode);
     }
 
     // If there was a playing track, try to find and load it
-    if let Some(track_path) = &app.last_track_path {
+    let track_path_clone = app.last_track_path.clone();
+    if let Some(track_path) = track_path_clone {
         // Search through all playlists for the track
         let mut found_track: Option<(usize, LibraryItem)> = None;
         for (playlist_idx, playlist) in app.playlists.iter().enumerate() {
             if let Some(track) = playlist
                 .tracks
                 .iter()
-                .find(|track| track.path() == *track_path)
+                .find(|track| track.path() == track_path)
             {
                 found_track = Some((playlist_idx, (*track).clone()));
                 break;
@@ -872,17 +877,22 @@ pub fn restore_player_state(app: &mut App) {
         if let Some((playlist_idx, track)) = found_track {
             tracing::info!("Restoring track: {:?}", track_path);
 
+            // Cache values before borrowing player mutably
+            let position_to_restore = app.last_position;
+            let was_playing = app.was_playing;
+
+            let player = app.player_mut_ref();
             // Set the selected track
             player.select_track(Some(track));
 
             // Set the seek position if available
-            if let Some(position) = app.last_position {
+            if let Some(position) = position_to_restore {
                 tracing::info!("Restoring position: {} ms", position);
                 player.seek_to(position);
             }
 
             // Start playback if it was playing when the app was closed
-            if let Some(true) = app.was_playing {
+            if let Some(true) = was_playing {
                 tracing::info!("Resuming playback");
                 player.play();
                 // Set the playlist containing the track as the playing playlist

@@ -177,6 +177,11 @@ impl AppComponent for Footer {
                                                 let playlist =
                                                     &mut ctx.playlists[current_playlist_idx];
                                                 let mut fetch_lyrics = false;
+                                                let mut track_to_play: Option<(
+                                                    usize,
+                                                    crate::app::library::LibraryItem,
+                                                )> = None;
+
                                                 for (idx, title, artist, album) in results {
                                                     let result_text = format!(
                                                         "{} - {} ({})",
@@ -203,12 +208,9 @@ impl AppComponent for Footer {
                                                         playlist.clear_selection();
                                                         playlist.toggle_selection(idx);
 
-                                                        // Play the clicked track
+                                                        // Store track to play later
                                                         let track = playlist.tracks[idx].clone();
-                                                        let player = ctx.player.as_mut().unwrap();
-                                                        player.select_track(Some(track));
-                                                        player.play();
-
+                                                        track_to_play = Some((idx, track));
                                                         fetch_lyrics = true;
 
                                                         // Hide the dropdown
@@ -219,6 +221,13 @@ impl AppComponent for Footer {
                                                             );
                                                         });
                                                     }
+                                                }
+
+                                                // Play the track after releasing the playlist borrow
+                                                if let Some((_idx, track)) = track_to_play {
+                                                    let player = ctx.player_mut_ref();
+                                                    player.select_track(Some(track));
+                                                    player.play();
                                                 }
 
                                                 if fetch_lyrics {

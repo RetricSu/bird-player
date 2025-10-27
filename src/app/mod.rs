@@ -137,6 +137,13 @@ pub struct App {
     pub last_volume: Option<f32>,
     pub was_playing: Option<bool>,
 
+    // 启动配置和运行时 - 在 main 中初始化后一定存在
+    #[serde(skip_serializing, skip_deserializing)]
+    pub boot_cfg: Option<crate::BirdBootCfg>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub runtime: Option<crate::BirdRuntime>,
+
     #[serde(skip_serializing, skip_deserializing)]
     pub player: Option<Player>,
 
@@ -216,6 +223,8 @@ impl Default for App {
             last_playback_mode: None,
             last_volume: None,
             was_playing: None,
+            boot_cfg: None,
+            runtime: None,
             player: None,
             playlist_idx_to_remove: None,
             playlist_being_renamed: None,
@@ -243,6 +252,52 @@ impl Default for App {
 }
 
 impl App {
+    // 便捷访问器 - boot_cfg
+    pub fn db(&self) -> &Arc<crate::db::Database> {
+        &self.boot_cfg.as_ref().expect("boot_cfg not initialized").db
+    }
+
+    pub fn lib_cmd_tx(&self) -> &Sender<LibraryCommand> {
+        &self
+            .boot_cfg
+            .as_ref()
+            .expect("boot_cfg not initialized")
+            .lib_cmd_tx
+    }
+
+    pub fn lib_cmd_rx(&self) -> &Receiver<LibraryCommand> {
+        &self
+            .boot_cfg
+            .as_ref()
+            .expect("boot_cfg not initialized")
+            .lib_cmd_rx
+    }
+
+    pub fn is_processing_ui_change(&self) -> &Arc<AtomicBool> {
+        &self
+            .boot_cfg
+            .as_ref()
+            .expect("boot_cfg not initialized")
+            .is_processing_ui_change
+    }
+
+    // 便捷访问器 - runtime
+    pub fn player_ref(&self) -> &Player {
+        &self
+            .runtime
+            .as_ref()
+            .expect("runtime not initialized")
+            .player
+    }
+
+    pub fn player_mut_ref(&mut self) -> &mut Player {
+        &mut self
+            .runtime
+            .as_mut()
+            .expect("runtime not initialized")
+            .player
+    }
+
     pub fn load_basic() -> Result<Self, TempError> {
         // Still use confy for app settings
         let config_result = confy::load::<AppSettings>("bird-player", None);
@@ -269,19 +324,6 @@ impl App {
         // Set the language from the loaded config
         i18n::set_language(app.current_language);
 
-        // Initialize database if it's not already set
-        if app.database.is_none() {
-            match crate::db::Database::new() {
-                Ok(db) => {
-                    app.database = Some(Arc::new(db));
-                    tracing::info!("Database created during App::load_basic()");
-                }
-                Err(e) => {
-                    tracing::error!("Failed to create database during App::load_basic(): {}", e);
-                }
-            }
-        }
-
         app.is_maximized = false;
         app.is_library_cfg_open = false;
 
@@ -292,66 +334,63 @@ impl App {
         // Load basic app state first
         let mut app = Self::load_basic()?;
 
-        // Now load the heavy data (library and playlists) if we have a database
-        if let Some(ref db) = app.database {
-            // Try to load library from database
-            match Library::load_from_db(&db.connection()) {
-                Ok(library) => {
-                    app.library = library;
-                    tracing::info!("Successfully loaded library from database");
-                }
-                Err(e) => {
-                    tracing::error!("Failed to load library from database: {}", e);
-                    // Keep the default empty library
-                }
+        // Now load the heavy data (library and playlists) if we have boot_cfg
+        let db_connection = app.db().connection();
+        // Try to load library from database
+        match Library::load_from_db(&db_connection) {
+            Ok(library) => {
+                app.library = library;
+                tracing::info!("Successfully loaded library from database");
             }
+            Err(e) => {
+                tracing::error!("Failed to load library from database: {}", e);
+                // Keep the default empty library
+            }
+        }
 
-            // Try to load playlists from database
-            match playlist::Playlist::load_all_from_db(&db.connection()) {
-                Ok(playlists) => {
-                    if !playlists.is_empty() {
-                        app.playlists = playlists;
+        // Try to load playlists from database
+        match playlist::Playlist::load_all_from_db(&db_connection) {
+            Ok(playlists) => {
+                if !playlists.is_empty() {
+                    app.playlists = playlists;
 
-                        // If there was a last played track, try to find its playlist
-                        if let Some(last_track_path) = &app.last_track_path {
-                            for (idx, playlist) in app.playlists.iter().enumerate() {
-                                if playlist
-                                    .tracks
-                                    .iter()
-                                    .any(|track| track.path() == *last_track_path)
-                                {
-                                    app.current_playlist_idx = Some(idx);
-                                    app.playing_playlist_idx = Some(idx);
-                                    tracing::info!(
-                                        "Found last played track in playlist '{}', selecting it",
-                                        playlist.get_name().unwrap_or_default()
-                                    );
-                                    break;
-                                }
+                    // If there was a last played track, try to find its playlist
+                    if let Some(last_track_path) = &app.last_track_path {
+                        for (idx, playlist) in app.playlists.iter().enumerate() {
+                            if playlist
+                                .tracks
+                                .iter()
+                                .any(|track| track.path() == *last_track_path)
+                            {
+                                app.current_playlist_idx = Some(idx);
+                                app.playing_playlist_idx = Some(idx);
+                                tracing::info!(
+                                    "Found last played track in playlist '{}', selecting it",
+                                    playlist.get_name().unwrap_or_default()
+                                );
+                                break;
                             }
                         }
-
-                        // If no playlist was selected (no last track or track not found), select first playlist
-                        if app.current_playlist_idx.is_none() {
-                            app.current_playlist_idx = Some(0);
-                            tracing::info!("No last played track found, selecting first playlist");
-                        }
-                    } else {
-                        // Only create a default playlist if no playlists exist in the database
-                        let mut default_playlist = playlist::Playlist::new();
-                        default_playlist.set_name("Default Playlist".to_string());
-                        app.playlists = vec![default_playlist];
-                        app.current_playlist_idx = Some(0);
-                        tracing::info!("No playlists found in database, created default playlist");
                     }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to load playlists from database: {}", e);
-                    // Keep the default playlist
+
+                    // If no playlist was selected (no last track or track not found), select first playlist
+                    if app.current_playlist_idx.is_none() {
+                        app.current_playlist_idx = Some(0);
+                        tracing::info!("No last played track found, selecting first playlist");
+                    }
+                } else {
+                    // Only create a default playlist if no playlists exist in the database
+                    let mut default_playlist = playlist::Playlist::new();
+                    default_playlist.set_name("Default Playlist".to_string());
+                    app.playlists = vec![default_playlist];
+                    app.current_playlist_idx = Some(0);
+                    tracing::info!("No playlists found in database, created default playlist");
                 }
             }
-        } else {
-            tracing::warn!("No database connection available when loading app state");
+            Err(e) => {
+                tracing::error!("Failed to load playlists from database: {}", e);
+                // Keep the default playlist
+            }
         }
 
         Ok(app)
@@ -365,21 +404,18 @@ impl App {
         tracing::info!("Starting async heavy data loading...");
 
         // Clone the database connection for the background thread
-        let db_connection = self.database.clone();
+        let db_connection = self.db().clone();
 
         // Start loading in a background thread
         std::thread::spawn(move || {
-            if let Some(db) = db_connection {
-                // Load library
-                let _library_result = Library::load_from_db(&db.connection());
+            // Load library
+            let _library_result = Library::load_from_db(&db_connection.connection());
 
-                // Load playlists
-                let _playlists_result = playlist::Playlist::load_all_from_db(&db.connection());
+            // Load playlists
+            let _playlists_result =
+                playlist::Playlist::load_all_from_db(&db_connection.connection());
 
-                tracing::info!("Async loading completed");
-            } else {
-                tracing::warn!("No database connection for async loading");
-            }
+            tracing::info!("Async loading completed");
         });
     }
 
@@ -390,66 +426,63 @@ impl App {
 
         tracing::info!("Loading heavy data (library and playlists)...");
 
-        // Load the heavy data (library and playlists) if we have a database
-        if let Some(ref db) = self.database {
-            // Try to load library from database
-            match Library::load_from_db(&db.connection()) {
-                Ok(library) => {
-                    self.library = library;
-                    tracing::info!("Successfully loaded library from database");
-                }
-                Err(e) => {
-                    tracing::error!("Failed to load library from database: {}", e);
-                    // Keep the default empty library
-                }
+        // Load the heavy data (library and playlists) from database
+        let db_connection = self.db().connection();
+        // Try to load library from database
+        match Library::load_from_db(&db_connection) {
+            Ok(library) => {
+                self.library = library;
+                tracing::info!("Successfully loaded library from database");
             }
+            Err(e) => {
+                tracing::error!("Failed to load library from database: {}", e);
+                // Keep the default empty library
+            }
+        }
 
-            // Try to load playlists from database
-            match playlist::Playlist::load_all_from_db(&db.connection()) {
-                Ok(playlists) => {
-                    if !playlists.is_empty() {
-                        self.playlists = playlists;
+        // Try to load playlists from database
+        match playlist::Playlist::load_all_from_db(&db_connection) {
+            Ok(playlists) => {
+                if !playlists.is_empty() {
+                    self.playlists = playlists;
 
-                        // If there was a last played track, try to find its playlist
-                        if let Some(last_track_path) = &self.last_track_path {
-                            for (idx, playlist) in self.playlists.iter().enumerate() {
-                                if playlist
-                                    .tracks
-                                    .iter()
-                                    .any(|track| track.path() == *last_track_path)
-                                {
-                                    self.current_playlist_idx = Some(idx);
-                                    self.playing_playlist_idx = Some(idx);
-                                    tracing::info!(
-                                        "Found last played track in playlist '{}', selecting it",
-                                        playlist.get_name().unwrap_or_default()
-                                    );
-                                    break;
-                                }
+                    // If there was a last played track, try to find its playlist
+                    if let Some(last_track_path) = &self.last_track_path {
+                        for (idx, playlist) in self.playlists.iter().enumerate() {
+                            if playlist
+                                .tracks
+                                .iter()
+                                .any(|track| track.path() == *last_track_path)
+                            {
+                                self.current_playlist_idx = Some(idx);
+                                self.playing_playlist_idx = Some(idx);
+                                tracing::info!(
+                                    "Found last played track in playlist '{}', selecting it",
+                                    playlist.get_name().unwrap_or_default()
+                                );
+                                break;
                             }
                         }
-
-                        // If no playlist was selected (no last track or track not found), select first playlist
-                        if self.current_playlist_idx.is_none() {
-                            self.current_playlist_idx = Some(0);
-                            tracing::info!("No last played track found, selecting first playlist");
-                        }
-                    } else {
-                        // Only create a default playlist if no playlists exist in the database
-                        let mut default_playlist = playlist::Playlist::new();
-                        default_playlist.set_name("Default Playlist".to_string());
-                        self.playlists = vec![default_playlist];
-                        self.current_playlist_idx = Some(0);
-                        tracing::info!("No playlists found in database, created default playlist");
                     }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to load playlists from database: {}", e);
-                    // Keep the default playlist
+
+                    // If no playlist was selected (no last track or track not found), select first playlist
+                    if self.current_playlist_idx.is_none() {
+                        self.current_playlist_idx = Some(0);
+                        tracing::info!("No last played track found, selecting first playlist");
+                    }
+                } else {
+                    // Only create a default playlist if no playlists exist in the database
+                    let mut default_playlist = playlist::Playlist::new();
+                    default_playlist.set_name("Default Playlist".to_string());
+                    self.playlists = vec![default_playlist];
+                    self.current_playlist_idx = Some(0);
+                    tracing::info!("No playlists found in database, created default playlist");
                 }
             }
-        } else {
-            tracing::warn!("No database connection available when loading heavy data");
+            Err(e) => {
+                tracing::error!("Failed to load playlists from database: {}", e);
+                // Keep the default playlist
+            }
         }
 
         // Restore player state after heavy data is loaded
@@ -516,21 +549,25 @@ impl App {
 
     /// Capture the current player state for persistence
     pub fn update_player_persistence(&mut self) {
-        if let Some(player) = &self.player {
-            // Save the current track path if there's a selected track
-            self.last_track_path = player.selected_track.as_ref().map(|track| track.path());
+        if self.runtime.is_some() {
+            // Read all values first before modifying self fields
+            let (track_path, position, playback_mode, volume, is_playing) = {
+                let player = self.player_ref();
+                (
+                    player.selected_track.as_ref().map(|track| track.path()),
+                    player.seek_to_timestamp,
+                    player.playback_mode,
+                    player.volume,
+                    matches!(player.track_state, player::TrackState::Playing),
+                )
+            };
 
-            // Save the current playing position
-            self.last_position = Some(player.seek_to_timestamp);
-
-            // Save the current playback mode
-            self.last_playback_mode = Some(player.playback_mode);
-
-            // Save the current volume
-            self.last_volume = Some(player.volume);
-
-            // Save whether the player was playing or paused
-            self.was_playing = Some(matches!(player.track_state, player::TrackState::Playing));
+            // Now update self fields
+            self.last_track_path = track_path;
+            self.last_position = Some(position);
+            self.last_playback_mode = Some(playback_mode);
+            self.last_volume = Some(volume);
+            self.was_playing = Some(is_playing);
         }
     }
 
@@ -548,7 +585,7 @@ impl App {
 
         tracing::info!("adding library path...");
 
-        let lib_cmd_tx = self.library_cmd_tx.as_ref().unwrap().clone();
+        let lib_cmd_tx = self.lib_cmd_tx().clone();
         let path = lib_path.path().clone();
         let path_id = lib_path.id();
         // Store path display string for later use
@@ -969,86 +1006,89 @@ impl App {
         self.current_lyrics = None;
         self.lyrics_fetch_state = LyricsFetchState::Idle;
 
-        if let Some((player_duration, track)) = self.player.as_ref().and_then(|player| {
-            player
-                .selected_track
-                .clone()
-                .map(|track| (player.duration, track))
-        }) {
-            let artist = track
-                .artist()
-                .unwrap_or_else(|| "Unknown Artist".to_string());
-            let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
-
-            // First, try to read lyrics from the ID3 tag
-            if let Some(cached_lyrics) = crate::app::lyrics::LyricsService::read_lyrics_from_file(
-                track.path(),
-                &artist,
-                &title,
-            ) {
-                tracing::info!(
-                    "✅ Found cached lyrics in ID3 tag for '{}'",
-                    track.path().display()
-                );
-                self.current_lyrics = Some(cached_lyrics);
-                self.lyrics_fetch_state = LyricsFetchState::Loaded;
-                // Show the lyrics panel when cached lyrics are loaded
-                if self
-                    .current_lyrics
-                    .as_ref()
-                    .is_some_and(|lyrics| !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some())
-                {
-                    self.show_lyrics_panel = true;
-                }
-                let lyrics_text_owned = self.current_lyrics.as_ref().and_then(|lyrics| {
-                    lyrics
-                        .synced_lyrics
-                        .as_deref()
-                        .or(lyrics.plain_lyrics.as_deref())
-                        .map(|text| text.to_string())
-                });
-                let track_key = track.key();
-                drop(track);
-                self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
-                return; // Don't fetch from API if we have cached lyrics
-            }
-
-            // If no cached lyrics, proceed with API fetch
-            if let Some(lyrics_service) = &self.lyrics_service {
-                let album = track.album();
-                let duration = if player_duration > 0 {
-                    Some(player_duration)
-                } else {
-                    None
-                };
-
-                tracing::info!(
-                    "🎵 No cached lyrics found, fetching from API for track: '{}' by '{}'",
-                    title,
-                    artist
-                );
-                tracing::debug!("📁 Track file: '{}'", track.path().display());
-                tracing::debug!("🏷️  Raw artist from track: {:?}", track.artist());
-                tracing::debug!("🏷️  Raw title from track: {:?}", track.title());
-                tracing::debug!("💿 Album: {:?}", album);
-                tracing::debug!("⏱️  Duration: {:?}", duration);
-
-                let response_rx = lyrics_service.fetch_lyrics(artist, title, album, duration);
-
-                // Store the response receiver - we'll check it asynchronously in the update loop
-                self.pending_lyrics_rx = Some(response_rx);
-                self.lyrics_fetch_state = LyricsFetchState::Loading;
-                tracing::debug!("📡 Lyrics fetch initiated, waiting for response...");
-            } else {
-                tracing::warn!("⚠️  Lyrics service not available");
-                self.lyrics_fetch_state =
-                    LyricsFetchState::Failed("Lyrics service not available".to_string());
-            }
-        } else if self.player.is_some() {
-            tracing::debug!("No track currently selected for lyrics fetch");
-        } else {
+        if self.runtime.is_none() {
             tracing::warn!("⚠️  Player not available for lyrics fetch");
             self.lyrics_fetch_state = LyricsFetchState::Failed("Player not available".to_string());
+            return;
+        }
+
+        let (player_duration, track) = {
+            let player = self.player_ref();
+            match player.selected_track.clone() {
+                Some(track) => (player.duration, track),
+                None => {
+                    tracing::debug!("No track currently selected for lyrics fetch");
+                    return;
+                }
+            }
+        };
+
+        let artist = track
+            .artist()
+            .unwrap_or_else(|| "Unknown Artist".to_string());
+        let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
+
+        // First, try to read lyrics from the ID3 tag
+        if let Some(cached_lyrics) =
+            crate::app::lyrics::LyricsService::read_lyrics_from_file(track.path(), &artist, &title)
+        {
+            tracing::info!(
+                "✅ Found cached lyrics in ID3 tag for '{}'",
+                track.path().display()
+            );
+            self.current_lyrics = Some(cached_lyrics);
+            self.lyrics_fetch_state = LyricsFetchState::Loaded;
+            // Show the lyrics panel when cached lyrics are loaded
+            if self
+                .current_lyrics
+                .as_ref()
+                .is_some_and(|lyrics| !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some())
+            {
+                self.show_lyrics_panel = true;
+            }
+            let lyrics_text_owned = self.current_lyrics.as_ref().and_then(|lyrics| {
+                lyrics
+                    .synced_lyrics
+                    .as_deref()
+                    .or(lyrics.plain_lyrics.as_deref())
+                    .map(|text| text.to_string())
+            });
+            let track_key = track.key();
+            drop(track);
+            self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
+            return; // Don't fetch from API if we have cached lyrics
+        }
+
+        // If no cached lyrics, proceed with API fetch
+        if let Some(lyrics_service) = &self.lyrics_service {
+            let album = track.album();
+            let duration = if player_duration > 0 {
+                Some(player_duration)
+            } else {
+                None
+            };
+
+            tracing::info!(
+                "🎵 No cached lyrics found, fetching from API for track: '{}' by '{}'",
+                title,
+                artist
+            );
+            tracing::debug!("📁 Track file: '{}'", track.path().display());
+            tracing::debug!("🏷️  Raw artist from track: {:?}", track.artist());
+            tracing::debug!("🏷️  Raw title from track: {:?}", track.title());
+            tracing::debug!("💿 Album: {:?}", album);
+            tracing::debug!("⏱️  Duration: {:?}", duration);
+
+            let response_rx = lyrics_service.fetch_lyrics(artist, title, album, duration);
+
+            // Store the response receiver - we'll check it asynchronously in the update loop
+            self.pending_lyrics_rx = Some(response_rx);
+            self.lyrics_fetch_state = LyricsFetchState::Loading;
+            tracing::debug!("📡 Lyrics fetch initiated, waiting for response...");
+        } else {
+            tracing::warn!("⚠️  Lyrics service not available");
+            self.lyrics_fetch_state =
+                LyricsFetchState::Failed("Lyrics service not available".to_string());
         }
     }
 }

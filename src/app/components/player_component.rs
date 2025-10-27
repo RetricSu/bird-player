@@ -21,9 +21,77 @@ impl AppComponent for PlayerComponent {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        // First collect all necessary data outside any closures
+        // Check if runtime is initialized
+        if ctx.runtime.is_none() {
+            ui.centered_and_justified(|ui| {
+                ui.heading("Player not initialized");
+            });
+            return;
+        }
+
+        // Process UI commands first
+        let ui_cmd = {
+            let player = ctx.player_mut_ref();
+            player.ui_rx.try_recv().ok()
+        };
+
+        if let Some(new_seek_cmd) = ui_cmd {
+            match new_seek_cmd {
+                UiCommand::CurrentTimestamp(seek_timestamp) => {
+                    // Check if we need to save
+                    let should_save = LAST_SAVE.with(|last_save| {
+                        let elapsed = last_save.borrow().elapsed().as_secs();
+                        if elapsed > 30 {
+                            *last_save.borrow_mut() = Instant::now();
+                            true
+                        } else {
+                            false
+                        }
+                    });
+
+                    if should_save {
+                        ctx.update_player_persistence();
+                        ctx.save_state();
+                    }
+
+                    let player = ctx.player_mut_ref();
+                    player.set_seek_to_timestamp(seek_timestamp);
+                }
+                UiCommand::TotalTrackDuration(dur) => {
+                    tracing::info!("Received Duration: {}", dur);
+                    let player = ctx.player_mut_ref();
+                    player.set_duration(dur);
+                }
+                UiCommand::AudioFinished => {
+                    tracing::info!("Track finished, getting next...");
+                    // Clone playlist before mutable borrow
+                    let playlist_clone = ctx
+                        .current_playlist_idx
+                        .and_then(|idx| ctx.playlists.get(idx).cloned());
+
+                    if let Some(playlist) = playlist_clone {
+                        let player = ctx.player_mut_ref();
+                        player.next(&playlist);
+                    }
+                    ctx.fetch_lyrics_for_current_track();
+                }
+                UiCommand::PlaybackStateChanged(is_playing) => {
+                    tracing::info!(
+                        "Playback state changed to: {}",
+                        if is_playing { "Playing" } else { "Paused" }
+                    );
+                    let player = ctx.player_mut_ref();
+                    if is_playing {
+                        player.track_state = crate::app::player::TrackState::Playing;
+                    } else {
+                        player.track_state = crate::app::player::TrackState::Paused;
+                    }
+                }
+            }
+        }
+
+        // Then collect all necessary data (不可变借用)
         let (
-            has_player,
             selected_track,
             is_playing,
             playback_mode,
@@ -31,68 +99,14 @@ impl AppComponent for PlayerComponent {
             duration,
             volume,
             current_playlist_name,
-        ) = if let Some(player) = &ctx.player {
+        ) = {
+            let player = ctx.player_ref();
             let selected_track = player.selected_track.clone();
             let is_playing = matches!(player.track_state, crate::app::player::TrackState::Playing);
             let playback_mode = player.playback_mode;
             let seek_to_timestamp = player.seek_to_timestamp;
             let duration = player.duration;
             let volume = player.volume;
-
-            // Process UI commands
-            if let Ok(new_seek_cmd) = player.ui_rx.try_recv() {
-                match new_seek_cmd {
-                    UiCommand::CurrentTimestamp(seek_timestamp) => {
-                        // Save player state every 30 seconds during playback
-                        LAST_SAVE.with(|last_save| {
-                            let elapsed = last_save.borrow().elapsed().as_secs();
-                            if elapsed > 30 {
-                                // Update persistence state
-                                ctx.update_player_persistence();
-                                ctx.save_state();
-                                // Reset timer
-                                *last_save.borrow_mut() = Instant::now();
-                            }
-                        });
-
-                        if let Some(player) = &mut ctx.player {
-                            player.set_seek_to_timestamp(seek_timestamp);
-                        }
-                    }
-                    UiCommand::TotalTrackDuration(dur) => {
-                        tracing::info!("Received Duration: {}", dur);
-                        if let Some(player) = &mut ctx.player {
-                            player.set_duration(dur);
-                        }
-                    }
-                    UiCommand::AudioFinished => {
-                        tracing::info!("Track finished, getting next...");
-                        let mut fetch_lyrics = false;
-                        if let Some(current_playlist_idx) = ctx.current_playlist_idx {
-                            if let Some(player) = &mut ctx.player {
-                                player.next(&ctx.playlists[current_playlist_idx]);
-                                fetch_lyrics = true;
-                            }
-                        }
-                        if fetch_lyrics {
-                            ctx.fetch_lyrics_for_current_track();
-                        }
-                    }
-                    UiCommand::PlaybackStateChanged(is_playing) => {
-                        tracing::info!(
-                            "Playback state changed to: {}",
-                            if is_playing { "Playing" } else { "Paused" }
-                        );
-                        if let Some(player) = &mut ctx.player {
-                            if is_playing {
-                                player.track_state = crate::app::player::TrackState::Playing;
-                            } else {
-                                player.track_state = crate::app::player::TrackState::Paused;
-                            }
-                        }
-                    }
-                }
-            }
 
             // Get current playlist name using map_or for cleaner code
             let current_playlist_name = ctx
@@ -102,7 +116,6 @@ impl AppComponent for PlayerComponent {
                 .unwrap_or_default();
 
             (
-                true,
                 selected_track,
                 is_playing,
                 playback_mode,
@@ -111,26 +124,7 @@ impl AppComponent for PlayerComponent {
                 volume,
                 current_playlist_name,
             )
-        } else {
-            (
-                false,
-                None,
-                false,
-                crate::app::player::PlaybackMode::Normal,
-                0,
-                0,
-                1.0,
-                String::new(),
-            )
         };
-
-        // If player is not initialized, just show a message
-        if !has_player {
-            ui.centered_and_justified(|ui| {
-                ui.heading("Player not initialized");
-            });
-            return;
-        }
 
         let has_selected_track = selected_track.is_some();
 

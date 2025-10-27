@@ -114,8 +114,8 @@ impl LyricsComponent {
     }
 
     fn show_synced_lyrics(ui: &mut eframe::egui::Ui, lyrics: &Lyrics, ctx: &App) {
-        let current_time_ms = if let Some(player) = &ctx.player {
-            player.seek_to_timestamp
+        let current_time_ms = if ctx.runtime.is_some() {
+            ctx.player_ref().seek_to_timestamp
         } else {
             0
         };
@@ -169,11 +169,12 @@ impl LyricsComponent {
     }
 
     fn handle_manual_upload(ctx: &mut App) -> ManualUploadResult {
-        let Some(player) = ctx.player.as_ref() else {
+        if ctx.runtime.is_none() {
             return ManualUploadResult::Failed("Player not available".to_string());
-        };
+        }
 
         let (track_key, track_path, artist, title, album) = {
+            let player = ctx.player_ref();
             let Some(track) = &player.selected_track else {
                 return ManualUploadResult::Failed(
                     "Select a track before uploading lyrics".to_string(),

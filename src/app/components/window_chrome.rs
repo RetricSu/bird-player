@@ -47,7 +47,13 @@ impl AppComponent for WindowChrome {
             // Add Playback menu
             let mut fetch_lyrics = false;
             ui.menu_button(t("playback"), |ui| {
-                if let Some(player) = &mut ctx.player {
+                if ctx.runtime.is_some() {
+                    // Cache playlist before borrowing player mutably
+                    let playlist_clone = ctx
+                        .playing_playlist_idx
+                        .and_then(|idx| ctx.playlists.get(idx).cloned());
+
+                    let player = ctx.player_mut_ref();
                     if let Some(_selected_track) = &player.selected_track {
                         if ui.button(t("play_pause")).clicked() {
                             match player.track_state {
@@ -61,15 +67,15 @@ impl AppComponent for WindowChrome {
                             ui.close_menu();
                         }
                         if ui.button(t("previous")).clicked() {
-                            if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
-                                player.previous(&ctx.playlists[playing_playlist_idx]);
+                            if let Some(playlist) = &playlist_clone {
+                                player.previous(playlist);
                                 fetch_lyrics = true;
                             }
                             ui.close_menu();
                         }
                         if ui.button(t("next")).clicked() {
-                            if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
-                                player.next(&ctx.playlists[playing_playlist_idx]);
+                            if let Some(playlist) = &playlist_clone {
+                                player.next(playlist);
                                 fetch_lyrics = true;
                             }
                             ui.close_menu();

@@ -133,7 +133,7 @@ impl eframe::App for App {
             }
         }
 
-        if let Some(selected_track) = &self.player.as_mut().unwrap().selected_track {
+        if let Some(selected_track) = &self.player_ref().selected_track {
             let display = format!(
                 "{} - {} [ Music Player ]",
                 &selected_track
