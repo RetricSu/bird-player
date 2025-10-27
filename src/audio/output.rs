@@ -218,12 +218,10 @@ mod cpal {
 
     use log::{error, info};
 
-    pub struct CpalAudioOutput;
-
     trait AudioOutputSample:
         cpal::Sample + ConvertibleSample + IntoSample<f32> + RawSample + std::marker::Send + 'static
     {
-        fn mul(&self, n: f32) -> Self;
+        fn mul(&self, n: f32) -> Self; // for adjusting volume
     }
 
     impl AudioOutputSample for f32 {
@@ -232,41 +230,40 @@ mod cpal {
         }
     }
 
-    // TODO - I don't think this will actually work as intended due to truncation?
     impl AudioOutputSample for i16 {
         fn mul(&self, n: f32) -> Self {
-            (*self as f32 * n) as i16
+            // the result might overflow, so we clamp it for safety
+            const MAX: f32 = i16::MAX as f32;
+            const MIN: f32 = i16::MIN as f32;
+            let scaled = *self as f32 * n;
+            (scaled.clamp(MIN, MAX) as i32) as i16
         }
     }
 
-    // TODO - I don't think this will actually work as intended due to truncation?
     impl AudioOutputSample for u16 {
         fn mul(&self, n: f32) -> Self {
-            (*self as f32 * n) as u16
+            // the result might overflow, so we clamp it for safety
+            const MAX: f32 = u16::MAX as f32;
+            const MIN: f32 = 0.0;
+            let scaled = *self as f32 * n;
+            (scaled.clamp(MIN, MAX) as i32) as u16
         }
     }
+
+    pub struct CpalAudioOutput;
 
     impl CpalAudioOutput {
         pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-            // Get default host.
             let host = cpal::default_host();
+            let device = host.default_output_device().ok_or_else(|| {
+                error!("failed to get default audio output device");
+                AudioOutputError::OpenStreamError
+            })?;
 
-            // Get the default audio output device.
-            let device = match host.default_output_device() {
-                Some(device) => device,
-                _ => {
-                    error!("failed to get default audio output device");
-                    return Err(AudioOutputError::OpenStreamError);
-                }
-            };
-
-            let config = match device.default_output_config() {
-                Ok(config) => config,
-                Err(err) => {
-                    error!("failed to get default audio output device config: {}", err);
-                    return Err(AudioOutputError::OpenStreamError);
-                }
-            };
+            let config = device.default_output_config().map_err(|err| {
+                error!("failed to get default audio output device config: {}", err);
+                AudioOutputError::OpenStreamError
+            })?;
 
             // Select proper playback routine based on sample format.
             match config.sample_format() {
@@ -284,10 +281,7 @@ mod cpal {
         }
     }
 
-    struct CpalAudioOutputImpl<T: AudioOutputSample>
-    where
-        T: AudioOutputSample,
-    {
+    struct CpalAudioOutputImpl<T: AudioOutputSample> {
         ring_buf_producer: rb::Producer<T>,
         sample_buf: SampleBuffer<T>,
         stream: cpal::Stream,
