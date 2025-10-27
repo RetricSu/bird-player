@@ -7,7 +7,9 @@ use std::sync::mpsc::Sender;
 use symphonia::core::codecs::Decoder;
 use symphonia::core::formats::FormatReader;
 
-use super::processing;
+use super::loader;
+use super::utils;
+
 use crate::app::UiCommand;
 use crate::audio::output::AudioOutput;
 
@@ -99,7 +101,7 @@ impl State for StoppedState {
         if let Some(ref current_track_path) = ctx.current_track_path {
             // 完成当前解码器
             if let Some(decoder) = ctx.decoder.as_mut() {
-                _ = processing::do_verification(decoder.finalize());
+                _ = utils::do_verification(decoder.finalize());
             }
 
             if let Some(audio_output) = ctx.engine.audio_output.as_mut() {
@@ -108,7 +110,7 @@ impl State for StoppedState {
 
             ctx.engine.audio_output = None;
 
-            processing::load_file(current_track_path, &mut ctx.engine, &mut ctx.decoder, 0);
+            loader::load_file(current_track_path, &mut ctx.engine, &mut ctx.decoder, 0);
 
             ctx.ui_tx
                 .send(UiCommand::CurrentTimestamp(0))
@@ -239,7 +241,7 @@ impl State for PlayingState {
         };
 
         // 处理错误
-        if let Err(err) = processing::ignore_end_of_stream_error(result) {
+        if let Err(err) = utils::ignore_end_of_stream_error(result) {
             tracing::error!("Fatal error in playing state: {}", err);
         }
 
@@ -274,7 +276,7 @@ impl State for LoadFileState {
 
         // 完成当前解码器
         if let Some(decoder) = ctx.decoder.as_mut() {
-            _ = processing::do_verification(decoder.finalize());
+            _ = utils::do_verification(decoder.finalize());
         }
 
         ctx.engine.audio_output = None;
@@ -282,7 +284,7 @@ impl State for LoadFileState {
 
     fn update(&mut self, ctx: &mut AudioContext) -> Transition {
         ctx.current_track_path = Some(self.path.clone());
-        processing::load_file(&self.path, &mut ctx.engine, &mut ctx.decoder, 0);
+        loader::load_file(&self.path, &mut ctx.engine, &mut ctx.decoder, 0);
 
         // 检查加载是否成功
         if ctx.engine.reader.is_some() && ctx.engine.track_info.is_some() {
@@ -331,7 +333,7 @@ impl State for SeekToState {
 
     fn update(&mut self, ctx: &mut AudioContext) -> Transition {
         if let Some(ref current_track_path) = ctx.current_track_path {
-            processing::load_file(
+            loader::load_file(
                 current_track_path,
                 &mut ctx.engine,
                 &mut ctx.decoder,
