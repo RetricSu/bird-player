@@ -18,9 +18,8 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 mod app;
+mod audio;
 mod db;
-mod output;
-mod resampler;
 
 // New function to load the app icon from multiple possible locations
 fn get_app_icon() -> Option<egui::IconData> {
@@ -240,7 +239,8 @@ fn main() {
                                     let duration = decoded.capacity() as u64;
 
                                     // Try to open the audio output.
-                                    audio_output.replace(output::try_open(spec, duration).unwrap());
+                                    audio_output
+                                        .replace(audio::output::try_open(spec, duration).unwrap());
                                 } else {
                                     // TODO: Check the audio spec. and duration hasn't changed.
                                 }
@@ -558,7 +558,7 @@ pub enum PlayerState {
 
 struct AudioEngineState {
     pub reader: Option<Box<dyn FormatReader>>,
-    pub audio_output: Option<Box<dyn output::AudioOutput>>,
+    pub audio_output: Option<Box<dyn audio::output::AudioOutput>>,
     pub track_num: Option<usize>,
     pub seek: Option<SeekPosition>,
     pub decode_opts: Option<DecoderOptions>,

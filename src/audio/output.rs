@@ -205,7 +205,7 @@ pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOut
 
 #[cfg(any(not(target_os = "linux"), not(feature = "pulseaudio")))]
 mod cpal {
-    use crate::resampler::Resampler;
+    use crate::audio::resampler::Resampler;
 
     use super::{AudioOutput, AudioOutputError, Result};
 
