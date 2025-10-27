@@ -1,7 +1,6 @@
-mod app;
-mod app_impl;
 mod components;
 pub mod constants;
+mod core;
 pub mod font;
 pub mod i18n;
 pub mod icon;
@@ -12,10 +11,11 @@ mod playlist;
 pub mod services;
 pub mod state;
 mod style;
+mod ui;
 mod version;
 pub mod viewport;
 
-pub use app::{
+pub use core::{
     App, AudioCommand, LibraryCommand, LibraryItem, LibraryPathId, Playlist, TempError, UiCommand,
 };
 

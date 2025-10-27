@@ -3,7 +3,7 @@ use rand::Rng;
 use rayon::prelude::*;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use walkdir::WalkDir;
 
@@ -65,9 +65,9 @@ impl LibraryImportService {
 
     /// Walk directory and import all MP3 files
     fn import_files(
-        path: &PathBuf,
+        path: &Path,
         path_id: LibraryPathId,
-        album_art_dir: &PathBuf,
+        album_art_dir: &Path,
         lib_cmd_tx: &Sender<LibraryCommand>,
     ) -> Result<Vec<LibraryItem>, Box<dyn std::error::Error>> {
         // Find all MP3 files
@@ -105,7 +105,7 @@ impl LibraryImportService {
     fn parse_audio_file(
         file_path: &std::path::Path,
         path_id: LibraryPathId,
-        album_art_dir: &PathBuf,
+        album_art_dir: &Path,
     ) -> LibraryItem {
         let tag_result = Tag::read_from_path(file_path);
 
@@ -126,7 +126,7 @@ impl LibraryImportService {
         file_path: &std::path::Path,
         path_id: LibraryPathId,
         tag: &Tag,
-        album_art_dir: &PathBuf,
+        album_art_dir: &Path,
     ) -> LibraryItem {
         // Get filename as fallback title
         let filename_title = file_path
@@ -181,7 +181,7 @@ impl LibraryImportService {
         item: &mut LibraryItem,
         tag: &Tag,
         file_path: &std::path::Path,
-        album_art_dir: &PathBuf,
+        album_art_dir: &Path,
     ) {
         for pic in tag.pictures() {
             let file_name = Self::generate_picture_filename(file_path, pic, album_art_dir);
@@ -203,7 +203,7 @@ impl LibraryImportService {
     fn generate_picture_filename(
         file_path: &std::path::Path,
         pic: &id3::frame::Picture,
-        album_art_dir: &PathBuf,
+        album_art_dir: &Path,
     ) -> PathBuf {
         let extension = match pic.mime_type.as_str() {
             "image/jpeg" => "jpg",
