@@ -13,6 +13,8 @@ mod app;
 mod audio;
 mod db;
 
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 // 启动配置 - 启动时一次性搞定
 pub struct BirdBootCfg {
     pub db: Arc<db::Database>,
@@ -26,12 +28,12 @@ pub struct BirdRuntime {
     pub player: Player,
 }
 
-fn main() {
+fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     tracing::info!("App booting...");
 
-    // 初始化启动配置 - 失败直接 panic
-    let database = Arc::new(db::Database::new().expect("Failed to initialize database"));
+    // 初始化启动配置
+    let database = Arc::new(db::Database::new()?);
     tracing::info!("Database initialized successfully");
 
     let (lib_cmd_tx, lib_cmd_rx) = channel();
@@ -61,34 +63,22 @@ fn main() {
     app.boot_cfg = Some(boot_cfg);
     app.runtime = Some(runtime);
 
-    // Try multiple possible icon paths for both development and bundled app scenarios
-    let icon_result = get_app_icon();
+    // Spawn audio playback thread
+    let _audio_thread =
+        audio::thread::spawn_audio_thread(audio_rx, ui_tx, is_processing_ui_change_thread);
 
-    // Create the native options with viewport settings
+    // Try multiple possible icon paths for both development and bundled app scenarios
+    let icon = get_app_icon().ok_or("Failed to load app icon")?;
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT])
             .with_min_inner_size([300.0, 0.0])
             .with_decorations(false)
             .with_transparent(true)
+            .with_icon(icon)
             .with_resizable(true),
         ..Default::default()
     };
-
-    // Apply the icon if available
-    let native_options = if let Some(icon) = icon_result {
-        eframe::NativeOptions {
-            viewport: native_options.viewport.with_icon(icon),
-            ..native_options
-        }
-    } else {
-        native_options
-    };
-
-    // Spawn audio playback thread
-    let _audio_thread =
-        audio::thread::spawn_audio_thread(audio_rx, ui_tx, is_processing_ui_change_thread);
-
     eframe::run_native(
         "Bird Player",
         native_options,
@@ -102,6 +92,7 @@ fn main() {
 
             Ok(Box::new(app))
         }),
-    )
-    .expect("eframe failed: I should change main to return a result and use anyhow");
+    )?;
+
+    Ok(())
 }
