@@ -1,6 +1,7 @@
 mod components;
 pub mod constants;
 mod core;
+mod error;
 pub mod font;
 pub mod i18n;
 pub mod icon;
@@ -16,7 +17,8 @@ mod ui;
 mod version;
 pub mod viewport;
 
-pub use core::{App, LibraryItem, LibraryPathId, Playlist, TempError};
+pub use core::{App, LibraryItem, LibraryPathId, Playlist};
+pub use error::AppLoadError;
 pub use library::LibraryCommand;
 pub use messaging::{AudioCommand, UiCommand};
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use super::error::AppLoadError;
 use super::i18n;
 use super::library::{Library, LibraryCommand, LibraryPath};
 use super::player::Player;
@@ -14,17 +15,6 @@ use super::state::{PlayerStateManager, StatePersistence};
 
 pub use super::library::{LibraryItem, LibraryPathId};
 pub use super::playlist::Playlist;
-
-#[derive(Debug, Clone)]
-pub enum TempError {
-    MissingAppState,
-}
-
-impl std::fmt::Display for TempError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Couldn't load app state")
-    }
-}
 
 /// Main application struct
 ///
@@ -134,7 +124,7 @@ impl App {
             .player
     }
 
-    pub fn load_basic() -> Result<Self, TempError> {
+    pub fn load_basic() -> Result<Self, AppLoadError> {
         let mut app = App::default();
 
         // Initialize i18n
@@ -154,7 +144,7 @@ impl App {
         Ok(app)
     }
 
-    pub fn load() -> Result<Self, TempError> {
+    pub fn load() -> Result<Self, AppLoadError> {
         // Load basic app state first
         let mut app = Self::load_basic()?;
 
