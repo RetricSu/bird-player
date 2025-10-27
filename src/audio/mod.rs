@@ -1,3 +1,4 @@
+pub mod cmd;
 pub mod loader;
 pub mod output;
 pub mod reader;
