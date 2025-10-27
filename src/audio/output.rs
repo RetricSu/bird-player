@@ -204,6 +204,41 @@ pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOut
     pulseaudio::PulseAudioOutput::try_open(spec, duration)
 }
 
+// ---------------------------------------------------------------------------
+// Audio Pipeline Overview (CpalStreamController)
+// ---------------------------------------------------------------------------
+// 1. OPENING A STREAM
+//    - Pick the platform-appropriate config (Windows: use device default;
+//      others: caller’s rate/channels).
+//    - Create an SPSC ring buffer (≈ 170 ms @ 48 kHz) to decouple the
+//      **producer** (decoder thread) from the **consumer** (CPAL callback).
+//    - Build & start the output stream.  CPAL will now call the callback
+//      every 5-10 ms asking for the next audio slice.
+//
+// 2. DECODER → RING  (write method)
+//    - Resample if needed, then apply per-sample volume.
+//    - Stream the data into the ring buffer in 128-frame chunks.
+//      The call is **blocking** : if the ring is full we wait, so the
+//      decoder naturally throttles to real-time speed.
+//
+// 3. RING → SOUND CARD  (callback)
+//    - Callback runs on a high-priority audio thread.
+//    - Read up to `output_slice.len()` frames from the ring.
+//    - If insufficient, fill the rest with `T::MID` (silence) to avoid
+//      underrun artefacts.
+//
+// 4. END OF TRACK / SEEK  (flush method)
+//    - Push any latent frames left in the resampler into the ring.
+//    - Pause the stream so the callback stops consuming.
+//    - On the next play event the ring starts empty, preventing old
+//      audio from bleeding into the new track.
+//
+// 5. LATENCY vs ROBUSTNESS
+//    - Ring capacity = 170 ms : safe for local music playback, negligible
+//      CPU cost (only memcpy), audible delay < 200 ms.
+//    - Smaller rings give lower latency but higher underrun risk; adjust
+//      `rb_capacity_frames` if interactive use (gaming, DJ) is required.
+// ---------------------------------------------------------------------------
 #[cfg(any(not(target_os = "linux"), not(feature = "pulseaudio")))]
 mod cpal {
     use crate::audio::resampler::Resampler;
