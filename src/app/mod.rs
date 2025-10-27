@@ -23,6 +23,7 @@ pub const DEFAULT_WINDOW_HEIGHT: f32 = 468.0;
 
 mod app_impl;
 mod components;
+pub mod font;
 pub mod i18n;
 pub mod icon;
 pub mod library;
