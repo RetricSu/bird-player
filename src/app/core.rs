@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use super::i18n;
-use super::library::{Library, LibraryPath, LibraryView};
+use super::library::{Library, LibraryCommand, LibraryPath};
 use super::player::Player;
 use super::services::{LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService};
 use super::state::{persistence::AppSettings, ui_state::LyricsFetchState, ui_state::UiState};
@@ -14,12 +14,6 @@ use super::state::{PlayerStateManager, StatePersistence};
 
 pub use super::library::{LibraryItem, LibraryPathId};
 pub use super::playlist::Playlist;
-
-pub enum LibraryCommand {
-    AddView(LibraryView),
-    AddItem(LibraryItem),
-    AddPathId(LibraryPathId),
-}
 
 #[derive(Debug, Clone)]
 pub enum TempError {

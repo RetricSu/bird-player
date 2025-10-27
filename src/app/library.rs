@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+pub enum LibraryCommand {
+    AddView(LibraryView),
+    AddItem(LibraryItem),
+    AddPathId(LibraryPathId),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Library {
     paths: Vec<LibraryPath>,

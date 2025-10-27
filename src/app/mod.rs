@@ -16,7 +16,8 @@ mod ui;
 mod version;
 pub mod viewport;
 
-pub use core::{App, LibraryCommand, LibraryItem, LibraryPathId, Playlist, TempError};
+pub use core::{App, LibraryItem, LibraryPathId, Playlist, TempError};
+pub use library::LibraryCommand;
 pub use messaging::{AudioCommand, UiCommand};
 
 // Re-export the i18n functions for convenience
