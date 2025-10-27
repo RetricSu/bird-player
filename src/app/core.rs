@@ -49,6 +49,9 @@ pub struct App {
     pub lyrics_manager: LyricsManager,
 
     #[serde(skip_serializing, skip_deserializing)]
+    pub last_window_title: Option<String>,
+
+    #[serde(skip_serializing, skip_deserializing)]
     pub heavy_data_loaded: bool,
 
     pub quit: bool,
@@ -69,6 +72,7 @@ impl Default for App {
             player_state: PlayerStateManager::default(),
             ui_state: UiState::default(),
             lyrics_manager: LyricsManager::new(),
+            last_window_title: None,
             heavy_data_loaded: false,
             quit: false,
         }

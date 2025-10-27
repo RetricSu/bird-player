@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use eframe::egui;
 
 use super::{App, LibraryCommand};
@@ -119,7 +121,13 @@ impl eframe::App for App {
                     .unwrap_or("unknown title".to_string())
             );
 
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title(display));
+            if self.last_window_title.as_deref() != Some(&display) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(display.clone()));
+                self.last_window_title = Some(display);
+            }
+        } else if self.last_window_title.is_some() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title("Bird Player".to_string()));
+            self.last_window_title = None;
         }
 
         // Add window chrome at the top
@@ -138,15 +146,6 @@ impl eframe::App for App {
             Footer::add(self, ui);
         });
 
-        egui::CentralPanel::default().show(ctx, |_ui| {
-            egui::SidePanel::left("Library Window")
-                .default_width(200.0)
-                .show(ctx, |ui| {
-                    LibraryComponent::add(self, ui);
-                });
-        });
-
-        // Lyrics panel (right side, can be toggled)
         if self.ui_state.show_lyrics_panel {
             egui::SidePanel::right("Lyrics Panel")
                 .default_width(300.0)
@@ -156,36 +155,39 @@ impl eframe::App for App {
                 });
         }
 
-        egui::CentralPanel::default().show(ctx, |_ui| {
-            egui::TopBottomPanel::top("Playlist Tabs").show(ctx, |ui| {
-                egui::ScrollArea::horizontal()
-                    .auto_shrink([false, true]) // Don't shrink horizontally, allow vertical shrinking
-                    .show(ui, |ui| {
-                        PlaylistTabs::add(self, ui);
-                    });
+        egui::SidePanel::left("Library Window")
+            .default_width(200.0)
+            .show(ctx, |ui| {
+                LibraryComponent::add(self, ui);
             });
 
-            egui::CentralPanel::default().show(ctx, |ui| {
-                if let Some(_current_playlist_idx) = &mut self.current_playlist_idx {
-                    // Create a scroll area with a unique ID for tracking scroll position
-                    let playlist_id =
-                        format!("playlist_{}", self.current_playlist_idx.unwrap_or(0));
-                    let scroll_area_id = ui.id().with(playlist_id).with("scroll_area");
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::horizontal()
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    PlaylistTabs::add(self, ui);
+                });
 
-                    egui::ScrollArea::both().show(ui, |ui| {
-                        ui.push_id(scroll_area_id, |ui| {
-                            PlaylistTable::add(self, ui);
-                        });
+            ui.add_space(8.0);
+
+            if let Some(current_playlist_idx) = self.current_playlist_idx {
+                // Create a scroll area with a unique ID for tracking scroll position
+                let playlist_id = format!("playlist_{}", current_playlist_idx);
+                let scroll_area_id = ui.id().with(playlist_id).with("scroll_area");
+
+                egui::ScrollArea::both().show(ui, |ui| {
+                    ui.push_id(scroll_area_id, |ui| {
+                        PlaylistTable::add(self, ui);
                     });
-                }
-            });
+                });
+            }
         });
 
         // Request repaint during playback for smooth synced lyrics updates
         if self.runtime.is_some() {
             let player = self.player_ref();
             if matches!(player.track_state, crate::app::player::TrackState::Playing) {
-                ctx.request_repaint();
+                ctx.request_repaint_after(Duration::from_millis(33));
             }
         }
     }
