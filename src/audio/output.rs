@@ -40,6 +40,8 @@ mod constants {
     pub const UNDERRUN_LOG_WATERMARK: usize = 256;
     /// the batch size for writing samples into the ring buffer
     pub const WRITE_BATCH_SIZE: usize = 1024;
+    /// sleep duration when ring buffer is full (in milliseconds)
+    pub const RING_FULL_SLEEP_MS: u64 = 2;
 }
 
 #[cfg(all(target_os = "linux", feature = "pulseaudio"))]
@@ -120,36 +122,12 @@ mod pulseaudio {
             // Interleave samples from the audio buffer into the sample buffer.
             self.sample_buf.copy_interleaved_ref(decoded);
 
-            // Apply volume adjustment
+            // Apply volume adjustment in-place if needed
             if volume != 1.0 {
-                // Use a temporary buffer to apply volume
-                let buf_bytes = self.sample_buf.as_bytes();
-                let sample_count = buf_bytes.len() / std::mem::size_of::<f32>();
-
-                // Create a buffer with the samples
-                let mut volume_adjusted = Vec::with_capacity(buf_bytes.len());
-                volume_adjusted.extend_from_slice(buf_bytes);
-
-                // Convert the buffer to f32 samples and apply volume
-                let samples_f32 = unsafe {
-                    std::slice::from_raw_parts_mut(
-                        volume_adjusted.as_mut_ptr() as *mut f32,
-                        sample_count,
-                    )
-                };
-
-                // Apply volume
-                for sample in samples_f32 {
+                // Access the internal f32 samples directly and modify in-place
+                let samples = self.sample_buf.samples_mut();
+                for sample in samples {
                     *sample *= volume;
-                }
-
-                // Write the volume-adjusted buffer to PulseAudio
-                match self.pa.write(&volume_adjusted) {
-                    Err(err) => {
-                        error!("audio output stream write error: {}", err);
-                        return Err(AudioOutputError::StreamClosedError);
-                    }
-                    _ => return Ok(()),
                 }
             }
 
@@ -157,7 +135,6 @@ mod pulseaudio {
             match self.pa.write(self.sample_buf.as_bytes()) {
                 Err(err) => {
                     error!("audio output stream write error: {}", err);
-
                     Err(AudioOutputError::StreamClosedError)
                 }
                 _ => Ok(()),
@@ -449,19 +426,7 @@ mod cpal {
             };
 
             // 2. volume scaling + write all at once
-            use std::iter;
-            let volume_iter = iter::from_fn({
-                let mut idx = 0;
-                move || {
-                    if idx == samples.len() {
-                        None
-                    } else {
-                        let v = samples[idx].mul(volume);
-                        idx += 1;
-                        Some(v)
-                    }
-                }
-            });
+            let volume_iter = samples.iter().map(|s| s.mul(volume));
 
             write_all_iter(&mut self.sample_sender, volume_iter);
             Ok(())
@@ -496,7 +461,9 @@ mod cpal {
                 while !remaining.is_empty() {
                     let n = sender.write(remaining).unwrap_or(0);
                     if n == 0 {
-                        std::thread::sleep(std::time::Duration::from_micros(100));
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            super::constants::RING_FULL_SLEEP_MS,
+                        ));
                     } else {
                         remaining = &remaining[n..];
                     }
@@ -511,7 +478,9 @@ mod cpal {
             while !remaining.is_empty() {
                 let n = sender.write(remaining).unwrap_or(0);
                 if n == 0 {
-                    std::thread::sleep(std::time::Duration::from_micros(100));
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        super::constants::RING_FULL_SLEEP_MS,
+                    ));
                 } else {
                     remaining = &remaining[n..];
                 }
