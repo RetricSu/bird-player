@@ -216,7 +216,7 @@ mod cpal {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use rb::*;
 
-    use log::{error, info};
+    use log::{error, info, warn};
 
     trait ScalableSample:
         cpal::Sample + ConvertibleSample + IntoSample<f32> + RawSample + std::marker::Send + 'static
@@ -299,75 +299,83 @@ mod cpal {
         ) -> Result<Box<dyn AudioOutput>> {
             let num_channels = spec.channels.count();
 
-            let config = if cfg!(not(target_os = "windows")) {
-                cpal::StreamConfig {
-                    channels: num_channels as cpal::ChannelCount,
-                    sample_rate: cpal::SampleRate(spec.rate),
-                    buffer_size: cpal::BufferSize::Default,
-                }
-            } else {
-                // Use the default config for Windows.
-                device
-                    .default_output_config()
-                    .expect("Failed to get the default output config.")
-                    .config()
-            };
+            let mut config = device
+                .default_output_config()
+                .map_err(|err| {
+                    error!("failed to get default output config: {}", err);
+                    AudioOutputError::OpenStreamError
+                })?
+                .config();
 
-            // Create a ring buffer with a capacity for up-to 200ms of audio.
-            // let ring_len = ((2 * config.sample_rate.0 as usize) / 1000) * num_channels;
-            let ring_len: usize = 8192; // Increased to reduce buffer underruns
+            #[cfg(not(target_os = "windows"))]
+            {
+                config.channels = num_channels as _;
+                config.sample_rate = cpal::SampleRate(spec.rate);
+                config.buffer_size = cpal::BufferSize::Default;
+            }
 
-            let ring_buf = SpscRb::new(ring_len);
-            let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
+            const TARGET_LATENCY_MS: usize = 170;
+            let rb_capacity_frames = config.sample_rate.0 as usize * TARGET_LATENCY_MS / 1000;
+            let sample_ring = SpscRb::new(rb_capacity_frames);
+            let (sample_sender, sample_receiver) = (sample_ring.producer(), sample_ring.consumer());
 
-            let stream_result = device.build_output_stream(
-                &config,
-                move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                    // let volume = 1.0f32;
-                    // Write out as many samples as possible from the ring buffer to the audio
-                    // output.
-                    let written = ring_buf_consumer.read(data).unwrap_or(0);
+            let output_stream = device
+                .build_output_stream(
+                    &config,
+                    move |output_slice: &mut [T], _: &cpal::OutputCallbackInfo| {
+                        let frames_needed = output_slice.len();
+                        let frames_written = sample_receiver.read(output_slice).unwrap_or(0);
 
-                    // Mute any remaining samples.
-                    data[written..].iter_mut().for_each(|s| *s = T::MID);
-                },
-                move |err| error!("audio output error: {}", err),
-                None,
+                        const LOW_WATER: usize = 256;
+                        if frames_written + LOW_WATER < frames_needed {
+                            static UNDERRUN_COUNT: std::sync::atomic::AtomicUsize =
+                                std::sync::atomic::AtomicUsize::new(0);
+                            let c =
+                                UNDERRUN_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if c == 0 {
+                                // only log the first underrun to avoid spamming
+                                warn!(
+                                    "audio underrun: only {} / {} frames available",
+                                    frames_written, frames_needed
+                                );
+                            }
+                        }
+
+                        // Mute any remaining samples.
+                        output_slice[frames_written..]
+                            .iter_mut()
+                            .for_each(|s| *s = T::MID);
+                    },
+                    move |err| error!("audio output error: {}", err),
+                    None,
+                )
+                .map_err(|err| {
+                    error!("audio output stream open error: {}", err);
+                    AudioOutputError::OpenStreamError
+                })?;
+
+            output_stream.play().map_err(|err| {
+                error!("audio output stream play error: {}", err);
+                AudioOutputError::PlayStreamError
+            })?;
+
+            let interleaved_buffer = SampleBuffer::<T>::new(duration, spec);
+
+            let rate_converter = (spec.rate != config.sample_rate.0).then(|| {
+                info!("resampling {} Hz → {} Hz", spec.rate, config.sample_rate.0);
+                Resampler::new(spec, config.sample_rate.0 as usize, duration)
+            });
+
+            info!(
+                "audio stream opened: {} Hz, {} ch, rb {} frames",
+                config.sample_rate.0, config.channels, rb_capacity_frames
             );
 
-            if let Err(err) = stream_result {
-                error!("audio output stream open error: {}", err);
-
-                return Err(AudioOutputError::OpenStreamError);
-            }
-
-            let stream = stream_result.unwrap();
-
-            // Start the output stream.
-            if let Err(err) = stream.play() {
-                error!("audio output stream play error: {}", err);
-
-                return Err(AudioOutputError::PlayStreamError);
-            }
-
-            let sample_buf = SampleBuffer::<T>::new(duration, spec);
-
-            let resampler = if spec.rate != config.sample_rate.0 {
-                info!("resampling {} Hz to {} Hz", spec.rate, config.sample_rate.0);
-                Some(Resampler::new(
-                    spec,
-                    config.sample_rate.0 as usize,
-                    duration,
-                ))
-            } else {
-                None
-            };
-
             Ok(Box::new(CpalStreamController {
-                sample_sender: ring_buf_producer,
-                interleaved_buffer: sample_buf,
-                stream,
-                rate_converter: resampler,
+                sample_sender,
+                interleaved_buffer,
+                stream: output_stream,
+                rate_converter,
             }))
         }
     }
