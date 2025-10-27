@@ -254,7 +254,7 @@ pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOut
 // ---------------------------------------------------------------------------
 #[cfg(any(not(target_os = "linux"), not(feature = "pulseaudio")))]
 mod cpal {
-    use crate::audio::resampler::Resampler;
+    use crate::audio::resampler::{make_rate_converter_auto, RateConverter};
 
     use super::{AudioOutput, AudioOutputError, Result};
 
@@ -334,7 +334,7 @@ mod cpal {
         sample_sender: rb::Producer<T>,
         interleaved_buffer: SampleBuffer<T>,
         stream: cpal::Stream,
-        rate_converter: Option<Resampler<T>>,
+        rate_converter: Option<Box<dyn RateConverter<T>>>,
     }
 
     impl<T: cpal::SizedSample + ScalableSample> CpalStreamController<T>
@@ -412,7 +412,7 @@ mod cpal {
 
             let rate_converter = (spec.rate != config.sample_rate.0).then(|| {
                 info!("resampling {} Hz → {} Hz", spec.rate, config.sample_rate.0);
-                Resampler::new(spec, config.sample_rate.0 as usize, duration)
+                make_rate_converter_auto(spec, config.sample_rate.0 as usize, duration)
             });
 
             info!(
@@ -441,7 +441,7 @@ mod cpal {
 
             // 1. retrieve samples (resampled or original)
             let samples = if let Some(res) = &mut self.rate_converter {
-                res.resample(incoming_audio)
+                res.push_planar(incoming_audio)
                     .ok_or(AudioOutputError::ResampleError)?
             } else {
                 self.interleaved_buffer.copy_interleaved_ref(incoming_audio);
@@ -470,7 +470,7 @@ mod cpal {
         fn flush(&mut self) {
             // 1. flush all remaining samples from the resampler
             if let Some(res) = &mut self.rate_converter {
-                while let Some(pending) = res.flush() {
+                while let Some(pending) = res.drain_remaining() {
                     write_all_iter(&mut self.sample_sender, pending.iter().copied());
                 }
             }
