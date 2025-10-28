@@ -63,6 +63,9 @@ fn main() -> Result<()> {
     app.boot_cfg = Some(boot_cfg);
     app.runtime = Some(runtime);
 
+    // Load library and playlists before handing control to the UI loop
+    app.load_heavy_data();
+
     // Spawn audio playback thread
     let _audio_thread =
         audio::thread::spawn_audio_thread(audio_rx, ui_tx, is_processing_ui_change_thread);

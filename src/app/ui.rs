@@ -15,18 +15,6 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Load heavy data on first frame if not already loaded
         if !self.heavy_data_loaded {
-            // Show a simple loading screen
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Bird Player");
-                    ui.add_space(20.0);
-                    ui.label("Loading...");
-                    ui.add_space(10.0);
-                    ui.spinner();
-                });
-            });
-
-            // Load heavy data synchronously since database is now small and fast
             self.load_heavy_data();
             return;
         }
