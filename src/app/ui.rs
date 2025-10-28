@@ -3,11 +3,7 @@ use std::time::Duration;
 use eframe::egui;
 
 use super::{App, LibraryCommand};
-use crate::app::components::{
-    footer::Footer, library_component::LibraryComponent, lyrics_component::LyricsComponent,
-    player_component::PlayerComponent, playlist_table::PlaylistTable, playlist_tabs::PlaylistTabs,
-    window_chrome::WindowChrome, AppComponent,
-};
+use crate::app::components::main_shell::MainShell;
 
 impl eframe::App for App {
     fn on_exit(&mut self, _ctx: Option<&eframe::glow::Context>) {
@@ -131,57 +127,7 @@ impl eframe::App for App {
         }
 
         // Add window chrome at the top
-        egui::TopBottomPanel::top("Window Chrome")
-            .show_separator_line(true)
-            .show(ctx, |ui| {
-                WindowChrome::add(self, ui);
-            });
-
-        egui::TopBottomPanel::top("Player").show(ctx, |ui| {
-            PlayerComponent::add(self, ui);
-            ui.add_space(5.0); // Add margin at the bottom
-        });
-
-        egui::TopBottomPanel::bottom("Footer").show(ctx, |ui| {
-            Footer::add(self, ui);
-        });
-
-        if self.ui_state.show_lyrics_panel {
-            egui::SidePanel::right("Lyrics Panel")
-                .default_width(300.0)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    LyricsComponent::add(self, ui);
-                });
-        }
-
-        egui::SidePanel::left("Library Window")
-            .default_width(200.0)
-            .show(ctx, |ui| {
-                LibraryComponent::add(self, ui);
-            });
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::horizontal()
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    PlaylistTabs::add(self, ui);
-                });
-
-            ui.add_space(8.0);
-
-            if let Some(current_playlist_idx) = self.current_playlist_idx {
-                // Create a scroll area with a unique ID for tracking scroll position
-                let playlist_id = format!("playlist_{}", current_playlist_idx);
-                let scroll_area_id = ui.id().with(playlist_id).with("scroll_area");
-
-                egui::ScrollArea::both().show(ui, |ui| {
-                    ui.push_id(scroll_area_id, |ui| {
-                        PlaylistTable::add(self, ui);
-                    });
-                });
-            }
-        });
+        MainShell::show(self, ctx);
 
         // Request repaint during playback for smooth synced lyrics updates
         if self.runtime.is_some() {
@@ -190,7 +136,5 @@ impl eframe::App for App {
                 ctx.request_repaint_after(Duration::from_millis(33));
             }
         }
-
-        eprintln!("fps = {:.0}", 1.0 / ctx.input(|i| i.unstable_dt));
     }
 }
