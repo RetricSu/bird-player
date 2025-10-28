@@ -52,6 +52,9 @@ pub struct App {
     pub last_window_title: Option<String>,
 
     #[serde(skip_serializing, skip_deserializing)]
+    pub last_window_title_fingerprint: Option<u64>,
+
+    #[serde(skip_serializing, skip_deserializing)]
     pub heavy_data_loaded: bool,
 
     pub quit: bool,
@@ -73,6 +76,7 @@ impl Default for App {
             ui_state: UiState::default(),
             lyrics_manager: LyricsManager::new(),
             last_window_title: None,
+            last_window_title_fingerprint: None,
             heavy_data_loaded: false,
             quit: false,
         }
@@ -552,6 +556,69 @@ impl App {
             Err(e) => {
                 tracing::error!("Failed to clean up duplicate pictures: {}", e);
             }
+        }
+    }
+
+    /// Process a freshly received lyrics response.
+    pub fn handle_lyrics_response(&mut self, should_show_panel: bool) {
+        tracing::debug!("📡 Lyrics response received");
+
+        if should_show_panel {
+            self.ui_state.show_lyrics_panel = true;
+        }
+
+        let track_key = self
+            .runtime
+            .as_ref()
+            .and_then(|rt| rt.player.selected_track.as_ref().map(|track| track.key()));
+
+        let lyrics_text_owned = self
+            .lyrics_manager
+            .current_lyrics()
+            .and_then(|lyrics_data| {
+                lyrics_data
+                    .synced_lyrics
+                    .as_deref()
+                    .or(lyrics_data.plain_lyrics.as_deref())
+                    .map(|text| text.to_string())
+            });
+
+        if let Some(lyrics_data) = self.lyrics_manager.current_lyrics() {
+            if self.runtime.is_some() {
+                let player = self.player_ref();
+                if let Some(track) = &player.selected_track {
+                    if let Err(e) = crate::app::lyrics::LyricsService::write_lyrics_to_file(
+                        track.path(),
+                        lyrics_data,
+                    ) {
+                        tracing::warn!("⚠️  Failed to cache lyrics in ID3 tag: {}", e);
+                    } else {
+                        tracing::info!("📝 Successfully cached lyrics in ID3 tag");
+                    }
+                }
+            }
+
+            if lyrics_data.instrumental {
+                tracing::info!("✅ Found instrumental track");
+            } else if !lyrics_data.lines.is_empty() || lyrics_data.plain_lyrics.is_some() {
+                tracing::info!("✅ Lyrics loaded successfully");
+            } else {
+                tracing::warn!("⚠️  Lyrics record found but no content available");
+            }
+        } else {
+            tracing::warn!("❌ No lyrics found");
+        }
+
+        if let Some(track_key) = track_key {
+            self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
+        }
+    }
+
+    pub fn process_library_command(&mut self, lib_cmd: LibraryCommand) {
+        match lib_cmd {
+            LibraryCommand::AddItem(lib_item) => self.library.add_item(lib_item),
+            LibraryCommand::AddView(lib_view) => self.library.add_view(lib_view),
+            LibraryCommand::AddPathId(path_id) => self.library.set_path_to_imported(path_id),
         }
     }
 

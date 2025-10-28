@@ -1,9 +1,44 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 use eframe::egui;
 
-use super::{App, LibraryCommand};
+use super::App;
 use crate::app::components::main_shell::MainShell;
+use crate::app::constants::DEFAULT_WINDOW_TITLE;
+
+impl App {
+    fn refresh_window_title(&mut self, ctx: &egui::Context) {
+        if let Some(track) = self
+            .runtime
+            .as_ref()
+            .and_then(|rt| rt.player.selected_track.as_ref())
+        {
+            let artist = track.artist_ref().unwrap_or("unknown artist");
+            let title = track.title_ref().unwrap_or("unknown title");
+
+            let mut hasher = DefaultHasher::new();
+            track.key().hash(&mut hasher);
+            artist.hash(&mut hasher);
+            title.hash(&mut hasher);
+            let fingerprint = hasher.finish();
+
+            if self.last_window_title_fingerprint != Some(fingerprint) {
+                let new_title = format!("{} - {} [ Music Player ]", artist, title);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(new_title.clone()));
+                self.last_window_title = Some(new_title);
+                self.last_window_title_fingerprint = Some(fingerprint);
+            }
+        } else if self.last_window_title.is_some() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(
+                DEFAULT_WINDOW_TITLE.to_string(),
+            ));
+            self.last_window_title = None;
+            self.last_window_title_fingerprint = None;
+        }
+    }
+}
 
 impl eframe::App for App {
     fn on_exit(&mut self, _ctx: Option<&eframe::glow::Context>) {
@@ -18,11 +53,7 @@ impl eframe::App for App {
         }
 
         if let Ok(lib_cmd) = self.lib_cmd_rx().try_recv() {
-            match lib_cmd {
-                LibraryCommand::AddItem(lib_item) => self.library.add_item(lib_item),
-                LibraryCommand::AddView(lib_view) => self.library.add_view(lib_view),
-                LibraryCommand::AddPathId(path_id) => self.library.set_path_to_imported(path_id),
-            }
+            self.process_library_command(lib_cmd);
         }
 
         // Check for pending lyrics response
@@ -31,82 +62,10 @@ impl eframe::App for App {
             .check_pending_lyrics(&mut self.ui_state.lyrics_fetch_state);
 
         if lyrics_received {
-            tracing::debug!("📡 Lyrics response received");
-
-            let track_key = self
-                .runtime
-                .as_ref()
-                .and_then(|rt| rt.player.selected_track.as_ref().map(|track| track.key()));
-
-            let lyrics_text_owned = self
-                .lyrics_manager
-                .current_lyrics()
-                .and_then(|lyrics_data| {
-                    lyrics_data
-                        .synced_lyrics
-                        .as_deref()
-                        .or(lyrics_data.plain_lyrics.as_deref())
-                        .map(|text| text.to_string())
-                });
-
-            if should_show_panel {
-                self.ui_state.show_lyrics_panel = true;
-            }
-
-            // Store the fetched lyrics in the ID3 tag for future use
-            if let Some(lyrics_data) = self.lyrics_manager.current_lyrics() {
-                if self.runtime.is_some() {
-                    let player = self.player_ref();
-                    if let Some(track) = &player.selected_track {
-                        if let Err(e) = crate::app::lyrics::LyricsService::write_lyrics_to_file(
-                            track.path(),
-                            lyrics_data,
-                        ) {
-                            tracing::warn!("⚠️  Failed to cache lyrics in ID3 tag: {}", e);
-                        } else {
-                            tracing::info!("📝 Successfully cached lyrics in ID3 tag");
-                        }
-                    }
-                }
-            }
-
-            // Show the lyrics panel when lyrics are loaded
-            if let Some(lyrics_data) = self.lyrics_manager.current_lyrics() {
-                if lyrics_data.instrumental {
-                    tracing::info!("✅ Found instrumental track");
-                } else if !lyrics_data.lines.is_empty() || lyrics_data.plain_lyrics.is_some() {
-                    tracing::info!("✅ Lyrics loaded successfully");
-                } else {
-                    tracing::warn!("⚠️  Lyrics record found but no content available");
-                }
-            } else {
-                tracing::warn!("❌ No lyrics found");
-            }
-
-            if let Some(track_key) = track_key {
-                self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
-            }
+            self.handle_lyrics_response(should_show_panel);
         }
 
-        if let Some(selected_track) = &self.player_ref().selected_track {
-            let display = format!(
-                "{} - {} [ Music Player ]",
-                &selected_track
-                    .artist()
-                    .unwrap_or("unknown artist".to_string()),
-                &selected_track
-                    .title()
-                    .unwrap_or("unknown title".to_string())
-            );
-
-            if self.last_window_title.as_deref() != Some(&display) {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Title(display.clone()));
-                self.last_window_title = Some(display);
-            }
-        } else if self.last_window_title.is_some() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title("Bird Player".to_string()));
-            self.last_window_title = None;
-        }
+        self.refresh_window_title(ctx);
 
         // Add window chrome at the top
         MainShell::show(self, ctx);
