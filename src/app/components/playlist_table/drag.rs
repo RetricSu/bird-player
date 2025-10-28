@@ -1,6 +1,7 @@
-use crate::app::{t, App};
+use crate::app::App;
 use eframe::egui;
 
+use super::row_texts::LocalizedFallbacks;
 use super::state::PlaylistTableState;
 
 pub(crate) fn render_drag_placeholder_row(
@@ -19,6 +20,7 @@ pub(crate) fn render_drag_placeholder_row(
     ui.end_row();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_drag_feedback(
     ctx: &App,
     ui: &mut egui::Ui,
@@ -27,6 +29,7 @@ pub(crate) fn render_drag_feedback(
     dragged_item: Option<usize>,
     pointer_pos: Option<egui::Pos2>,
     row_rects: &[(usize, egui::Rect)],
+    fallbacks: &LocalizedFallbacks,
 ) {
     let Some(drag_idx) = dragged_item else {
         state.set_drop_target(ui, None);
@@ -85,10 +88,7 @@ pub(crate) fn render_drag_feedback(
             egui::Color32::from_rgba_premultiplied(100, 100, 180, 200),
         );
 
-        let drag_text = track
-            .title()
-            .unwrap_or_else(|| t("unknown_title"))
-            .to_string();
+        let drag_text = track.title_ref().unwrap_or(fallbacks.title());
         ui.painter().text(
             drag_rect.center(),
             egui::Align2::CENTER_CENTER,

@@ -7,7 +7,7 @@ use super::controller;
 use super::drag::{handle_drag_end, render_drag_feedback, render_drag_placeholder_row};
 use super::post_render::{handle_auto_scroll, handle_scroll_request};
 use super::row_highlight::{apply_row_decorations, paint_selection_background, RowHighlight};
-use super::row_texts::extract_row_texts;
+use super::row_texts::{extract_row_texts, LocalizedFallbacks};
 use super::state::PlaylistTableState;
 use crate::app::t;
 use crate::app::App;
@@ -56,6 +56,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
     let mut actions = PendingActions::default();
     let mut dragged_item = state.dragged_item();
     let mut is_dragging = state.is_dragging();
+    let fallbacks = LocalizedFallbacks::current();
 
     let scroll_area_id = base_id.with("scroll_area");
     egui::ScrollArea::both()
@@ -122,13 +123,13 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         paint_selection_background(ui, row_rect, is_selected);
 
                         let track = &ctx.playlists[current_playlist_idx].tracks[idx];
-                        let row_texts = extract_row_texts(track);
+                        let row_texts = extract_row_texts(track, &fallbacks);
 
                         let drag_handle_text = egui::RichText::new((idx + 1).to_string()).strong();
-                        let title_text = egui::RichText::new(row_texts.title.clone());
-                        let artist_text = egui::RichText::new(row_texts.artist.clone());
-                        let album_text = egui::RichText::new(row_texts.album.clone());
-                        let genre_text = egui::RichText::new(row_texts.genre.clone());
+                        let title_text = egui::RichText::new(row_texts.title.as_ref());
+                        let artist_text = egui::RichText::new(row_texts.artist.as_ref());
+                        let album_text = egui::RichText::new(row_texts.album.as_ref());
+                        let genre_text = egui::RichText::new(row_texts.genre.as_ref());
 
                         let RowHighlight {
                             drag_handle,
@@ -175,7 +176,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             is_dragging,
                             ctrl_pressed,
                             is_current_track,
-                            &row_texts.title,
+                            row_texts.title.as_ref(),
                             title,
                             &mut state,
                             &mut actions,
@@ -190,7 +191,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             idx,
                             is_dragging,
                             ctrl_pressed,
-                            &row_texts.artist,
+                            row_texts.artist.as_ref(),
                             artist,
                             &mut state,
                             &mut actions,
@@ -205,7 +206,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             idx,
                             is_dragging,
                             ctrl_pressed,
-                            &row_texts.album,
+                            row_texts.album.as_ref(),
                             album,
                             &mut state,
                             &mut actions,
@@ -230,7 +231,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             idx,
                             is_dragging,
                             ctrl_pressed,
-                            &row_texts.genre,
+                            row_texts.genre.as_ref(),
                             genre,
                             &mut state,
                             &mut actions,
@@ -258,6 +259,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             dragged_item,
                             pointer_pos,
                             &row_rects,
+                            &fallbacks,
                         );
                     }
 

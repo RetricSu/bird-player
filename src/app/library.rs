@@ -495,6 +495,10 @@ impl LibraryItem {
         self.title.clone()
     }
 
+    pub fn title_ref(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+
     pub fn set_artist(&mut self, artist: Option<&str>) -> Self {
         if let Some(artist) = artist {
             self.artist = Some(artist.to_string());
@@ -506,6 +510,10 @@ impl LibraryItem {
         self.artist.clone()
     }
 
+    pub fn artist_ref(&self) -> Option<&str> {
+        self.artist.as_deref()
+    }
+
     pub fn set_album(&mut self, album: Option<&str>) -> Self {
         if let Some(album) = album {
             self.album = Some(album.to_string());
@@ -515,6 +523,10 @@ impl LibraryItem {
 
     pub fn album(&self) -> Option<String> {
         self.album.clone()
+    }
+
+    pub fn album_ref(&self) -> Option<&str> {
+        self.album.as_deref()
     }
 
     pub fn set_year(&mut self, year: Option<i32>) -> Self {
@@ -535,6 +547,10 @@ impl LibraryItem {
 
     pub fn genre(&self) -> Option<String> {
         self.genre.clone()
+    }
+
+    pub fn genre_ref(&self) -> Option<&str> {
+        self.genre.as_deref()
     }
 
     pub fn set_track_number(&mut self, track_number: Option<u32>) -> Self {
