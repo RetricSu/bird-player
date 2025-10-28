@@ -44,6 +44,20 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
     let column_proportions = [0.05, 0.30, 0.18, 0.20, 0.12, 0.15];
     let num_columns = column_proportions.len();
 
+    // Pre-calculate column widths once instead of 6 times per row
+    let column_widths: [f32; 6] = [
+        available_width * column_proportions[0],
+        available_width * column_proportions[1],
+        available_width * column_proportions[2],
+        available_width * column_proportions[3],
+        available_width * column_proportions[4],
+        available_width * column_proportions[5],
+    ];
+
+    // Cache selection color once instead of fetching on every row
+    let selection_bg_color = ui.style().visuals.selection.bg_fill;
+    let drag_color = egui::Color32::from_rgb(120, 120, 180);
+
     let current_track_idx = ctx
         .player_ref()
         .selected_track
@@ -72,32 +86,32 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                 .num_columns(num_columns)
                 .show(ui, |ui| {
                     ui.scope(|ui| {
-                        ui.set_min_width(available_width * column_proportions[0]);
+                        ui.set_min_width(column_widths[0]);
                         ui.strong(localization.column_number());
                     });
 
                     ui.scope(|ui| {
-                        ui.set_min_width(available_width * column_proportions[1]);
+                        ui.set_min_width(column_widths[1]);
                         ui.strong(localization.column_title());
                     });
 
                     ui.scope(|ui| {
-                        ui.set_min_width(available_width * column_proportions[2]);
+                        ui.set_min_width(column_widths[2]);
                         ui.strong(localization.column_artist());
                     });
 
                     ui.scope(|ui| {
-                        ui.set_min_width(available_width * column_proportions[3]);
+                        ui.set_min_width(column_widths[3]);
                         ui.strong(localization.column_album());
                     });
 
                     ui.scope(|ui| {
-                        ui.set_min_width(available_width * column_proportions[4]);
+                        ui.set_min_width(column_widths[4]);
                         ui.strong(localization.column_lyrics());
                     });
 
                     ui.scope(|ui| {
-                        ui.set_min_width(available_width * column_proportions[5]);
+                        ui.set_min_width(column_widths[5]);
                         ui.strong(localization.column_genre());
                     });
 
@@ -130,12 +144,12 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             .player_ref()
                             .selected_track
                             .as_ref()
-                            .map_or(false, |selected_track| selected_track.key() == track.key());
+                            .is_some_and(|selected_track| selected_track.key() == track.key());
 
                         let highlight_color = if is_current_track {
-                            Some(ui.style().visuals.selection.bg_fill)
+                            Some(selection_bg_color)
                         } else if is_dragging {
-                            Some(egui::Color32::from_rgb(120, 120, 180))
+                            Some(drag_color)
                         } else {
                             None
                         };
@@ -143,7 +157,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         render_number_column(
                             ui,
                             row_id,
-                            available_width * column_proportions[0],
+                            column_widths[0],
                             idx,
                             highlight_color,
                             &mut state,
@@ -156,7 +170,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         render_title_column(
                             ui,
                             row_id,
-                            available_width * column_proportions[1],
+                            column_widths[1],
                             idx,
                             is_dragging,
                             ctrl_pressed,
@@ -173,7 +187,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         render_artist_column(
                             ui,
                             row_id,
-                            available_width * column_proportions[2],
+                            column_widths[2],
                             idx,
                             is_dragging,
                             ctrl_pressed,
@@ -189,7 +203,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         render_album_column(
                             ui,
                             row_id,
-                            available_width * column_proportions[3],
+                            column_widths[3],
                             idx,
                             is_dragging,
                             ctrl_pressed,
@@ -205,7 +219,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         render_lyrics_column(
                             ui,
                             row_id,
-                            available_width * column_proportions[4],
+                            column_widths[4],
                             track.has_lyrics(),
                             track.key(),
                             track.path_ref(),
@@ -216,7 +230,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         render_genre_column(
                             ui,
                             row_id,
-                            available_width * column_proportions[5],
+                            column_widths[5],
                             idx,
                             is_dragging,
                             ctrl_pressed,
