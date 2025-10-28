@@ -6,6 +6,7 @@ use crate::app::t;
 
 use super::{actions::PendingActions, state::PlaylistTableState};
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_number_column(
     ui: &mut egui::Ui,
     row_id: egui::Id,
@@ -42,6 +43,7 @@ pub(crate) fn render_number_column(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_title_column(
     ui: &mut egui::Ui,
     row_id: egui::Id,
@@ -110,6 +112,7 @@ pub(crate) fn render_title_column(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_artist_column(
     ui: &mut egui::Ui,
     row_id: egui::Id,
@@ -173,6 +176,7 @@ pub(crate) fn render_artist_column(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_album_column(
     ui: &mut egui::Ui,
     row_id: egui::Id,
@@ -277,6 +281,7 @@ pub(crate) fn render_lyrics_column(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_genre_column(
     ui: &mut egui::Ui,
     row_id: egui::Id,

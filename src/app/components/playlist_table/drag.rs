@@ -99,6 +99,7 @@ pub(crate) fn render_drag_feedback(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_drag_end(
     ctx: &mut App,
     ui: &mut egui::Ui,

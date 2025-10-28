@@ -10,6 +10,7 @@ pub(crate) struct RowHighlight {
     pub is_current_track: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn apply_row_decorations(
     ctx: &App,
     ui: &egui::Ui,
