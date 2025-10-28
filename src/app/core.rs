@@ -52,9 +52,6 @@ pub struct App {
     pub last_window_title: Option<String>,
 
     #[serde(skip_serializing, skip_deserializing)]
-    pub last_window_title_fingerprint: Option<u64>,
-
-    #[serde(skip_serializing, skip_deserializing)]
     pub heavy_data_loaded: bool,
 
     pub quit: bool,
@@ -76,7 +73,6 @@ impl Default for App {
             ui_state: UiState::default(),
             lyrics_manager: LyricsManager::new(),
             last_window_title: None,
-            last_window_title_fingerprint: None,
             heavy_data_loaded: false,
             quit: false,
         }

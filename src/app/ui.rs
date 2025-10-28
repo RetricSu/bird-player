@@ -1,5 +1,3 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 use eframe::egui;
@@ -18,24 +16,17 @@ impl App {
             let artist = track.artist_ref().unwrap_or("unknown artist");
             let title = track.title_ref().unwrap_or("unknown title");
 
-            let mut hasher = DefaultHasher::new();
-            track.key().hash(&mut hasher);
-            artist.hash(&mut hasher);
-            title.hash(&mut hasher);
-            let fingerprint = hasher.finish();
+            let new_title = format!("{} - {} [ Music Player ]", artist, title);
 
-            if self.last_window_title_fingerprint != Some(fingerprint) {
-                let new_title = format!("{} - {} [ Music Player ]", artist, title);
+            if self.last_window_title.as_deref() != Some(&new_title) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(new_title.clone()));
                 self.last_window_title = Some(new_title);
-                self.last_window_title_fingerprint = Some(fingerprint);
             }
         } else if self.last_window_title.is_some() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(
                 DEFAULT_WINDOW_TITLE.to_string(),
             ));
             self.last_window_title = None;
-            self.last_window_title_fingerprint = None;
         }
     }
 }
