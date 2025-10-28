@@ -45,6 +45,7 @@ const ALBUM_ART_SIZE: f32 = 120.0;
 const CASSETTE_WIDTH: f32 = 280.0;
 const CASSETTE_HEIGHT: f32 = 160.0;
 const REEL_RADIUS: f32 = 40.0;
+const ROTATION_SPEED_PLAYING: f32 = 0.8;
 
 thread_local! {
     static LAST_UPDATE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
@@ -292,7 +293,12 @@ fn update_animation(ctx: &mut App) -> (f32, f32) {
         });
 
         let is_playing = ctx.player_ref().track_state.to_string() == "Playing";
-        let rotation_speed = if is_playing { 2.0 } else { 0.0 };
+        // Slightly slower spin keeps motion smooth when repaint cadence drops.
+        let rotation_speed = if is_playing {
+            ROTATION_SPEED_PLAYING
+        } else {
+            0.0
+        };
 
         *angle.borrow_mut() += rotation_speed * elapsed.as_secs_f32();
         *angle.borrow()
