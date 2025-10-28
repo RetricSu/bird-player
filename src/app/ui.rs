@@ -13,12 +13,6 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Load heavy data on first frame if not already loaded
-        if !self.heavy_data_loaded {
-            self.load_heavy_data();
-            return;
-        }
-
         if self.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
