@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 pub enum LibraryCommand {
@@ -475,6 +475,10 @@ impl LibraryItem {
         self.path.clone()
     }
 
+    pub fn path_ref(&self) -> &Path {
+        &self.path
+    }
+
     pub fn key(&self) -> usize {
         self.key
     }
@@ -575,12 +579,28 @@ impl LibraryItem {
     }
 
     pub fn set_lyrics(&mut self, lyrics: Option<&str>) -> Self {
-        self.lyrics = lyrics.map(|lyrics| lyrics.to_string());
+        self.lyrics = lyrics.and_then(|lyrics| {
+            let trimmed = lyrics.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_owned())
+            }
+        });
         self.to_owned()
     }
 
     pub fn replace_lyrics(&mut self, lyrics: Option<String>) {
-        self.lyrics = lyrics;
+        self.lyrics = lyrics.and_then(|lyrics| {
+            let trimmed = lyrics.trim();
+            if trimmed.is_empty() {
+                None
+            } else if trimmed.len() == lyrics.len() {
+                Some(lyrics)
+            } else {
+                Some(trimmed.to_owned())
+            }
+        });
     }
 
     pub fn lyrics(&self) -> Option<String> {
@@ -588,10 +608,7 @@ impl LibraryItem {
     }
 
     pub fn has_lyrics(&self) -> bool {
-        self.lyrics
-            .as_ref()
-            .map(|text| !text.trim().is_empty())
-            .unwrap_or(false)
+        self.lyrics.is_some()
     }
 }
 

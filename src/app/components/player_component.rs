@@ -12,6 +12,12 @@ pub struct PlayerComponent;
 
 const CASSETTE_WIDTH: f32 = 280.0;
 
+struct SelectedTrackSummary {
+    key: usize,
+    title: Option<String>,
+    artist: Option<String>,
+}
+
 // For periodic state saving
 thread_local! {
     static LAST_SAVE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
@@ -101,14 +107,20 @@ impl AppComponent for PlayerComponent {
             current_playlist_name,
         ) = {
             let player = ctx.player_ref();
-            let selected_track = player.selected_track.clone();
+            let selected_track = player
+                .selected_track
+                .as_ref()
+                .map(|track| SelectedTrackSummary {
+                    key: track.key(),
+                    title: track.title(),
+                    artist: track.artist(),
+                });
             let is_playing = matches!(player.track_state, crate::app::player::TrackState::Playing);
             let playback_mode = player.playback_mode;
             let seek_to_timestamp = player.seek_to_timestamp;
             let duration = player.duration;
             let volume = player.volume;
 
-            // Get current playlist name using map_or for cleaner code
             let current_playlist_name = ctx
                 .playing_playlist_idx
                 .and_then(|idx| ctx.playlists.get(idx))
@@ -156,21 +168,15 @@ impl AppComponent for PlayerComponent {
 
                     // Show track info if selected, otherwise show default message
                     if let Some(track) = &selected_track {
+                        let title = track.title.as_deref().unwrap_or("unknown title");
                         ui.add(
-                            eframe::egui::Label::new(format!(
-                                "{}{}",
-                                t("song"),
-                                track.title().unwrap_or("unknown title".to_string())
-                            ))
-                            .wrap_mode(eframe::egui::TextWrapMode::Truncate),
+                            eframe::egui::Label::new(format!("{}{}", t("song"), title))
+                                .wrap_mode(eframe::egui::TextWrapMode::Truncate),
                         )
                         .highlight();
 
-                        ui.label(format!(
-                            "{}{}",
-                            t("artist"),
-                            track.artist().unwrap_or("unknown artist".to_string())
-                        ));
+                        let artist = track.artist.as_deref().unwrap_or("unknown artist");
+                        ui.label(format!("{}{}", t("artist"), artist));
 
                         ui.label(format!("{}{}", t("playlist"), current_playlist_name));
                     } else {
@@ -319,9 +325,9 @@ impl AppComponent for PlayerComponent {
                                     if let Some(track) = &selected_track {
                                         if let Some(current_playlist_idx) = ctx.current_playlist_idx
                                         {
-                                            // Find the position of the current track in the playlist
-                                            if let Some(current_track_position) =
-                                                ctx.playlists[current_playlist_idx].get_pos(track)
+                                            if let Some(current_track_position) = ctx.playlists
+                                                [current_playlist_idx]
+                                                .get_pos_by_key(track.key)
                                             {
                                                 // Get the next track before removing the current one
                                                 let next_track = if current_track_position

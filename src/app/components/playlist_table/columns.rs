@@ -1,10 +1,10 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use eframe::egui;
 
-use crate::app::t;
-
-use super::{actions::PendingActions, state::PlaylistTableState};
+use super::{
+    actions::PendingActions, localization::PlaylistLocalization, state::PlaylistTableState,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_number_column(
@@ -12,7 +12,7 @@ pub(crate) fn render_number_column(
     row_id: egui::Id,
     column_width: f32,
     idx: usize,
-    drag_handle: egui::RichText,
+    highlight_color: Option<egui::Color32>,
     state: &mut PlaylistTableState,
     dragged_item: &mut Option<usize>,
     is_dragging: &mut bool,
@@ -23,8 +23,13 @@ pub(crate) fn render_number_column(
         ui.push_id(row_id.with("number_col"), |ui| {
             ui.set_min_width(column_width);
 
+            let mut text = egui::RichText::new((idx + 1).to_string()).strong();
+            if let Some(color) = highlight_color {
+                text = text.color(color);
+            }
+
             let drag_handle_response =
-                ui.add(egui::Label::new(drag_handle).sense(egui::Sense::click_and_drag()));
+                ui.add(egui::Label::new(text).sense(egui::Sense::click_and_drag()));
 
             if drag_handle_response.hovered() && !*is_dragging {
                 ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Grab);
@@ -53,7 +58,8 @@ pub(crate) fn render_title_column(
     ctrl_pressed: bool,
     is_current_track: bool,
     track_title: &str,
-    title_text: egui::RichText,
+    highlight_color: Option<egui::Color32>,
+    localization: &PlaylistLocalization,
     state: &mut PlaylistTableState,
     actions: &mut PendingActions,
     editing_field: Option<&str>,
@@ -77,20 +83,27 @@ pub(crate) fn render_title_column(
                     state.clear_edit(ui);
                 }
             } else {
-                let title_response =
-                    ui.add(egui::Label::new(title_text).sense(egui::Sense::click()));
+                let mut text = egui::RichText::new(track_title);
+                if let Some(color) = highlight_color {
+                    text = text.color(color);
+                }
+
+                let title_response = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
 
                 if title_response.hovered() && !is_dragging {
                     ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
                 }
 
                 title_response.context_menu(|ui| {
-                    if ui.button(t("edit_title")).clicked() {
+                    if ui.button(localization.menu_edit_title()).clicked() {
                         state.begin_edit(ui, "title", idx, track_title.to_string());
                         ui.close_menu();
                     }
 
-                    if ui.button(t("remove_from_playlist")).clicked() {
+                    if ui
+                        .button(localization.menu_remove_from_playlist())
+                        .clicked()
+                    {
                         actions.remove_track(idx);
                         ui.close_menu();
                     }
@@ -121,7 +134,8 @@ pub(crate) fn render_artist_column(
     is_dragging: bool,
     ctrl_pressed: bool,
     track_artist: &str,
-    artist_text: egui::RichText,
+    highlight_color: Option<egui::Color32>,
+    localization: &PlaylistLocalization,
     state: &mut PlaylistTableState,
     actions: &mut PendingActions,
     editing_field: Option<&str>,
@@ -145,16 +159,23 @@ pub(crate) fn render_artist_column(
                     state.clear_edit(ui);
                 }
             } else {
-                let artist_response =
-                    ui.add(egui::Label::new(artist_text).sense(egui::Sense::click()));
+                let mut text = egui::RichText::new(track_artist);
+                if let Some(color) = highlight_color {
+                    text = text.color(color);
+                }
+
+                let artist_response = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
 
                 artist_response.context_menu(|ui| {
-                    if ui.button(t("edit_artist")).clicked() {
+                    if ui.button(localization.menu_edit_artist()).clicked() {
                         state.begin_edit(ui, "artist", idx, track_artist.to_string());
                         ui.close_menu();
                     }
 
-                    if ui.button(t("remove_from_playlist")).clicked() {
+                    if ui
+                        .button(localization.menu_remove_from_playlist())
+                        .clicked()
+                    {
                         actions.remove_track(idx);
                         ui.close_menu();
                     }
@@ -185,7 +206,8 @@ pub(crate) fn render_album_column(
     is_dragging: bool,
     ctrl_pressed: bool,
     track_album: &str,
-    album_text: egui::RichText,
+    highlight_color: Option<egui::Color32>,
+    localization: &PlaylistLocalization,
     state: &mut PlaylistTableState,
     actions: &mut PendingActions,
     editing_field: Option<&str>,
@@ -209,16 +231,23 @@ pub(crate) fn render_album_column(
                     state.clear_edit(ui);
                 }
             } else {
-                let album_response =
-                    ui.add(egui::Label::new(album_text).sense(egui::Sense::click()));
+                let mut text = egui::RichText::new(track_album);
+                if let Some(color) = highlight_color {
+                    text = text.color(color);
+                }
+
+                let album_response = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
 
                 album_response.context_menu(|ui| {
-                    if ui.button(t("edit_album")).clicked() {
+                    if ui.button(localization.menu_edit_album()).clicked() {
                         state.begin_edit(ui, "album", idx, track_album.to_string());
                         ui.close_menu();
                     }
 
-                    if ui.button(t("remove_from_playlist")).clicked() {
+                    if ui
+                        .button(localization.menu_remove_from_playlist())
+                        .clicked()
+                    {
                         actions.remove_track(idx);
                         ui.close_menu();
                     }
@@ -246,7 +275,8 @@ pub(crate) fn render_lyrics_column(
     column_width: f32,
     has_lyrics: bool,
     track_key: usize,
-    track_path: PathBuf,
+    track_path: &Path,
+    localization: &PlaylistLocalization,
     actions: &mut PendingActions,
 ) {
     ui.scope(|ui| {
@@ -258,11 +288,11 @@ pub(crate) fn render_lyrics_column(
                     ui.label("🎵");
                     if ui
                         .small_button("❌")
-                        .on_hover_text(t("remove_lyrics"))
+                        .on_hover_text(localization.remove_lyrics())
                         .clicked()
                     {
                         if let Err(e) =
-                            crate::app::lyrics::LyricsService::remove_lyrics_from_file(&track_path)
+                            crate::app::lyrics::LyricsService::remove_lyrics_from_file(track_path)
                         {
                             tracing::error!("Failed to remove lyrics from file: {}", e);
                         } else {
@@ -290,7 +320,8 @@ pub(crate) fn render_genre_column(
     is_dragging: bool,
     ctrl_pressed: bool,
     track_genre: &str,
-    genre_text: egui::RichText,
+    highlight_color: Option<egui::Color32>,
+    localization: &PlaylistLocalization,
     state: &mut PlaylistTableState,
     actions: &mut PendingActions,
     editing_field: Option<&str>,
@@ -314,16 +345,23 @@ pub(crate) fn render_genre_column(
                     state.clear_edit(ui);
                 }
             } else {
-                let genre_response =
-                    ui.add(egui::Label::new(genre_text).sense(egui::Sense::click()));
+                let mut text = egui::RichText::new(track_genre);
+                if let Some(color) = highlight_color {
+                    text = text.color(color);
+                }
+
+                let genre_response = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
 
                 genre_response.context_menu(|ui| {
-                    if ui.button(t("edit_genre")).clicked() {
+                    if ui.button(localization.menu_edit_genre()).clicked() {
                         state.begin_edit(ui, "genre", idx, track_genre.to_string());
                         ui.close_menu();
                     }
 
-                    if ui.button(t("remove_from_playlist")).clicked() {
+                    if ui
+                        .button(localization.menu_remove_from_playlist())
+                        .clicked()
+                    {
                         actions.remove_track(idx);
                         ui.close_menu();
                     }

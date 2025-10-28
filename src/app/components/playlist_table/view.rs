@@ -5,11 +5,11 @@ use super::columns::{
 };
 use super::controller;
 use super::drag::{handle_drag_end, render_drag_feedback, render_drag_placeholder_row};
+use super::localization::PlaylistLocalization;
 use super::post_render::{handle_auto_scroll, handle_scroll_request};
-use super::row_highlight::{apply_row_decorations, paint_selection_background, RowHighlight};
+use super::row_highlight::paint_selection_background;
 use super::row_texts::{extract_row_texts, LocalizedFallbacks};
 use super::state::PlaylistTableState;
-use crate::app::t;
 use crate::app::App;
 use eframe::egui;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -21,7 +21,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
         return;
     };
 
-    let base_id = ui.id().with(format!("playlist_{}", current_playlist_idx));
+    let base_id = ui.id().with(("playlist", current_playlist_idx));
     let mut state = PlaylistTableState::load(ui, base_id);
     let editing_field = state.editing_field.clone();
     let editing_track_idx = state.editing_track_idx;
@@ -57,6 +57,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
     let mut dragged_item = state.dragged_item();
     let mut is_dragging = state.is_dragging();
     let fallbacks = LocalizedFallbacks::current();
+    let localization = PlaylistLocalization::current();
 
     let scroll_area_id = base_id.with("scroll_area");
     egui::ScrollArea::both()
@@ -72,38 +73,38 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                 .show(ui, |ui| {
                     ui.scope(|ui| {
                         ui.set_min_width(available_width * column_proportions[0]);
-                        ui.strong(t("column_number"));
+                        ui.strong(localization.column_number());
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(available_width * column_proportions[1]);
-                        ui.strong(t("column_title"));
+                        ui.strong(localization.column_title());
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(available_width * column_proportions[2]);
-                        ui.strong(t("column_artist"));
+                        ui.strong(localization.column_artist());
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(available_width * column_proportions[3]);
-                        ui.strong(t("column_album"));
+                        ui.strong(localization.column_album());
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(available_width * column_proportions[4]);
-                        ui.strong(t("column_lyrics"));
+                        ui.strong(localization.column_lyrics());
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(available_width * column_proportions[5]);
-                        ui.strong(t("column_genre"));
+                        ui.strong(localization.column_genre());
                     });
 
                     ui.end_row();
 
                     for idx in 0..playlist_len {
-                        let row_id = base_id.with(format!("row_{idx}"));
+                        let row_id = base_id.with(("row", idx));
                         let is_being_dragged = dragged_item == Some(idx);
 
                         if is_being_dragged && is_dragging {
@@ -125,42 +126,26 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                         let track = &ctx.playlists[current_playlist_idx].tracks[idx];
                         let row_texts = extract_row_texts(track, &fallbacks);
 
-                        let drag_handle_text = egui::RichText::new((idx + 1).to_string()).strong();
-                        let title_text = egui::RichText::new(row_texts.title.as_ref());
-                        let artist_text = egui::RichText::new(row_texts.artist.as_ref());
-                        let album_text = egui::RichText::new(row_texts.album.as_ref());
-                        let genre_text = egui::RichText::new(row_texts.genre.as_ref());
+                        let is_current_track = ctx
+                            .player_ref()
+                            .selected_track
+                            .as_ref()
+                            .map_or(false, |selected_track| selected_track.key() == track.key());
 
-                        let RowHighlight {
-                            drag_handle,
-                            title,
-                            artist,
-                            album,
-                            genre,
-                            is_current_track,
-                        } = apply_row_decorations(
-                            ctx,
-                            ui,
-                            current_playlist_idx,
-                            idx,
-                            drag_handle_text,
-                            title_text,
-                            artist_text,
-                            album_text,
-                            genre_text,
-                        );
-
-                        let mut drag_handle = drag_handle;
-                        if is_dragging {
-                            drag_handle = drag_handle.color(egui::Color32::from_rgb(120, 120, 180));
-                        }
+                        let highlight_color = if is_current_track {
+                            Some(ui.style().visuals.selection.bg_fill)
+                        } else if is_dragging {
+                            Some(egui::Color32::from_rgb(120, 120, 180))
+                        } else {
+                            None
+                        };
 
                         render_number_column(
                             ui,
                             row_id,
                             available_width * column_proportions[0],
                             idx,
-                            drag_handle,
+                            highlight_color,
                             &mut state,
                             &mut dragged_item,
                             &mut is_dragging,
@@ -177,7 +162,8 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             ctrl_pressed,
                             is_current_track,
                             row_texts.title.as_ref(),
-                            title,
+                            highlight_color,
+                            &localization,
                             &mut state,
                             &mut actions,
                             editing_field.as_deref(),
@@ -192,7 +178,8 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             is_dragging,
                             ctrl_pressed,
                             row_texts.artist.as_ref(),
-                            artist,
+                            highlight_color,
+                            &localization,
                             &mut state,
                             &mut actions,
                             editing_field.as_deref(),
@@ -207,7 +194,8 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             is_dragging,
                             ctrl_pressed,
                             row_texts.album.as_ref(),
-                            album,
+                            highlight_color,
+                            &localization,
                             &mut state,
                             &mut actions,
                             editing_field.as_deref(),
@@ -220,7 +208,8 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             available_width * column_proportions[4],
                             track.has_lyrics(),
                             track.key(),
-                            track.path(),
+                            track.path_ref(),
+                            &localization,
                             &mut actions,
                         );
 
@@ -232,7 +221,8 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                             is_dragging,
                             ctrl_pressed,
                             row_texts.genre.as_ref(),
-                            genre,
+                            highlight_color,
+                            &localization,
                             &mut state,
                             &mut actions,
                             editing_field.as_deref(),

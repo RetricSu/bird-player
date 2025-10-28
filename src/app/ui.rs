@@ -65,8 +65,10 @@ impl eframe::App for App {
         if self.runtime.is_some() {
             let player = self.player_ref();
             if matches!(player.track_state, crate::app::player::TrackState::Playing) {
-                ctx.request_repaint_after(Duration::from_millis(120));
+                ctx.request_repaint_after(Duration::from_millis(33));
             }
         }
+
+        eprintln!("fps = {:.0}", 1.0 / ctx.input(|i| i.unstable_dt));
     }
 }

@@ -41,32 +41,37 @@ pub(crate) fn render_drag_feedback(
         return;
     };
 
-    let mut sorted_rows: Vec<_> = row_rects.to_vec();
-    sorted_rows.sort_by(|(_, rect_a), (_, rect_b)| {
-        let dist_a = (rect_a.center().y - pointer_pos.y).abs();
-        let dist_b = (rect_b.center().y - pointer_pos.y).abs();
-        dist_a.partial_cmp(&dist_b).unwrap()
-    });
+    let mut nearest_row: Option<(usize, egui::Rect)> = None;
+    let mut best_distance = f32::MAX;
 
-    let nearest_row = sorted_rows
-        .iter()
-        .find(|(idx, _)| Some(*idx) != dragged_item)
-        .map(|(idx, _)| *idx);
+    for (idx, rect) in row_rects.iter() {
+        if Some(*idx) == dragged_item {
+            continue;
+        }
 
-    if let Some(target_idx) = nearest_row {
+        let distance = (rect.center().y - pointer_pos.y).abs();
+        if distance < best_distance {
+            best_distance = distance;
+            nearest_row = Some((*idx, *rect));
+        }
+    }
+
+    if let Some((target_idx, target_rect)) = nearest_row {
         state.set_drop_target(ui, Some(target_idx));
 
-        if let Some((_, rect)) = row_rects.iter().find(|(i, _)| *i == target_idx) {
-            let insert_above = pointer_pos.y < rect.center().y;
-            let line_y = if insert_above { rect.min.y } else { rect.max.y };
+        let insert_above = pointer_pos.y < target_rect.center().y;
+        let line_y = if insert_above {
+            target_rect.min.y
+        } else {
+            target_rect.max.y
+        };
 
-            let line_rect = egui::Rect::from_min_max(
-                egui::pos2(rect.min.x, line_y - 1.0),
-                egui::pos2(rect.max.x, line_y + 1.0),
-            );
-            ui.painter()
-                .rect_filled(line_rect, 0.0, egui::Color32::from_rgb(50, 150, 250));
-        }
+        let line_rect = egui::Rect::from_min_max(
+            egui::pos2(target_rect.min.x, line_y - 1.0),
+            egui::pos2(target_rect.max.x, line_y + 1.0),
+        );
+        ui.painter()
+            .rect_filled(line_rect, 0.0, egui::Color32::from_rgb(50, 150, 250));
     } else {
         state.set_drop_target(ui, None);
     }

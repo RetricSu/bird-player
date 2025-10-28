@@ -6,6 +6,7 @@ mod actions;
 mod columns;
 mod controller;
 mod drag;
+mod localization;
 mod post_render;
 mod row_highlight;
 mod row_texts;

@@ -19,13 +19,8 @@ impl AppComponent for PlaylistContent {
         ui.add_space(8.0);
 
         if let Some(current_playlist_idx) = ctx.current_playlist_idx {
-            let playlist_id = format!("playlist_{}", current_playlist_idx);
-            let scroll_area_id = ui.id().with(playlist_id).with("scroll_area");
-
-            egui::ScrollArea::both().show(ui, |ui| {
-                ui.push_id(scroll_area_id, |ui| {
-                    PlaylistTable::add(ctx, ui);
-                });
+            ui.push_id(("playlist", current_playlist_idx), |ui| {
+                PlaylistTable::add(ctx, ui);
             });
         }
     }
