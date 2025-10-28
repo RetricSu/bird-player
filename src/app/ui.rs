@@ -190,5 +190,7 @@ impl eframe::App for App {
                 ctx.request_repaint_after(Duration::from_millis(33));
             }
         }
+
+        eprintln!("fps = {:.0}", 1.0 / ctx.input(|i| i.unstable_dt));
     }
 }
