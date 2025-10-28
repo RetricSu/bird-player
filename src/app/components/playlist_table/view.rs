@@ -57,8 +57,10 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
     let mut dragged_item = state.dragged_item();
     let mut is_dragging = state.is_dragging();
 
-    egui::containers::Frame::new()
-        .fill(ui.style().visuals.widgets.noninteractive.bg_fill)
+    let scroll_area_id = base_id.with("scroll_area");
+    egui::ScrollArea::both()
+        .id_salt(scroll_area_id)
+        .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.set_min_width(available_width);
 
@@ -238,41 +240,44 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
 
                         ui.end_row();
                     }
+
+                    if let Some(new_last_played) =
+                        handle_auto_scroll(ui, current_track_idx, last_played_track, &row_rects)
+                    {
+                        LAST_PLAYED_TRACK.store(new_last_played, Ordering::Relaxed);
+                    }
+
+                    handle_scroll_request(ui, &mut state, playlist_len, &row_rects);
+
+                    if is_dragging {
+                        render_drag_feedback(
+                            ctx,
+                            ui,
+                            &mut state,
+                            current_playlist_idx,
+                            dragged_item,
+                            pointer_pos,
+                            &row_rects,
+                        );
+                    }
+
+                    if mouse_released && is_dragging {
+                        handle_drag_end(
+                            ctx,
+                            ui,
+                            &mut state,
+                            current_playlist_idx,
+                            dragged_item,
+                            pointer_pos,
+                            &row_rects,
+                            playlist_len,
+                        );
+
+                        dragged_item = state.dragged_item();
+                        is_dragging = state.is_dragging();
+                    }
                 });
         });
 
     controller::apply(ctx, current_playlist_idx, actions);
-
-    if let Some(new_last_played) =
-        handle_auto_scroll(ui, current_track_idx, last_played_track, &row_rects)
-    {
-        LAST_PLAYED_TRACK.store(new_last_played, Ordering::Relaxed);
-    }
-
-    handle_scroll_request(ui, &mut state, playlist_len, &row_rects);
-
-    if is_dragging {
-        render_drag_feedback(
-            ctx,
-            ui,
-            &mut state,
-            current_playlist_idx,
-            dragged_item,
-            pointer_pos,
-            &row_rects,
-        );
-    }
-
-    if mouse_released && is_dragging {
-        handle_drag_end(
-            ctx,
-            ui,
-            &mut state,
-            current_playlist_idx,
-            dragged_item,
-            pointer_pos,
-            &row_rects,
-            playlist_len,
-        );
-    }
 }
