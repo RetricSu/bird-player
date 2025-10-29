@@ -45,6 +45,7 @@ const ALBUM_ART_SIZE: f32 = 120.0;
 const CASSETTE_WIDTH: f32 = 280.0;
 const CASSETTE_HEIGHT: f32 = 160.0;
 const REEL_RADIUS: f32 = 40.0;
+const ROTATION_SPEED_PLAYING: f32 = 0.8;
 
 thread_local! {
     static LAST_UPDATE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
@@ -200,7 +201,7 @@ impl AppComponent for CassetteComponent {
 
             let mut show_wave_canvas = true;
 
-            if let Some(selected_track) = &ctx.player.as_ref().unwrap().selected_track {
+            if let Some(selected_track) = &ctx.player_ref().selected_track {
                 if let Some(picture) = selected_track.pictures().first() {
                     let path = picture.file_path.clone();
 
@@ -291,16 +292,23 @@ fn update_animation(ctx: &mut App) -> (f32, f32) {
             elapsed
         });
 
-        let is_playing = ctx.player.as_ref().unwrap().track_state.to_string() == "Playing";
-        let rotation_speed = if is_playing { 2.0 } else { 0.0 };
+        let is_playing = matches!(
+            ctx.player_ref().track_state,
+            crate::app::player::TrackState::Playing
+        ); // Slightly slower spin keeps motion smooth when repaint cadence drops.
+        let rotation_speed = if is_playing {
+            ROTATION_SPEED_PLAYING
+        } else {
+            0.0
+        };
 
         *angle.borrow_mut() += rotation_speed * elapsed.as_secs_f32();
         *angle.borrow()
     });
 
     // Calculate the current progress directly
-    let current_timestamp = ctx.player.as_ref().unwrap().seek_to_timestamp as f32;
-    let duration = ctx.player.as_ref().unwrap().duration as f32;
+    let current_timestamp = ctx.player_ref().seek_to_timestamp as f32;
+    let duration = ctx.player_ref().duration as f32;
     let tape_progress = if duration > 0.0 {
         current_timestamp / duration
     } else {
@@ -437,7 +445,7 @@ fn show_default_album_art(ctx: &App, ui: &mut eframe::egui::Ui, rect: eframe::eg
     let artist_pos = rect.center() + vec2(0.0, text_spacing);
 
     // Get track information from the player
-    if let Some(selected_track) = &ctx.player.as_ref().unwrap().selected_track {
+    if let Some(selected_track) = &ctx.player_ref().selected_track {
         // Calculate maximum text width (80% of rect width to leave some margin)
         let max_width = rect.width() * 0.8;
         let title_font = eframe::egui::FontId::proportional(12.0);

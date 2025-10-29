@@ -108,7 +108,11 @@ impl Playlist {
     }
 
     pub fn get_pos(&self, track: &LibraryItem) -> Option<usize> {
-        self.tracks.iter().position(|t| t == track)
+        self.get_pos_by_key(track.key())
+    }
+
+    pub fn get_pos_by_key(&self, key: usize) -> Option<usize> {
+        self.tracks.iter().position(|t| t.key() == key)
     }
 
     pub fn select_all(&mut self) {

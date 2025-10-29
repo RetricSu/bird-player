@@ -1,9 +1,9 @@
 use super::language_selector::LanguageSelector;
 use super::AppComponent;
+use crate::app::constants::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 use crate::app::t;
-use crate::app::version_info;
+use crate::app::version::version_info;
 use crate::app::App;
-use crate::app::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 use eframe::egui::{self, Color32, RichText, Window};
 use rfd;
 
@@ -47,7 +47,13 @@ impl AppComponent for WindowChrome {
             // Add Playback menu
             let mut fetch_lyrics = false;
             ui.menu_button(t("playback"), |ui| {
-                if let Some(player) = &mut ctx.player {
+                if ctx.runtime.is_some() {
+                    // Cache playlist before borrowing player mutably
+                    let playlist_clone = ctx
+                        .playing_playlist_idx
+                        .and_then(|idx| ctx.playlists.get(idx).cloned());
+
+                    let player = ctx.player_mut_ref();
                     if let Some(_selected_track) = &player.selected_track {
                         if ui.button(t("play_pause")).clicked() {
                             match player.track_state {
@@ -61,15 +67,15 @@ impl AppComponent for WindowChrome {
                             ui.close_menu();
                         }
                         if ui.button(t("previous")).clicked() {
-                            if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
-                                player.previous(&ctx.playlists[playing_playlist_idx]);
+                            if let Some(playlist) = &playlist_clone {
+                                player.previous(playlist);
                                 fetch_lyrics = true;
                             }
                             ui.close_menu();
                         }
                         if ui.button(t("next")).clicked() {
-                            if let Some(playing_playlist_idx) = ctx.playing_playlist_idx {
-                                player.next(&ctx.playlists[playing_playlist_idx]);
+                            if let Some(playlist) = &playlist_clone {
+                                player.next(playlist);
                                 fetch_lyrics = true;
                             }
                             ui.close_menu();
@@ -114,20 +120,20 @@ impl AppComponent for WindowChrome {
 
             // Add View menu
             ui.menu_button(t("view"), |ui| {
-                let lyrics_text = if ctx.show_lyrics_panel {
+                let lyrics_text = if ctx.ui_state.show_lyrics_panel {
                     t("hide_lyrics")
                 } else {
                     t("show_lyrics")
                 };
                 if ui.button(lyrics_text).clicked() {
-                    ctx.show_lyrics_panel = !ctx.show_lyrics_panel;
+                    ctx.ui_state.show_lyrics_panel = !ctx.ui_state.show_lyrics_panel;
                     ui.close_menu();
                 }
             });
 
             ui.menu_button(t("help"), |ui| {
                 if ui.button(t("about")).clicked() {
-                    ctx.show_about_dialog = true;
+                    ctx.ui_state.show_about_dialog = true;
                     ui.close_menu();
                 }
             });
@@ -155,9 +161,10 @@ impl AppComponent for WindowChrome {
                 );
                 if maximize_response.clicked() {
                     // Toggle maximize
-                    ui.ctx()
-                        .send_viewport_cmd(egui::ViewportCommand::Maximized(!ctx.is_maximized));
-                    ctx.is_maximized = !ctx.is_maximized;
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(
+                        !ctx.ui_state.is_maximized,
+                    ));
+                    ctx.ui_state.is_maximized = !ctx.ui_state.is_maximized;
                 }
 
                 // Minimize button
@@ -183,15 +190,16 @@ impl AppComponent for WindowChrome {
 
                 // Double click to maximize/restore (common UI pattern)
                 if title_bar_response.double_clicked() {
-                    ctx.is_maximized = !ctx.is_maximized;
-                    ui.ctx()
-                        .send_viewport_cmd(egui::ViewportCommand::Maximized(ctx.is_maximized));
+                    ctx.ui_state.is_maximized = !ctx.ui_state.is_maximized;
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(
+                        ctx.ui_state.is_maximized,
+                    ));
                 }
 
                 // This approach explicitly checks for drag start with primary button
                 // which works better across platforms including Ubuntu/Linux
                 if title_bar_response.drag_started_by(egui::PointerButton::Primary)
-                    && !ctx.is_maximized
+                    && !ctx.ui_state.is_maximized
                 {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
@@ -199,7 +207,7 @@ impl AppComponent for WindowChrome {
         });
 
         // Show About dialog if requested
-        if ctx.show_about_dialog {
+        if ctx.ui_state.show_about_dialog {
             Window::new(t("about"))
                 .collapsible(false)
                 .resizable(false)
@@ -221,7 +229,7 @@ impl AppComponent for WindowChrome {
                         ui.label(t("contact_email"));
                         ui.add_space(20.0);
                         if ui.button(t("exit")).clicked() {
-                            ctx.show_about_dialog = false;
+                            ctx.ui_state.show_about_dialog = false;
                         }
                     });
                 });

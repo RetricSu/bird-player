@@ -1,7 +1,13 @@
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+pub enum LibraryCommand {
+    AddView(LibraryView),
+    AddItem(LibraryItem),
+    AddPathId(LibraryPathId),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Library {
@@ -125,6 +131,26 @@ impl Library {
         let mut new = library_view.containers.clone();
 
         self.library_view.containers.append(&mut new);
+    }
+
+    pub fn update_item_lyrics(&mut self, key: usize, lyrics: Option<&str>) -> Option<String> {
+        let lyrics_owned = lyrics.map(|text| text.to_string());
+
+        for item in self.items.iter_mut() {
+            if item.key() == key {
+                item.replace_lyrics(lyrics_owned.clone());
+            }
+        }
+
+        for container in self.library_view.containers.iter_mut() {
+            for item in container.items.iter_mut() {
+                if item.key() == key {
+                    item.replace_lyrics(lyrics_owned.clone());
+                }
+            }
+        }
+
+        lyrics_owned
     }
 
     // Database methods
@@ -449,6 +475,10 @@ impl LibraryItem {
         self.path.clone()
     }
 
+    pub fn path_ref(&self) -> &Path {
+        &self.path
+    }
+
     pub fn key(&self) -> usize {
         self.key
     }
@@ -469,6 +499,10 @@ impl LibraryItem {
         self.title.clone()
     }
 
+    pub fn title_ref(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+
     pub fn set_artist(&mut self, artist: Option<&str>) -> Self {
         if let Some(artist) = artist {
             self.artist = Some(artist.to_string());
@@ -480,6 +514,10 @@ impl LibraryItem {
         self.artist.clone()
     }
 
+    pub fn artist_ref(&self) -> Option<&str> {
+        self.artist.as_deref()
+    }
+
     pub fn set_album(&mut self, album: Option<&str>) -> Self {
         if let Some(album) = album {
             self.album = Some(album.to_string());
@@ -489,6 +527,10 @@ impl LibraryItem {
 
     pub fn album(&self) -> Option<String> {
         self.album.clone()
+    }
+
+    pub fn album_ref(&self) -> Option<&str> {
+        self.album.as_deref()
     }
 
     pub fn set_year(&mut self, year: Option<i32>) -> Self {
@@ -509,6 +551,10 @@ impl LibraryItem {
 
     pub fn genre(&self) -> Option<String> {
         self.genre.clone()
+    }
+
+    pub fn genre_ref(&self) -> Option<&str> {
+        self.genre.as_deref()
     }
 
     pub fn set_track_number(&mut self, track_number: Option<u32>) -> Self {
@@ -533,14 +579,36 @@ impl LibraryItem {
     }
 
     pub fn set_lyrics(&mut self, lyrics: Option<&str>) -> Self {
-        if let Some(lyrics) = lyrics {
-            self.lyrics = Some(lyrics.to_string());
-        }
+        self.lyrics = lyrics.and_then(|lyrics| {
+            let trimmed = lyrics.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_owned())
+            }
+        });
         self.to_owned()
+    }
+
+    pub fn replace_lyrics(&mut self, lyrics: Option<String>) {
+        self.lyrics = lyrics.and_then(|lyrics| {
+            let trimmed = lyrics.trim();
+            if trimmed.is_empty() {
+                None
+            } else if trimmed.len() == lyrics.len() {
+                Some(lyrics)
+            } else {
+                Some(trimmed.to_owned())
+            }
+        });
     }
 
     pub fn lyrics(&self) -> Option<String> {
         self.lyrics.clone()
+    }
+
+    pub fn has_lyrics(&self) -> bool {
+        self.lyrics.is_some()
     }
 }
 

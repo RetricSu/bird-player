@@ -12,6 +12,12 @@ pub struct PlayerComponent;
 
 const CASSETTE_WIDTH: f32 = 280.0;
 
+struct SelectedTrackSummary {
+    key: usize,
+    title: Option<String>,
+    artist: Option<String>,
+}
+
 // For periodic state saving
 thread_local! {
     static LAST_SAVE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
@@ -21,9 +27,77 @@ impl AppComponent for PlayerComponent {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        // First collect all necessary data outside any closures
+        // Check if runtime is initialized
+        if ctx.runtime.is_none() {
+            ui.centered_and_justified(|ui| {
+                ui.heading("Player not initialized");
+            });
+            return;
+        }
+
+        // Process UI commands first
+        let ui_cmd = {
+            let player = ctx.player_mut_ref();
+            player.ui_rx.try_recv().ok()
+        };
+
+        if let Some(new_seek_cmd) = ui_cmd {
+            match new_seek_cmd {
+                UiCommand::CurrentTimestamp(seek_timestamp) => {
+                    // Check if we need to save
+                    let should_save = LAST_SAVE.with(|last_save| {
+                        let elapsed = last_save.borrow().elapsed().as_secs();
+                        if elapsed > 30 {
+                            *last_save.borrow_mut() = Instant::now();
+                            true
+                        } else {
+                            false
+                        }
+                    });
+
+                    if should_save {
+                        ctx.update_player_persistence();
+                        ctx.save_state();
+                    }
+
+                    let player = ctx.player_mut_ref();
+                    player.set_seek_to_timestamp(seek_timestamp);
+                }
+                UiCommand::TotalTrackDuration(dur) => {
+                    tracing::info!("Received Duration: {}", dur);
+                    let player = ctx.player_mut_ref();
+                    player.set_duration(dur);
+                }
+                UiCommand::AudioFinished => {
+                    tracing::info!("Track finished, getting next...");
+                    // Clone playlist before mutable borrow
+                    let playlist_clone = ctx
+                        .current_playlist_idx
+                        .and_then(|idx| ctx.playlists.get(idx).cloned());
+
+                    if let Some(playlist) = playlist_clone {
+                        let player = ctx.player_mut_ref();
+                        player.next(&playlist);
+                    }
+                    ctx.fetch_lyrics_for_current_track();
+                }
+                UiCommand::PlaybackStateChanged(is_playing) => {
+                    tracing::info!(
+                        "Playback state changed to: {}",
+                        if is_playing { "Playing" } else { "Paused" }
+                    );
+                    let player = ctx.player_mut_ref();
+                    if is_playing {
+                        player.track_state = crate::app::player::TrackState::Playing;
+                    } else {
+                        player.track_state = crate::app::player::TrackState::Paused;
+                    }
+                }
+            }
+        }
+
+        // Then collect all necessary data (不可变借用)
         let (
-            has_player,
             selected_track,
             is_playing,
             playback_mode,
@@ -31,70 +105,22 @@ impl AppComponent for PlayerComponent {
             duration,
             volume,
             current_playlist_name,
-        ) = if let Some(player) = &ctx.player {
-            let selected_track = player.selected_track.clone();
+        ) = {
+            let player = ctx.player_ref();
+            let selected_track = player
+                .selected_track
+                .as_ref()
+                .map(|track| SelectedTrackSummary {
+                    key: track.key(),
+                    title: track.title(),
+                    artist: track.artist(),
+                });
             let is_playing = matches!(player.track_state, crate::app::player::TrackState::Playing);
             let playback_mode = player.playback_mode;
             let seek_to_timestamp = player.seek_to_timestamp;
             let duration = player.duration;
             let volume = player.volume;
 
-            // Process UI commands
-            if let Ok(new_seek_cmd) = player.ui_rx.try_recv() {
-                match new_seek_cmd {
-                    UiCommand::CurrentTimestamp(seek_timestamp) => {
-                        // Save player state every 30 seconds during playback
-                        LAST_SAVE.with(|last_save| {
-                            let elapsed = last_save.borrow().elapsed().as_secs();
-                            if elapsed > 30 {
-                                // Update persistence state
-                                ctx.update_player_persistence();
-                                ctx.save_state();
-                                // Reset timer
-                                *last_save.borrow_mut() = Instant::now();
-                            }
-                        });
-
-                        if let Some(player) = &mut ctx.player {
-                            player.set_seek_to_timestamp(seek_timestamp);
-                        }
-                    }
-                    UiCommand::TotalTrackDuration(dur) => {
-                        tracing::info!("Received Duration: {}", dur);
-                        if let Some(player) = &mut ctx.player {
-                            player.set_duration(dur);
-                        }
-                    }
-                    UiCommand::AudioFinished => {
-                        tracing::info!("Track finished, getting next...");
-                        let mut fetch_lyrics = false;
-                        if let Some(current_playlist_idx) = ctx.current_playlist_idx {
-                            if let Some(player) = &mut ctx.player {
-                                player.next(&ctx.playlists[current_playlist_idx]);
-                                fetch_lyrics = true;
-                            }
-                        }
-                        if fetch_lyrics {
-                            ctx.fetch_lyrics_for_current_track();
-                        }
-                    }
-                    UiCommand::PlaybackStateChanged(is_playing) => {
-                        tracing::info!(
-                            "Playback state changed to: {}",
-                            if is_playing { "Playing" } else { "Paused" }
-                        );
-                        if let Some(player) = &mut ctx.player {
-                            if is_playing {
-                                player.track_state = crate::app::player::TrackState::Playing;
-                            } else {
-                                player.track_state = crate::app::player::TrackState::Paused;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Get current playlist name using map_or for cleaner code
             let current_playlist_name = ctx
                 .playing_playlist_idx
                 .and_then(|idx| ctx.playlists.get(idx))
@@ -102,7 +128,6 @@ impl AppComponent for PlayerComponent {
                 .unwrap_or_default();
 
             (
-                true,
                 selected_track,
                 is_playing,
                 playback_mode,
@@ -111,26 +136,7 @@ impl AppComponent for PlayerComponent {
                 volume,
                 current_playlist_name,
             )
-        } else {
-            (
-                false,
-                None,
-                false,
-                crate::app::player::PlaybackMode::Normal,
-                0,
-                0,
-                1.0,
-                String::new(),
-            )
         };
-
-        // If player is not initialized, just show a message
-        if !has_player {
-            ui.centered_and_justified(|ui| {
-                ui.heading("Player not initialized");
-            });
-            return;
-        }
 
         let has_selected_track = selected_track.is_some();
 
@@ -162,21 +168,15 @@ impl AppComponent for PlayerComponent {
 
                     // Show track info if selected, otherwise show default message
                     if let Some(track) = &selected_track {
+                        let title = track.title.as_deref().unwrap_or("unknown title");
                         ui.add(
-                            eframe::egui::Label::new(format!(
-                                "{}{}",
-                                t("song"),
-                                track.title().unwrap_or("unknown title".to_string())
-                            ))
-                            .wrap_mode(eframe::egui::TextWrapMode::Truncate),
+                            eframe::egui::Label::new(format!("{}{}", t("song"), title))
+                                .wrap_mode(eframe::egui::TextWrapMode::Truncate),
                         )
                         .highlight();
 
-                        ui.label(format!(
-                            "{}{}",
-                            t("artist"),
-                            track.artist().unwrap_or("unknown artist".to_string())
-                        ));
+                        let artist = track.artist.as_deref().unwrap_or("unknown artist");
+                        ui.label(format!("{}{}", t("artist"), artist));
 
                         ui.label(format!("{}{}", t("playlist"), current_playlist_name));
                     } else {
@@ -223,22 +223,19 @@ impl AppComponent for PlayerComponent {
 
                         // Update in real-time while dragging (just the timestamp, not seeking the audio)
                         if time_slider.dragged() && has_selected_track {
-                            if let Some(player) = &mut ctx.player {
-                                player.set_seek_to_timestamp(current_seek);
-                            }
+                            ctx.player_mut_ref().set_seek_to_timestamp(current_seek);
                         }
 
                         // Only perform the actual seek when drag is stopped
                         if time_slider.drag_stopped() && has_selected_track {
-                            if let Some(player) = &mut ctx.player {
-                                // We already updated seek_to_timestamp during dragging,
-                                // now actually seek the audio playback
-                                player.seek_to(current_seek);
+                            let player = ctx.player_mut_ref();
+                            // We already updated seek_to_timestamp during dragging,
+                            // now actually seek the audio playback
+                            player.seek_to(current_seek);
 
-                                // When seeking, make sure the track state is set to Playing
-                                // This ensures the UI buttons match the actual state
-                                player.track_state = crate::app::player::TrackState::Playing;
-                            }
+                            // When seeking, make sure the track state is set to Playing
+                            // This ensures the UI buttons match the actual state
+                            player.track_state = crate::app::player::TrackState::Playing;
                         }
 
                         ui.label(format_time(current_seek));
@@ -286,9 +283,10 @@ impl AppComponent for PlayerComponent {
                                 ui.add_enabled_ui(false, |ui| ui.button("1.0x"));
 
                                 if ui.button(t("playlist_btn")).clicked() {
-                                    ctx.show_library_and_playlist = !ctx.show_library_and_playlist;
+                                    ctx.ui_state.show_library_and_playlist =
+                                        !ctx.ui_state.show_library_and_playlist;
                                     // Adjust window height based on visibility
-                                    let new_height = if ctx.show_library_and_playlist {
+                                    let new_height = if ctx.ui_state.show_library_and_playlist {
                                         ctx.default_window_height as f32
                                     } else {
                                         200.0 // Compact height when library and playlist are hidden
@@ -299,12 +297,13 @@ impl AppComponent for PlayerComponent {
                                 };
 
                                 if ui.button(t("lyrics")).clicked() {
-                                    ctx.show_lyrics_panel = !ctx.show_lyrics_panel;
+                                    ctx.ui_state.show_lyrics_panel =
+                                        !ctx.ui_state.show_lyrics_panel;
                                 };
 
                                 if ui.button(t("mini")).clicked() {
                                     // Hide library and playlist
-                                    ctx.show_library_and_playlist = false;
+                                    ctx.ui_state.show_library_and_playlist = false;
 
                                     // Set minimal window size
                                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(
@@ -326,9 +325,9 @@ impl AppComponent for PlayerComponent {
                                     if let Some(track) = &selected_track {
                                         if let Some(current_playlist_idx) = ctx.current_playlist_idx
                                         {
-                                            // Find the position of the current track in the playlist
-                                            if let Some(current_track_position) =
-                                                ctx.playlists[current_playlist_idx].get_pos(track)
+                                            if let Some(current_track_position) = ctx.playlists
+                                                [current_playlist_idx]
+                                                .get_pos_by_key(track.key)
                                             {
                                                 // Get the next track before removing the current one
                                                 let next_track = if current_track_position
@@ -363,15 +362,12 @@ impl AppComponent for PlayerComponent {
 
                                                 // Play the next track if available
                                                 if let Some(next_track) = next_track {
-                                                    if let Some(player) = &mut ctx.player {
-                                                        player.select_track(Some(next_track));
-                                                        player.play();
-                                                    }
+                                                    let player = ctx.player_mut_ref();
+                                                    player.select_track(Some(next_track));
+                                                    player.play();
                                                 } else {
                                                     // If no tracks left, clear the selected track
-                                                    if let Some(player) = &mut ctx.player {
-                                                        player.select_track(None);
-                                                    }
+                                                    ctx.player_mut_ref().select_track(None);
                                                 }
                                             }
                                         }
@@ -394,51 +390,61 @@ impl AppComponent for PlayerComponent {
                                 );
 
                                 if volume_slider.dragged() {
-                                    if let Some(is_processing_ui_change) =
-                                        &ctx.is_processing_ui_change
-                                    {
-                                        // Only send if the volume is actually changing
-                                        if current_volume != previous_vol {
-                                            if let Some(player) = &mut ctx.player {
-                                                player.set_volume(
-                                                    current_volume,
-                                                    is_processing_ui_change,
-                                                );
-                                            }
-                                        }
+                                    // Only send if the volume is actually changing
+                                    if current_volume != previous_vol {
+                                        let is_processing_ui_change = ctx.is_processing_ui_change();
+                                        ctx.player_mut_ref()
+                                            .set_volume(current_volume, &is_processing_ui_change);
                                     }
                                 }
 
                                 // Handle button clicks if a track is selected
                                 let mut fetch_lyrics = false;
                                 if has_selected_track {
-                                    if let Some(player) = &mut ctx.player {
-                                        if mode_btn.clicked() {
-                                            player.toggle_playback_mode();
-                                        }
+                                    // Check which action to take
+                                    let mut action = None;
 
-                                        if play_pause_btn.clicked() {
-                                            if is_playing {
-                                                player.pause();
-                                            } else {
-                                                player.play();
+                                    if mode_btn.clicked() {
+                                        action = Some("toggle_mode");
+                                    } else if play_pause_btn.clicked() {
+                                        action = Some(if is_playing { "pause" } else { "play" });
+                                    } else if prev_btn.clicked()
+                                        && ctx.playing_playlist_idx.is_some()
+                                    {
+                                        action = Some("previous");
+                                        fetch_lyrics = true;
+                                    } else if next_btn.clicked()
+                                        && ctx.playing_playlist_idx.is_some()
+                                    {
+                                        action = Some("next");
+                                        fetch_lyrics = true;
+                                    }
+
+                                    // Execute the action
+                                    if let Some(action) = action {
+                                        match action {
+                                            "toggle_mode" => {
+                                                ctx.player_mut_ref().toggle_playback_mode();
                                             }
-                                        }
-
-                                        if prev_btn.clicked() && ctx.playing_playlist_idx.is_some()
-                                        {
-                                            player.previous(
-                                                &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
-                                            );
-                                            fetch_lyrics = true;
-                                        }
-
-                                        if next_btn.clicked() && ctx.playing_playlist_idx.is_some()
-                                        {
-                                            player.next(
-                                                &ctx.playlists[ctx.playing_playlist_idx.unwrap()],
-                                            );
-                                            fetch_lyrics = true;
+                                            "pause" => {
+                                                ctx.player_mut_ref().pause();
+                                            }
+                                            "play" => {
+                                                ctx.player_mut_ref().play();
+                                            }
+                                            "previous" => {
+                                                if let Some(idx) = ctx.playing_playlist_idx {
+                                                    let playlist_clone = ctx.playlists[idx].clone();
+                                                    ctx.player_mut_ref().previous(&playlist_clone);
+                                                }
+                                            }
+                                            "next" => {
+                                                if let Some(idx) = ctx.playing_playlist_idx {
+                                                    let playlist_clone = ctx.playlists[idx].clone();
+                                                    ctx.player_mut_ref().next(&playlist_clone);
+                                                }
+                                            }
+                                            _ => {}
                                         }
                                     }
                                 }
