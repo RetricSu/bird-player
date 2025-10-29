@@ -292,8 +292,10 @@ fn update_animation(ctx: &mut App) -> (f32, f32) {
             elapsed
         });
 
-        let is_playing = ctx.player_ref().track_state.to_string() == "Playing";
-        // Slightly slower spin keeps motion smooth when repaint cadence drops.
+        let is_playing = matches!(
+            ctx.player_ref().track_state,
+            crate::app::player::TrackState::Playing
+        ); // Slightly slower spin keeps motion smooth when repaint cadence drops.
         let rotation_speed = if is_playing {
             ROTATION_SPEED_PLAYING
         } else {

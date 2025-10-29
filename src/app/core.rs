@@ -365,22 +365,20 @@ impl App {
         // Get is_processing first before borrowing anything else
         let is_processing = self.is_processing_ui_change();
 
-        // Split borrows: we need mutable access to player (via runtime)
-        // and mutable access to player_state, and immutable access to playlists.
-        // Since all are different fields, we can do this via pointer manipulation.
+        let (playing_playlist_idx, should_fetch_lyrics) = {
+            let Self {
+                runtime,
+                player_state,
+                playlists,
+                ..
+            } = self;
+            let runtime: &mut crate::BirdRuntime =
+                runtime.as_mut().expect("runtime not initialized");
 
-        let runtime_ptr =
-            self.runtime.as_mut().expect("runtime not initialized") as *mut crate::BirdRuntime;
-        let player_state_ptr = &mut self.player_state as *mut PlayerStateManager;
-        let playlists_ref = &self.playlists;
-
-        // SAFETY: We're accessing different fields of self, so there's no aliasing.
-        // runtime.player is separate from player_state and playlists.
-        let (playing_playlist_idx, should_fetch_lyrics) = unsafe {
             PlayerRestoreService::restore_player_state(
-                &mut (*runtime_ptr).player,
-                &mut *player_state_ptr,
-                playlists_ref,
+                &mut runtime.player,
+                player_state,
+                playlists,
                 is_processing,
             )
         };
