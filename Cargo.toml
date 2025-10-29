@@ -9,6 +9,7 @@ edition = "2021"
 name = "Bird Player"
 identifier = "bird.player.app"
 icon = ["assets/icons/icon.icns", "assets/icons/icon.png"]
+resources = ["assets/icons/icon.png"]
 version = "0.1.0"
 copyright = "© 2024 RetricSu"
 category = "Music"

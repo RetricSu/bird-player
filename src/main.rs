@@ -70,9 +70,14 @@ fn main() -> Result<()> {
     let _audio_thread =
         audio::thread::spawn_audio_thread(audio_rx, ui_tx, is_processing_ui_change_thread);
 
-    // Try multiple possible icon paths for both development and bundled app scenarios
-    let icon = get_app_icon().ok_or("Failed to load app icon")?;
-    let native_options = app::viewport::build_viewport_with_icon(icon);
+    // Try to load app icon, but continue without it if not found
+    let icon = get_app_icon();
+    let native_options = if let Some(icon_data) = icon {
+        app::viewport::build_viewport_with_icon(icon_data)
+    } else {
+        tracing::warn!("Starting without app icon");
+        app::viewport::build_viewport_without_icon()
+    };
 
     eframe::run_native(
         "Bird Player",
