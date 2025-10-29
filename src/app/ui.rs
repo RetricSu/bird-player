@@ -29,6 +29,22 @@ impl App {
             self.last_window_title = None;
         }
     }
+
+    fn refresh_lyrics_display(&mut self) {
+        let (lyrics_received, should_show_panel) = self
+            .lyrics_manager
+            .check_pending_lyrics(&mut self.ui_state.lyrics_fetch_state);
+
+        if lyrics_received {
+            self.handle_lyrics_response(should_show_panel);
+        }
+    }
+
+    fn refresh_library_command_processor(&mut self) {
+        if let Ok(lib_cmd) = self.lib_cmd_rx().try_recv() {
+            self.process_library_command(lib_cmd);
+        }
+    }
 }
 
 impl eframe::App for App {
@@ -42,23 +58,10 @@ impl eframe::App for App {
         if self.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-
-        if let Ok(lib_cmd) = self.lib_cmd_rx().try_recv() {
-            self.process_library_command(lib_cmd);
-        }
-
-        // Check for pending lyrics response
-        let (lyrics_received, should_show_panel) = self
-            .lyrics_manager
-            .check_pending_lyrics(&mut self.ui_state.lyrics_fetch_state);
-
-        if lyrics_received {
-            self.handle_lyrics_response(should_show_panel);
-        }
-
+        self.refresh_library_command_processor();
+        self.refresh_lyrics_display();
         self.refresh_window_title(ctx);
 
-        // Add window chrome at the top
         MainShell::show(self, ctx);
 
         // Request repaint during playback for smooth synced lyrics updates
