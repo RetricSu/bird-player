@@ -84,6 +84,9 @@ pub fn init() {
     en.insert("playlist_btn".to_string(), "Playlist".to_string());
     en.insert("lyrics".to_string(), "Lyrics".to_string());
 
+    // Lyrics component
+    en.insert("upload_lyrics".to_string(), "Upload Lyrics".to_string());
+
     // Library component
     en.insert("music_files".to_string(), "Music Library".to_string());
     en.insert("expand_all".to_string(), "Expand all folders".to_string());
@@ -181,6 +184,9 @@ pub fn init() {
     zh.insert("mini".to_string(), "迷你".to_string());
     zh.insert("playlist_btn".to_string(), "列表".to_string());
     zh.insert("lyrics".to_string(), "歌词".to_string());
+
+    // Lyrics component
+    zh.insert("upload_lyrics".to_string(), "上传歌词".to_string());
 
     // Library component
     zh.insert("music_files".to_string(), "音乐库".to_string());

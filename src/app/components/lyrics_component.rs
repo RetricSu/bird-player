@@ -3,7 +3,7 @@ use eframe::egui;
 use super::AppComponent;
 use crate::app::libstate::lyrics_state::LyricsFetchState;
 use crate::app::lyrics::{Lyrics, LyricsService};
-use crate::app::App;
+use crate::app::{t, App};
 
 enum ManualUploadResult {
     Cancelled,
@@ -18,19 +18,8 @@ impl AppComponent for LyricsComponent {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal(|ui| {
-            if ui.button("Upload Lyrics…").clicked() {
-                match Self::handle_manual_upload(ctx) {
-                    ManualUploadResult::Updated => {
-                        ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Loaded;
-                    }
-                    ManualUploadResult::Failed(message) => {
-                        ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Failed(message);
-                    }
-                    ManualUploadResult::Cancelled => {}
-                }
-            }
-
-            ui.add_space(12.0);
+            Self::show_lyrics_type(ui, ctx);
+            Self::show_lyrics_header(ui, ctx);
             Self::show_status(ui, ctx);
         });
 
@@ -44,6 +33,47 @@ impl AppComponent for LyricsComponent {
 }
 
 impl LyricsComponent {
+    fn show_lyrics_header(ui: &mut egui::Ui, ctx: &mut App) {
+        // Show track info
+        if let Some(lyrics) = ctx.lyrics_manager.current_lyrics() {
+            ui.label(format!("{} - {}", &lyrics.track_name, &lyrics.artist_name));
+        }
+
+        if ui.button(t("upload_lyrics")).clicked() {
+            match Self::handle_manual_upload(ctx) {
+                ManualUploadResult::Updated => {
+                    ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Loaded;
+                }
+                ManualUploadResult::Failed(message) => {
+                    ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Failed(message);
+                }
+                ManualUploadResult::Cancelled => {}
+            }
+        }
+    }
+
+    fn show_lyrics_type(ui: &mut egui::Ui, ctx: &App) {
+        if let Some(lyrics) = ctx.lyrics_manager.current_lyrics() {
+            // Show lyrics type indicator
+            let lyrics_type = if !lyrics.lines.is_empty() {
+                "🎤"
+            } else if lyrics.plain_lyrics.is_some() {
+                "📝"
+            } else if lyrics.instrumental {
+                "🎸"
+            } else {
+                "-"
+            };
+            ui.label(
+                egui::RichText::new(lyrics_type)
+                    .color(egui::Color32::from_rgb(100, 150, 255))
+                    .italics(),
+            );
+
+            ui.separator();
+        }
+    }
+
     fn show_status(ui: &mut egui::Ui, ctx: &App) {
         match &ctx.ui_state.lyrics_fetch_state {
             LyricsFetchState::Loading => {
@@ -62,31 +92,6 @@ impl LyricsComponent {
 
     fn show_body(ctx: &App, ui: &mut egui::Ui) {
         if let Some(lyrics) = ctx.lyrics_manager.current_lyrics() {
-            // Show track info
-            ui.label(format!("Lyrics：{}", &lyrics.track_name));
-            ui.label(format!("Artist：{}", &lyrics.artist_name));
-            if let Some(album) = &lyrics.album_name {
-                ui.label(format!("From：{}", album));
-            }
-
-            // Show lyrics type indicator
-            let lyrics_type = if !lyrics.lines.is_empty() {
-                "Synced Lyrics"
-            } else if lyrics.plain_lyrics.is_some() {
-                "Plain Text Lyrics"
-            } else if lyrics.instrumental {
-                "Instrumental"
-            } else {
-                "No Lyrics"
-            };
-            ui.label(
-                egui::RichText::new(lyrics_type)
-                    .color(egui::Color32::from_rgb(100, 150, 255))
-                    .italics(),
-            );
-
-            ui.separator();
-
             // Show lyrics
             if lyrics.instrumental {
                 ui.add(egui::Label::new(
