@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use walkdir::WalkDir;
 
-use crate::app::{
+use crate::{
     library::{
         LibraryItem, LibraryItemContainer, LibraryPath, LibraryPathId, LibraryPathStatus,
         LibraryView, Picture, ViewType,

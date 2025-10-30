@@ -1,10 +1,10 @@
 use std::sync::mpsc::Receiver;
 
-use crate::app::{
+use crate::{
     library::LibraryItem,
     lyrics::{Lyrics, LyricsService},
     player::Player,
-    state::ui_state::LyricsFetchState,
+    state::lyrics_state::LyricsFetchState,
 };
 
 /// Service for managing lyrics fetching and display

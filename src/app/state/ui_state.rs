@@ -1,5 +1,5 @@
+use crate::app::libstate::lyrics_state::LyricsFetchState;
 use serde::{Deserialize, Serialize};
-
 /// UI-specific state that doesn't need to be persisted
 #[derive(Debug, Clone)]
 pub struct UiState {
@@ -8,12 +8,6 @@ pub struct UiState {
 
     /// Whether the library folders section is expanded
     pub library_folders_expanded: bool,
-
-    /// Whether the library configuration dialog is open
-    pub is_library_cfg_open: bool,
-
-    /// Set of selected library path IDs in the config dialog
-    pub lib_config_selections: std::collections::HashSet<crate::app::library::LibraryPathId>,
 
     /// Whether the about dialog is shown
     pub show_about_dialog: bool,
@@ -40,27 +34,11 @@ pub struct UiState {
     pub lyrics_fetch_state: LyricsFetchState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LyricsFetchState {
-    Idle,
-    Loading,
-    Loaded,
-    Failed(String),
-}
-
-impl Default for LyricsFetchState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
-
 impl Default for UiState {
     fn default() -> Self {
         Self {
             show_library_and_playlist: true,
             library_folders_expanded: false,
-            is_library_cfg_open: false,
-            lib_config_selections: Default::default(),
             show_about_dialog: false,
             playlist_idx_to_remove: None,
             playlist_being_renamed: None,

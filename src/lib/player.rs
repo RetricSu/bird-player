@@ -1,6 +1,6 @@
-use crate::app::library::LibraryItem;
-use crate::app::playlist::Playlist;
-use crate::{AudioCommand, UiCommand};
+use crate::library::LibraryItem;
+use crate::playlist::Playlist;
+use crate::{AudioCommand, AudioEvent};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -19,7 +19,7 @@ pub struct Player {
     pub track_state: TrackState,
     pub selected_track: Option<LibraryItem>,
     pub audio_tx: Sender<AudioCommand>,
-    pub ui_rx: Receiver<UiCommand>,
+    pub ui_rx: Receiver<AudioEvent>,
     pub volume: f32,
     pub seek_to_timestamp: u64,
     pub duration: u64,
@@ -30,7 +30,7 @@ pub struct Player {
 impl Player {
     pub fn new(
         audio_cmd_tx: Sender<AudioCommand>,
-        ui_cmd_rx: Receiver<UiCommand>,
+        ui_cmd_rx: Receiver<AudioEvent>,
         cursor: Arc<AtomicU32>,
     ) -> Self {
         Self {

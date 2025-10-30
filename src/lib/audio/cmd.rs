@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::app::AudioCommand;
+use crate::AudioCommand;
 
 use super::state_machine::*;
 

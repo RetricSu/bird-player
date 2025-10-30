@@ -6,7 +6,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 
-use crate::app::{AudioCommand, UiCommand};
+use crate::{AudioCommand, AudioEvent};
 
 use super::state_machine::*;
 
@@ -21,7 +21,7 @@ use super::state_machine::*;
 /// A `JoinHandle` for the spawned audio thread
 pub fn spawn_audio_thread(
     audio_rx: Receiver<AudioCommand>,
-    ui_tx: Sender<UiCommand>,
+    ui_tx: Sender<AudioEvent>,
     is_processing_ui_change: Arc<AtomicBool>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
@@ -35,7 +35,7 @@ pub fn spawn_audio_thread(
 /// It processes incoming commands, updates the current state, and manages state transitions.
 fn run_audio_loop(
     audio_rx: Receiver<AudioCommand>,
-    ui_tx: Sender<UiCommand>,
+    ui_tx: Sender<AudioEvent>,
     is_processing_ui_change: Arc<AtomicBool>,
 ) {
     // 初始化音频上下文

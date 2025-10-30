@@ -12,13 +12,6 @@ pub enum Language {
 }
 
 impl Language {
-    pub fn code(&self) -> &'static str {
-        match self {
-            Language::English => "en",
-            Language::Chinese => "zh",
-        }
-    }
-
     pub fn name(&self) -> &'static str {
         match self {
             Language::English => "En",
@@ -300,11 +293,6 @@ fn init_about_translations(en: &mut HashMap<String, String>, zh: &mut HashMap<St
 pub fn set_language(lang: Language) {
     let mut current = CURRENT_LANGUAGE.write().unwrap();
     *current = lang;
-}
-
-// Get the current language
-pub fn get_language() -> Language {
-    *CURRENT_LANGUAGE.read().unwrap()
 }
 
 // Translate a key to the current language

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::app::player::PlaybackMode;
+use crate::player::PlaybackMode;
 
 /// Player state manager - handles player state persistence and restoration
 #[derive(Default)]
@@ -65,14 +65,14 @@ impl PlayerStateManager {
     }
 
     /// Update state from current player
-    pub fn update_from_player(&mut self, player: &crate::app::player::Player) {
+    pub fn update_from_player(&mut self, player: &crate::player::Player) {
         self.last_track_path = player.selected_track.as_ref().map(|track| track.path());
         self.last_position = Some(player.seek_to_timestamp);
         self.last_playback_mode = Some(player.playback_mode);
         self.last_volume = Some(player.volume);
         self.was_playing = Some(matches!(
             player.track_state,
-            crate::app::player::TrackState::Playing
+            crate::player::TrackState::Playing
         ));
     }
 }

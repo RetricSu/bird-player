@@ -10,8 +10,8 @@ use symphonia::core::formats::FormatReader;
 use super::loader;
 use super::utils;
 
-use crate::app::UiCommand;
 use crate::audio::output::AudioOutput;
+use crate::AudioEvent;
 
 /// 状态转换结果
 pub enum Transition {
@@ -27,7 +27,7 @@ pub struct AudioContext {
     pub decoder: Option<Box<dyn Decoder>>,
     pub volume: f32,
     pub current_track_path: Option<PathBuf>,
-    pub ui_tx: Sender<UiCommand>,
+    pub ui_tx: Sender<AudioEvent>,
     pub timer: std::time::Instant,
     pub last_ts: u64,
 }
@@ -113,7 +113,7 @@ impl State for StoppedState {
             loader::load_file(current_track_path, &mut ctx.engine, &mut ctx.decoder, 0);
 
             ctx.ui_tx
-                .send(UiCommand::CurrentTimestamp(0))
+                .send(AudioEvent::CurrentTimestamp(0))
                 .expect("Failed to send timestamp to ui thread");
 
             return Transition::To(Box::new(UnstartedState));
@@ -155,7 +155,7 @@ impl State for PlayingState {
                         "AudioThread Playing - No reader available, switching to stopped"
                     );
                     ctx.ui_tx
-                        .send(UiCommand::AudioFinished)
+                        .send(AudioEvent::AudioFinished)
                         .expect("Failed to send audio finished to ui thread");
                     return Transition::To(Box::new(StoppedState));
                 }
@@ -168,7 +168,7 @@ impl State for PlayingState {
                         "AudioThread Playing - No track info available, switching to stopped"
                     );
                     ctx.ui_tx
-                        .send(UiCommand::AudioFinished)
+                        .send(AudioEvent::AudioFinished)
                         .expect("Failed to send audio finished to ui thread");
                     return Transition::To(Box::new(StoppedState));
                 }
@@ -180,7 +180,7 @@ impl State for PlayingState {
                 Err(_err) => {
                     tracing::warn!("couldn't decode next packet");
                     ctx.ui_tx
-                        .send(UiCommand::AudioFinished)
+                        .send(AudioEvent::AudioFinished)
                         .expect("Failed to send audio finished to ui thread");
                     return Transition::To(Box::new(StoppedState));
                 }
@@ -204,7 +204,7 @@ impl State for PlayingState {
                 };
 
                 ctx.ui_tx
-                    .send(UiCommand::CurrentTimestamp(timestamp_ms))
+                    .send(AudioEvent::CurrentTimestamp(timestamp_ms))
                     .expect("Failed to send timestamp to ui thread");
 
                 ctx.timer = std::time::Instant::now();
@@ -289,14 +289,14 @@ impl State for LoadFileState {
         // 检查加载是否成功
         if ctx.engine.reader.is_some() && ctx.engine.track_info.is_some() {
             ctx.ui_tx
-                .send(UiCommand::TotalTrackDuration(ctx.engine.duration))
+                .send(AudioEvent::TotalTrackDuration(ctx.engine.duration))
                 .expect("Failed to send track duration to ui thread");
 
             Transition::To(Box::new(PlayingState))
         } else {
             tracing::warn!("Failed to load audio file: {:?}", self.path);
             ctx.ui_tx
-                .send(UiCommand::AudioFinished)
+                .send(AudioEvent::AudioFinished)
                 .expect("Failed to send audio finished to ui thread");
             ctx.current_track_path = None;
             Transition::To(Box::new(StoppedState))
@@ -343,14 +343,14 @@ impl State for SeekToState {
             // 检查加载是否成功
             if ctx.engine.reader.is_some() && ctx.engine.track_info.is_some() {
                 ctx.ui_tx
-                    .send(UiCommand::PlaybackStateChanged(true))
+                    .send(AudioEvent::PlaybackStateChanged(true))
                     .expect("Failed to send playback state to ui thread");
 
                 return Transition::To(Box::new(PlayingState));
             } else {
                 tracing::warn!("Failed to reload audio file during seek");
                 ctx.ui_tx
-                    .send(UiCommand::AudioFinished)
+                    .send(AudioEvent::AudioFinished)
                     .expect("Failed to send audio finished to ui thread");
                 return Transition::To(Box::new(StoppedState));
             }
@@ -367,6 +367,12 @@ impl State for SeekToState {
 /// 状态机 - 管理状态转换
 pub struct StateMachine {
     current_state: Box<dyn State>,
+}
+
+impl Default for StateMachine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StateMachine {

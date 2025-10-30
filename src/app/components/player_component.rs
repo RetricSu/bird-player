@@ -5,8 +5,8 @@ use super::cassette_component::CassetteComponent;
 use super::AppComponent;
 use crate::app::style::{ButtonExt, SliderExt};
 use crate::app::t;
-use crate::egui::style::HandleShape;
-use crate::{app::App, UiCommand};
+use crate::{app::App, app::AudioEvent};
+use eframe::egui::style::HandleShape;
 
 pub struct PlayerComponent;
 
@@ -43,7 +43,7 @@ impl AppComponent for PlayerComponent {
 
         if let Some(new_seek_cmd) = ui_cmd {
             match new_seek_cmd {
-                UiCommand::CurrentTimestamp(seek_timestamp) => {
+                AudioEvent::CurrentTimestamp(seek_timestamp) => {
                     // Check if we need to save
                     let should_save = LAST_SAVE.with(|last_save| {
                         let elapsed = last_save.borrow().elapsed().as_secs();
@@ -63,12 +63,12 @@ impl AppComponent for PlayerComponent {
                     let player = ctx.player_mut_ref();
                     player.set_seek_to_timestamp(seek_timestamp);
                 }
-                UiCommand::TotalTrackDuration(dur) => {
+                AudioEvent::TotalTrackDuration(dur) => {
                     tracing::info!("Received Duration: {}", dur);
                     let player = ctx.player_mut_ref();
                     player.set_duration(dur);
                 }
-                UiCommand::AudioFinished => {
+                AudioEvent::AudioFinished => {
                     tracing::info!("Track finished, getting next...");
                     // Clone playlist before mutable borrow
                     let playlist_clone = ctx
@@ -81,7 +81,7 @@ impl AppComponent for PlayerComponent {
                     }
                     ctx.fetch_lyrics_for_current_track();
                 }
-                UiCommand::PlaybackStateChanged(is_playing) => {
+                AudioEvent::PlaybackStateChanged(is_playing) => {
                     tracing::info!(
                         "Playback state changed to: {}",
                         if is_playing { "Playing" } else { "Paused" }

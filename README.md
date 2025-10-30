@@ -30,9 +30,9 @@ A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, fe
 
 ### Prerequisites
 
-- Rust 1.70 or higher
+- Rust 1.85 or higher
 - Cargo package manager
-- Audio system libraries (see [Audio Backends](#audio-backends) below)
+- Audio system libraries (see [Audio Backends](/docs/AUDIO_BACKENDS.md) below)
 
 ### Building from Source
 
@@ -53,16 +53,6 @@ cargo build --release
 
 The compiled binary will be available in `target/release/bird-player`.
 
-## Audio Backends
-
-Bird Player supports different audio backends depending on your platform:
-
-- **Linux:** PulseAudio (recommended) or CPAL with ALSA
-- **macOS:** CoreAudio via CPAL
-- **Windows:** Windows Audio Session API via CPAL
-
-For detailed dependency requirements and troubleshooting, see [AUDIO_BACKENDS.md](AUDIO_BACKENDS.md).
-
 ## Usage
 
 1. Launch Bird Player:
@@ -73,28 +63,6 @@ cargo run --release
 2. Use the file dialog to add your music directory
 3. Browse and play your music collection
 4. Enjoy your music with high-quality audio playback
-
-## Configuration
-
-Bird Player automatically saves your configuration and library state between sessions. The configuration file is stored in the standard system configuration directory using YAML format.
-
-## Development
-
-### Project Structure
-
-- `src/main.rs`: Application entry point and main logic
-- `src/output.rs`: Audio output handling
-- `src/resampler.rs`: Audio resampling functionality
-- `src/app/`: UI components and application state management
-
-### Dependencies
-
-- `eframe`: GUI framework
-- `cpal`: Audio playback
-- `symphonia`: Audio decoding
-- `id3`: Music metadata handling
-- `serde`: Configuration serialization
-- Other utilities for file management and audio processing
 
 ## License
 

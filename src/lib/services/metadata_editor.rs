@@ -1,7 +1,7 @@
 use id3::{Tag, TagLike, Version};
 use std::path::PathBuf;
 
-use crate::app::library::LibraryItem;
+use crate::library::LibraryItem;
 
 /// Service for editing audio file metadata
 pub struct MetadataEditor;

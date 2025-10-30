@@ -1,29 +1,44 @@
+pub mod bootstrap;
 mod components;
 pub mod constants;
 mod core;
+pub mod db;
 mod error;
 pub mod font;
 pub mod i18n;
 pub mod icon;
-pub mod library;
-pub mod lyrics;
-mod messaging;
-pub mod player;
-mod playlist;
-pub mod services;
+pub mod runtime;
 pub mod state;
 mod style;
 mod ui;
 mod version;
 pub mod viewport;
 
+pub mod library {
+    pub use bird_player::library::*;
+}
+pub mod messaging {
+    pub use bird_player::messaging::*;
+}
+pub mod playlist {
+    pub use bird_player::playlist::*;
+}
+pub mod lyrics {
+    pub use bird_player::lyrics::*;
+}
+pub mod player {
+    pub use bird_player::player::*;
+}
+pub mod services {
+    pub use bird_player::services::*;
+}
+pub mod libstate {
+    pub use bird_player::state::*;
+}
+
 pub use core::{App, LibraryItem, LibraryPathId, Playlist};
-pub use error::AppLoadError;
 pub use library::LibraryCommand;
-pub use messaging::{AudioCommand, UiCommand};
+pub use messaging::AudioEvent;
 
 // Re-export the i18n functions for convenience
-pub use i18n::{get_language, set_language, t, tf, Language};
-
-// Re-export commonly used state types
-pub use state::{ui_state::LyricsFetchState, AppState, PlayerStateManager, StatePersistence};
+pub use i18n::{t, tf, Language};

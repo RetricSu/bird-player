@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
-use super::player_state::PlayerSettings;
 use super::ui_state::UiSettings;
 use crate::app::i18n::Language;
+use crate::app::libstate::player_state::PlayerSettings;
 
 /// Persistable application settings
 /// These are saved to confy and restored on app startup

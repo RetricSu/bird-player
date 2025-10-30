@@ -1,9 +1,8 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use crate::app::{
-    library::LibraryItem, player::Player, playlist::Playlist, state::PlayerStateManager,
-};
+use crate::state::player_state::PlayerStateManager;
+use crate::{library::LibraryItem, player::Player, playlist::Playlist};
 
 /// Service for restoring player state on app startup
 pub struct PlayerRestoreService;

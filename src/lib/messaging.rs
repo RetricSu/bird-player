@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-/// Commands sent from the UI layer to the audio engine.
+/// Commands sent from the consumer layer to the audio engine.
 #[derive(Debug, Clone)]
 pub enum AudioCommand {
     Stop,
@@ -12,9 +12,9 @@ pub enum AudioCommand {
     SetVolume(f32),
 }
 
-/// Notifications emitted by the audio backend toward the UI.
+/// Notifications emitted by the audio backend toward the consumer.
 #[derive(Debug, Clone)]
-pub enum UiCommand {
+pub enum AudioEvent {
     AudioFinished,
     TotalTrackDuration(u64),
     CurrentTimestamp(u64),

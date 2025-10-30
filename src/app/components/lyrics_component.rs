@@ -1,8 +1,9 @@
 use eframe::egui;
 
 use super::AppComponent;
+use crate::app::libstate::lyrics_state::LyricsFetchState;
 use crate::app::lyrics::{Lyrics, LyricsService};
-use crate::app::{App, LyricsFetchState};
+use crate::app::App;
 
 enum ManualUploadResult {
     Cancelled,

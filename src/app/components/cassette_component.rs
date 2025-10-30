@@ -1,8 +1,8 @@
 use super::AppComponent;
 use crate::app::App;
-use crate::egui::epaint::*;
-use crate::egui::{vec2, ColorImage, Shape, TextureHandle};
 use ::image::io::Reader as ImageReader;
+use eframe::egui::epaint::*;
+use eframe::egui::{vec2, ColorImage, Shape, TextureHandle};
 use eframe::egui::{Rect, Sense};
 use log::{error, info, warn};
 use std::collections::HashMap;

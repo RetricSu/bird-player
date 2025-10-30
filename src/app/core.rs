@@ -8,13 +8,17 @@ use serde::{Deserialize, Serialize};
 use super::error::AppLoadError;
 use super::i18n;
 use super::library::{Library, LibraryCommand, LibraryPath};
-use super::player::Player;
-use super::services::{LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService};
-use super::state::{persistence::AppSettings, ui_state::LyricsFetchState, ui_state::UiState};
-use super::state::{PlayerStateManager, StatePersistence};
-
 pub use super::library::{LibraryItem, LibraryPathId};
+use super::libstate::lyrics_state::LyricsFetchState;
+use super::libstate::player_state::PlayerStateManager;
+use super::player::Player;
 pub use super::playlist::Playlist;
+use super::services::{LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService};
+use super::state::StatePersistence;
+use super::state::{persistence::AppSettings, ui_state::UiState};
+use crate::app::bootstrap;
+use crate::app::db;
+use crate::app::runtime;
 
 /// Main application struct
 ///
@@ -34,10 +38,10 @@ pub struct App {
 
     // Runtime state (not serialized)
     #[serde(skip_serializing, skip_deserializing)]
-    pub boot_cfg: Option<crate::BirdBootCfg>,
+    pub boot_cfg: Option<bootstrap::BirdBootCfg>,
 
     #[serde(skip_serializing, skip_deserializing)]
-    pub runtime: Option<crate::BirdRuntime>,
+    pub runtime: Option<runtime::BirdRuntime>,
 
     #[serde(skip_serializing, skip_deserializing)]
     pub player_state: PlayerStateManager,
@@ -81,7 +85,7 @@ impl Default for App {
 
 impl App {
     // 便捷访问器 - boot_cfg
-    pub fn db(&self) -> &Arc<crate::db::Database> {
+    pub fn db(&self) -> &Arc<db::Database> {
         &self.boot_cfg.as_ref().expect("boot_cfg not initialized").db
     }
 
@@ -135,105 +139,23 @@ impl App {
         i18n::init();
 
         // Load settings from confy
-        if let Ok(settings) = StatePersistence::load_settings() {
-            // Apply settings
-            app.current_language = settings.current_language;
-            app.player_state.apply_settings(settings.player);
-            app.ui_state.apply_settings(settings.ui);
-        }
+        StatePersistence::load_settings()
+            .map(|settings| {
+                app.current_language = settings.current_language;
+                app.player_state.apply_settings(settings.player);
+                app.ui_state.apply_settings(settings.ui);
+            })
+            .unwrap_or_else(|err| {
+                tracing::warn!(
+                    error = %AppLoadError::MissingAppState,
+                    "Falling back to default settings: {err}"
+                );
+            });
 
         // Set the language from the loaded config
         i18n::set_language(app.current_language);
 
         Ok(app)
-    }
-
-    pub fn load() -> Result<Self, AppLoadError> {
-        // Load basic app state first
-        let mut app = Self::load_basic()?;
-
-        // Now load the heavy data (library and playlists) if we have boot_cfg
-        let db_connection = app.db().connection();
-        // Try to load library from database
-        match Library::load_from_db(&db_connection) {
-            Ok(library) => {
-                app.library = library;
-                tracing::info!("Successfully loaded library from database");
-            }
-            Err(e) => {
-                tracing::error!("Failed to load library from database: {}", e);
-                // Keep the default empty library
-            }
-        }
-
-        // Try to load playlists from database
-        match Playlist::load_all_from_db(&db_connection) {
-            Ok(playlists) => {
-                if !playlists.is_empty() {
-                    app.playlists = playlists;
-
-                    // If there was a last played track, try to find its playlist
-                    if let Some(last_track_path) = &app.player_state.last_track_path {
-                        for (idx, playlist) in app.playlists.iter().enumerate() {
-                            if playlist
-                                .tracks
-                                .iter()
-                                .any(|track| track.path() == *last_track_path)
-                            {
-                                app.current_playlist_idx = Some(idx);
-                                app.playing_playlist_idx = Some(idx);
-                                tracing::info!(
-                                    "Found last played track in playlist '{}', selecting it",
-                                    playlist.get_name().unwrap_or_default()
-                                );
-                                break;
-                            }
-                        }
-                    }
-
-                    // If no playlist was selected (no last track or track not found), select first playlist
-                    if app.current_playlist_idx.is_none() {
-                        app.current_playlist_idx = Some(0);
-                        tracing::info!("No last played track found, selecting first playlist");
-                    }
-                } else {
-                    // Only create a default playlist if no playlists exist in the database
-                    let mut default_playlist = Playlist::new();
-                    default_playlist.set_name("Default Playlist".to_string());
-                    app.playlists = vec![default_playlist];
-                    app.current_playlist_idx = Some(0);
-                    tracing::info!("No playlists found in database, created default playlist");
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to load playlists from database: {}", e);
-                // Keep the default playlist
-            }
-        }
-
-        Ok(app)
-    }
-
-    pub fn start_async_loading(&mut self) {
-        if self.heavy_data_loaded {
-            return;
-        }
-
-        tracing::info!("Starting async heavy data loading...");
-
-        // Clone the database connection for the background thread
-        let db_connection = self.db().clone();
-
-        // Start loading in a background thread
-        std::thread::spawn(move || {
-            // Load library
-            let _library_result = Library::load_from_db(&db_connection.connection());
-
-            // Load playlists
-            let _playlists_result = Playlist::load_all_from_db(&db_connection.connection());
-
-            tracing::info!("Async loading completed");
-        });
     }
 
     pub fn load_heavy_data(&mut self) {
@@ -372,7 +294,7 @@ impl App {
                 playlists,
                 ..
             } = self;
-            let runtime: &mut crate::BirdRuntime =
+            let runtime: &mut runtime::BirdRuntime =
                 runtime.as_mut().expect("runtime not initialized");
 
             PlayerRestoreService::restore_player_state(
@@ -390,10 +312,6 @@ impl App {
         if should_fetch_lyrics {
             self.ui_state.should_fetch_lyrics_on_init = true;
         }
-    }
-
-    pub fn quit(&mut self) {
-        self.quit = true;
     }
 
     // Spawns a background thread and imports files from a library path
@@ -526,31 +444,6 @@ impl App {
 
     pub fn get_language(&self) -> i18n::Language {
         self.current_language
-    }
-
-    pub fn cleanup_duplicate_pictures(&self) {
-        let db = self.db();
-        let conn = db.connection();
-        let conn_guard = conn.lock().unwrap();
-
-        tracing::info!("Cleaning up duplicate pictures in database...");
-
-        // Delete all duplicate pictures, keeping only the first one for each library_item_id
-        let result = conn_guard.execute(
-            "DELETE FROM pictures WHERE id NOT IN (
-                SELECT MIN(id) FROM pictures GROUP BY library_item_id, mime_type, picture_type, description, file_path
-            )",
-            [],
-        );
-
-        match result {
-            Ok(rows_deleted) => {
-                tracing::info!("Cleaned up {} duplicate picture records", rows_deleted);
-            }
-            Err(e) => {
-                tracing::error!("Failed to clean up duplicate pictures: {}", e);
-            }
-        }
     }
 
     /// Process a freshly received lyrics response.

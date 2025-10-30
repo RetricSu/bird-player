@@ -1,5 +1,5 @@
-use crate::app::LibraryItem;
 use crate::AudioCommand;
+use crate::LibraryItem;
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -276,7 +276,7 @@ impl Playlist {
                 let library_id_raw: i64 = row.get(1)?;
                 let path: String = row.get(2)?;
 
-                let library_id = crate::app::library::LibraryPathId::new(library_id_raw as usize);
+                let library_id = crate::library::LibraryPathId::new(library_id_raw as usize);
                 let mut item = LibraryItem::new(std::path::PathBuf::from(path), library_id);
 
                 // Set metadata fields
@@ -305,7 +305,7 @@ impl Playlist {
                     let description: String = row.get(2)?;
                     let file_path: String = row.get(3)?;
 
-                    Ok(crate::app::library::Picture::new(
+                    Ok(crate::library::Picture::new(
                         mime_type,
                         picture_type,
                         description,
@@ -381,7 +381,7 @@ impl Playlist {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::library::LibraryPathId;
+    use crate::library::LibraryPathId;
 
     use super::*;
     use std::path::PathBuf;
