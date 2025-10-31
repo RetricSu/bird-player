@@ -18,15 +18,15 @@ impl App {
 
             let new_title = format!("{} - {} [ Music Player ]", artist, title);
 
-            if self.last_window_title.as_deref() != Some(&new_title) {
+            if self.ui_state.last_window_title.as_deref() != Some(&new_title) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(new_title.clone()));
-                self.last_window_title = Some(new_title);
+                self.ui_state.last_window_title = Some(new_title);
             }
-        } else if self.last_window_title.is_some() {
+        } else if self.ui_state.last_window_title.is_some() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(
                 DEFAULT_WINDOW_TITLE.to_string(),
             ));
-            self.last_window_title = None;
+            self.ui_state.last_window_title = None;
         }
     }
 

@@ -32,6 +32,9 @@ pub struct UiState {
 
     /// Current lyrics fetch state
     pub lyrics_fetch_state: LyricsFetchState,
+
+    /// Last window title to avoid redundant updates
+    pub last_window_title: Option<String>,
 }
 
 impl Default for UiState {
@@ -47,6 +50,7 @@ impl Default for UiState {
             show_lyrics_panel: false,
             should_fetch_lyrics_on_init: false,
             lyrics_fetch_state: LyricsFetchState::Idle,
+            last_window_title: None,
         }
     }
 }
