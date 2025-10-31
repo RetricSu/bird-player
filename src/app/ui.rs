@@ -31,9 +31,8 @@ impl App {
     }
 
     fn refresh_lyrics_display(&mut self) {
-        let (lyrics_received, should_show_panel) = self
-            .lyrics_manager
-            .check_pending_lyrics(&mut self.ui_state.lyrics_fetch_state);
+        let (lyrics_received, should_show_panel) =
+            self.lyrics_service.check_pending_lyrics(&mut self.ui_state);
 
         if lyrics_received {
             self.handle_lyrics_response(should_show_panel);

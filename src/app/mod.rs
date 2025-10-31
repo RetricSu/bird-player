@@ -29,7 +29,8 @@ pub mod lyrics {
 pub mod player {
     pub use bird_player::player::*;
 }
-pub mod services {
+pub mod services;
+pub mod lib_services {
     pub use bird_player::services::*;
 }
 pub mod libstate {

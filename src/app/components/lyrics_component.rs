@@ -35,7 +35,7 @@ impl AppComponent for LyricsComponent {
 impl LyricsComponent {
     fn show_lyrics_header(ui: &mut egui::Ui, ctx: &mut App) {
         // Show track info
-        if let Some(lyrics) = ctx.lyrics_manager.current_lyrics() {
+        if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
             ui.label(format!("{} - {}", &lyrics.track_name, &lyrics.artist_name));
         }
 
@@ -53,7 +53,7 @@ impl LyricsComponent {
     }
 
     fn show_lyrics_type(ui: &mut egui::Ui, ctx: &App) {
-        if let Some(lyrics) = ctx.lyrics_manager.current_lyrics() {
+        if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
             // Show lyrics type indicator
             let lyrics_type = if !lyrics.lines.is_empty() {
                 "🎤"
@@ -91,7 +91,7 @@ impl LyricsComponent {
     }
 
     fn show_body(ctx: &App, ui: &mut egui::Ui) {
-        if let Some(lyrics) = ctx.lyrics_manager.current_lyrics() {
+        if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
             // Show lyrics
             if lyrics.instrumental {
                 ui.add(egui::Label::new(
@@ -234,7 +234,7 @@ impl LyricsComponent {
             manual_lyrics.plain_lyrics = Some(content);
         }
 
-        ctx.lyrics_manager
+        ctx.lyrics_manager_mut()
             .set_current_lyrics(Some(manual_lyrics.clone()));
         ctx.ui_state.show_lyrics_panel = true;
 

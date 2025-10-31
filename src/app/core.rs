@@ -7,18 +7,21 @@ use serde::{Deserialize, Serialize};
 
 use super::error::AppLoadError;
 use super::i18n;
+use super::lib_services::{
+    LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService,
+};
 use super::library::{Library, LibraryCommand, LibraryPath};
 pub use super::library::{LibraryItem, LibraryPathId};
 use super::libstate::lyrics_state::LyricsFetchState;
 use super::libstate::player_state::PlayerStateManager;
 use super::player::{Player, TrackState};
 pub use super::playlist::Playlist;
-use super::services::{LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService};
 use super::state::StatePersistence;
 use super::state::{persistence::AppConfig, ui_state::UiState};
 use crate::app::bootstrap;
 use crate::app::db;
 use crate::app::runtime;
+use crate::app::services::LyricsService;
 
 /// Main application struct
 ///
@@ -45,7 +48,7 @@ pub struct App {
     pub ui_state: UiState,
 
     #[serde(skip_serializing, skip_deserializing)]
-    pub lyrics_manager: LyricsManager,
+    pub lyrics_service: LyricsService,
 
     #[serde(skip_serializing, skip_deserializing)]
     pub heavy_data_loaded: bool,
@@ -64,7 +67,7 @@ impl Default for App {
             boot_cfg: None,
             runtime: None,
             ui_state: UiState::default(),
-            lyrics_manager: LyricsManager::new(),
+            lyrics_service: LyricsService::new(),
             heavy_data_loaded: false,
             quit: false,
         }
@@ -127,6 +130,15 @@ impl App {
 
     pub fn player_state_mut(&mut self) -> &mut PlayerStateManager {
         &mut self.config.player
+    }
+
+    /// Access to lyrics manager for UI components
+    pub fn lyrics_manager(&self) -> &LyricsManager {
+        self.lyrics_service.manager()
+    }
+
+    pub fn lyrics_manager_mut(&mut self) -> &mut LyricsManager {
+        self.lyrics_service.manager_mut()
     }
 
     pub fn load_basic() -> Result<Self, AppLoadError> {
@@ -328,75 +340,17 @@ impl App {
     }
 
     pub fn update_track_lyrics(&mut self, track_key: usize, lyrics: Option<&str>) {
-        let lyrics_owned = self.library.update_item_lyrics(track_key, lyrics);
+        let db_conn = self.db().connection();
+        let player = self.runtime.as_mut().map(|rt| &mut rt.player);
 
-        for playlist in &mut self.playlists {
-            for item in playlist.tracks.iter_mut() {
-                if item.key() == track_key {
-                    item.replace_lyrics(lyrics_owned.clone());
-                }
-            }
-
-            if let Some(selected) = playlist.selected.as_mut() {
-                if selected.key() == track_key {
-                    selected.replace_lyrics(lyrics_owned.clone());
-                }
-            }
-        }
-
-        if self.runtime.is_some() {
-            let player = self.player_mut_ref();
-            if let Some(selected_track) = player.selected_track.as_mut() {
-                if selected_track.key() == track_key {
-                    selected_track.replace_lyrics(lyrics_owned.clone());
-
-                    if lyrics_owned.is_none() {
-                        self.lyrics_manager.set_current_lyrics(None);
-                    }
-                }
-            }
-        }
-
-        let db = self.db();
-        let conn_arc = db.connection();
-        let lyrics_param = lyrics_owned.as_deref();
-
-        let update_result = {
-            match conn_arc.lock() {
-                Ok(conn_guard) => conn_guard.execute(
-                    "UPDATE library_items SET lyrics = ?1 WHERE key = ?2",
-                    rusqlite::params![lyrics_param, track_key.to_string()],
-                ),
-                Err(e) => {
-                    tracing::error!(
-                        "Failed to acquire database lock for lyrics update on track {}: {}",
-                        track_key,
-                        e
-                    );
-                    return;
-                }
-            }
-        };
-
-        match update_result {
-            Ok(0) => {
-                if let Err(e) = self.library.save_to_db(&conn_arc) {
-                    tracing::error!(
-                        "Failed to persist lyrics update for track {}: {}",
-                        track_key,
-                        e
-                    );
-                }
-            }
-            Ok(_) => {}
-            Err(e) => {
-                tracing::error!(
-                    "Failed to update lyrics in database for track {}: {}",
-                    track_key,
-                    e
-                );
-            }
-        }
+        self.lyrics_service.update_track_lyrics(
+            track_key,
+            lyrics,
+            &mut self.library,
+            &mut self.playlists,
+            player,
+            &db_conn,
+        );
     }
 
     pub fn update_track_metadata(
@@ -453,29 +407,23 @@ impl App {
 
     /// Process a freshly received lyrics response.
     pub fn handle_lyrics_response(&mut self, should_show_panel: bool) {
-        tracing::debug!("📡 Lyrics response received");
-
-        if should_show_panel {
-            self.ui_state.show_lyrics_panel = true;
-        }
-
         let track_key = self
             .runtime
             .as_ref()
             .and_then(|rt| rt.player.selected_track.as_ref().map(|track| track.key()));
 
-        let lyrics_text_owned = self
-            .lyrics_manager
-            .current_lyrics()
-            .and_then(|lyrics_data| {
-                lyrics_data
-                    .synced_lyrics
-                    .as_deref()
-                    .or(lyrics_data.plain_lyrics.as_deref())
-                    .map(|text| text.to_string())
-            });
+        let lyrics_text = self
+            .lyrics_service
+            .handle_lyrics_response(should_show_panel, &mut self.ui_state);
 
-        if let Some(lyrics_data) = self.lyrics_manager.current_lyrics() {
+        if let Some(track_key) = track_key {
+            if let Some(lyrics) = &lyrics_text {
+                self.update_track_lyrics(track_key, Some(lyrics.as_str()));
+            }
+        }
+
+        // Handle lyrics caching to ID3 tag
+        if let Some(lyrics_data) = self.lyrics_service.manager().current_lyrics() {
             if self.runtime.is_some() {
                 let player = self.player_ref();
                 if let Some(track) = &player.selected_track {
@@ -489,20 +437,6 @@ impl App {
                     }
                 }
             }
-
-            if lyrics_data.instrumental {
-                tracing::info!("✅ Found instrumental track");
-            } else if !lyrics_data.lines.is_empty() || lyrics_data.plain_lyrics.is_some() {
-                tracing::info!("✅ Lyrics loaded successfully");
-            } else {
-                tracing::warn!("⚠️  Lyrics record found but no content available");
-            }
-        } else {
-            tracing::warn!("❌ No lyrics found");
-        }
-
-        if let Some(track_key) = track_key {
-            self.update_track_lyrics(track_key, lyrics_text_owned.as_deref());
         }
     }
 
@@ -523,38 +457,41 @@ impl App {
             return;
         }
 
-        // Extract the data we need from player first
-        let (selected_track, selected_track_key) = {
-            let player = self.player_ref();
-            let selected = player.selected_track.clone();
-            let selected_key = player.selected_track.as_ref().map(|t| t.key());
-            (selected, selected_key)
-        };
+        // Get data we need before any mutable borrows
+        let selected_track = self.runtime.as_ref().unwrap().player.selected_track.clone();
+        let selected_track_key = selected_track.as_ref().map(|t| t.key());
 
-        // Now we can mutate self without holding the player reference
-        let (lyrics_found, should_show_panel) = self.lyrics_manager.fetch_lyrics_for_track_data(
-            selected_track.as_ref(),
-            &mut self.ui_state.lyrics_fetch_state,
-        );
+        // Now we can mutate
+        if let Some(track) = &selected_track {
+            let (lyrics_found, should_show_panel) = self
+                .lyrics_service
+                .manager_mut()
+                .fetch_lyrics_for_track_data(Some(track), &mut self.ui_state.lyrics_fetch_state);
 
-        if lyrics_found && should_show_panel {
-            self.ui_state.show_lyrics_panel = true;
-
-            // Update track lyrics if we got them from cache
-            // Extract lyrics text and convert to owned String to avoid borrow issues
-            let lyrics_text_owned: Option<String> = {
-                self.lyrics_manager.current_lyrics().and_then(|lyrics| {
-                    lyrics
-                        .synced_lyrics
-                        .as_ref()
-                        .or(lyrics.plain_lyrics.as_ref())
-                        .map(|s| s.to_owned())
-                })
-            };
-
-            if let (Some(track_key), Some(lyrics_text)) = (selected_track_key, lyrics_text_owned) {
-                self.update_track_lyrics(track_key, Some(&lyrics_text));
+            if lyrics_found && should_show_panel {
+                self.ui_state.show_lyrics_panel = true;
             }
+        } else {
+            tracing::warn!("⚠️  No track selected for lyrics fetch");
+            self.ui_state.lyrics_fetch_state =
+                LyricsFetchState::Failed("No track selected".to_string());
+        }
+
+        // Handle cached lyrics update
+        let lyrics_text_owned: Option<String> = self
+            .lyrics_service
+            .manager()
+            .current_lyrics()
+            .and_then(|lyrics| {
+                lyrics
+                    .synced_lyrics
+                    .as_ref()
+                    .or(lyrics.plain_lyrics.as_ref())
+                    .map(|s| s.to_owned())
+            });
+
+        if let (Some(track_key), Some(lyrics_text)) = (selected_track_key, lyrics_text_owned) {
+            self.update_track_lyrics(track_key, Some(lyrics_text.as_str()));
         }
     }
 }
