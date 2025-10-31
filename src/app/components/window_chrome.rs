@@ -50,7 +50,7 @@ impl AppComponent for WindowChrome {
                 if ctx.runtime.is_some() {
                     // Cache playlist before borrowing player mutably
                     let playlist_clone = ctx
-                        .config
+                        .app_settings
                         .playing_playlist_idx
                         .and_then(|idx| ctx.playlists.get(idx).cloned());
 

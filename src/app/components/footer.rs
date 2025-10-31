@@ -9,7 +9,7 @@ impl AppComponent for Footer {
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal(|ui| {
             // Playlist operation buttons
-            if let Some(current_playlist_idx) = ctx.config.current_playlist_idx {
+            if let Some(current_playlist_idx) = ctx.app_settings.current_playlist_idx {
                 let selection_count = ctx.playlists[current_playlist_idx].selected_indices.len();
 
                 // Track search state in memory

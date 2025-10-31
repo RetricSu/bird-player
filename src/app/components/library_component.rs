@@ -165,7 +165,7 @@ impl AppComponent for LibraryComponent {
                                 // Handle click to add to current playlist
                                 if item_label.clicked() {
                                     if let Some(current_playlist_idx) =
-                                        &ctx.config.current_playlist_idx
+                                        &ctx.app_settings.current_playlist_idx
                                     {
                                         let current_playlist =
                                             &mut ctx.playlists[*current_playlist_idx];
@@ -179,7 +179,7 @@ impl AppComponent for LibraryComponent {
                                 item_label.context_menu(|ui| {
                                     if ui.button(t("add_to_playlist")).clicked() {
                                         if let Some(current_playlist_idx) =
-                                            &ctx.config.current_playlist_idx
+                                            &ctx.app_settings.current_playlist_idx
                                         {
                                             let current_playlist =
                                                 &mut ctx.playlists[*current_playlist_idx];
@@ -198,7 +198,9 @@ impl AppComponent for LibraryComponent {
                     section.header_response.context_menu(|ui| {
                         // Add context menu for the folder header
                         if ui.button(t("add_all_to_playlist")).clicked() {
-                            if let Some(current_playlist_idx) = &ctx.config.current_playlist_idx {
+                            if let Some(current_playlist_idx) =
+                                &ctx.app_settings.current_playlist_idx
+                            {
                                 let current_playlist = &mut ctx.playlists[*current_playlist_idx];
 
                                 // Add all tracks from this folder to the playlist

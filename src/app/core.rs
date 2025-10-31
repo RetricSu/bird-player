@@ -14,7 +14,7 @@ use super::libstate::lyrics_state::LyricsFetchState;
 use super::libstate::player_state::PlayerStateManager;
 use super::player::Player;
 pub use super::playlist::Playlist;
-use super::state::{config::AppConfig, ui_state::UiState};
+use super::state::{app_state::AppSettings, ui_state::UiState};
 use crate::app::bootstrap;
 use crate::app::db;
 use crate::app::runtime;
@@ -30,7 +30,7 @@ pub struct App {
     pub playlists: Vec<Playlist>,
 
     // Persisted settings
-    pub config: AppConfig,
+    pub app_settings: AppSettings,
 
     // Runtime state (not serialized)
     #[serde(skip_serializing, skip_deserializing)]
@@ -45,7 +45,7 @@ pub struct App {
     #[serde(skip_serializing, skip_deserializing)]
     pub lyrics_service: LyricsService,
 
-    pub heavy_data_loaded: bool,
+    pub is_heavy_data_loaded: bool,
 
     pub quit: bool,
 }
@@ -55,12 +55,12 @@ impl Default for App {
         Self {
             library: Library::new(),
             playlists: vec![],
-            config: AppConfig::default(),
+            app_settings: AppSettings::default(),
             boot_cfg: None,
             runtime: None,
             ui_state: UiState::default(),
             lyrics_service: LyricsService::new(),
-            heavy_data_loaded: false,
+            is_heavy_data_loaded: false,
             quit: false,
         }
     }
@@ -117,7 +117,7 @@ impl App {
 
     // 便捷访问器 - player state
     pub fn player_state(&self) -> &PlayerStateManager {
-        &self.config.player
+        &self.app_settings.player
     }
 
     pub fn lyrics_manager(&self) -> &LyricsManager {
@@ -133,7 +133,7 @@ impl App {
         let config = PersistenceService::load_basic_config()?;
 
         let mut app = App {
-            config: config.clone(),
+            app_settings: config.clone(),
             ..Default::default()
         };
 
@@ -147,7 +147,7 @@ impl App {
     }
 
     pub fn load_heavy_data(&mut self) {
-        if self.heavy_data_loaded {
+        if self.is_heavy_data_loaded {
             return;
         }
 
@@ -165,21 +165,21 @@ impl App {
                 &mut self.playlists,
                 &mut self.library,
                 &player_state,
-                &self.config,
+                &self.app_settings,
             );
 
-        self.config.current_playlist_idx = current_playlist_idx;
-        self.config.playing_playlist_idx = playing_playlist_idx;
+        self.app_settings.current_playlist_idx = current_playlist_idx;
+        self.app_settings.playing_playlist_idx = playing_playlist_idx;
 
         // Validate indices are within bounds
-        if let Some(idx) = self.config.current_playlist_idx {
+        if let Some(idx) = self.app_settings.current_playlist_idx {
             if idx >= self.playlists.len() {
-                self.config.current_playlist_idx = self.playlists.is_empty().then_some(0);
+                self.app_settings.current_playlist_idx = self.playlists.is_empty().then_some(0);
             }
         }
-        if let Some(idx) = self.config.playing_playlist_idx {
+        if let Some(idx) = self.app_settings.playing_playlist_idx {
             if idx >= self.playlists.len() {
-                self.config.playing_playlist_idx = self.playlists.is_empty().then_some(0);
+                self.app_settings.playing_playlist_idx = self.playlists.is_empty().then_some(0);
             }
         }
 
@@ -193,7 +193,7 @@ impl App {
             self.ui_state.should_fetch_lyrics_on_init = false;
         }
 
-        self.heavy_data_loaded = true;
+        self.is_heavy_data_loaded = true;
         tracing::info!("Heavy data loading completed");
     }
 
@@ -208,11 +208,16 @@ impl App {
 
     pub fn save_state(&mut self) {
         // Update config from current state
-        self.config.ui = self.ui_state.to_settings();
+        self.app_settings.ui = self.ui_state.to_settings();
 
         // Save all state using PersistenceService
         let db_conn = self.db().connection();
-        PersistenceService::save_state(&self.config, &self.library, &mut self.playlists, &db_conn);
+        PersistenceService::save_state(
+            &self.app_settings,
+            &self.library,
+            &mut self.playlists,
+            &db_conn,
+        );
     }
 
     /// Capture the current player state for persistence
@@ -220,7 +225,7 @@ impl App {
         if let Some(runtime) = &self.runtime {
             // Extract references to avoid borrowing conflicts
             let player = &runtime.player;
-            let player_state = &mut self.config.player;
+            let player_state = &mut self.app_settings.player;
 
             PersistenceService::update_player_persistence(player, player_state);
         }
@@ -242,14 +247,14 @@ impl App {
 
             PlayerRestoreService::restore_player_state(
                 &mut runtime.player,
-                &mut self.config.player,
+                &mut self.app_settings.player,
                 playlists,
                 is_processing,
             )
         };
 
         if let Some(idx) = playing_playlist_idx {
-            self.config.playing_playlist_idx = Some(idx);
+            self.app_settings.playing_playlist_idx = Some(idx);
         }
 
         if should_fetch_lyrics {
@@ -306,21 +311,21 @@ impl App {
 
     // Add these new methods for language handling
     pub fn set_language(&mut self, lang: i18n::Language) {
-        self.config.current_language = lang;
+        self.app_settings.current_language = lang;
         i18n::set_language(lang);
         // Save state to persist language preference
         self.save_state();
     }
 
     pub fn get_language(&self) -> i18n::Language {
-        self.config.current_language
+        self.app_settings.current_language
     }
 
     // Service convenience methods for common operations
 
     /// Play the next track, handling playlist navigation
     pub fn play_next_track(&mut self) {
-        if let Some(playlist_idx) = self.config.playing_playlist_idx {
+        if let Some(playlist_idx) = self.app_settings.playing_playlist_idx {
             if let Some(playlist) = self.playlists.get(playlist_idx) {
                 if let Some(player) = self.runtime.as_mut().map(|rt| &mut rt.player) {
                     crate::app::services::PlayerService::next_track(player, playlist);
@@ -331,7 +336,7 @@ impl App {
 
     /// Play the previous track, handling playlist navigation
     pub fn play_previous_track(&mut self) {
-        if let Some(playlist_idx) = self.config.playing_playlist_idx {
+        if let Some(playlist_idx) = self.app_settings.playing_playlist_idx {
             if let Some(playlist) = self.playlists.get(playlist_idx) {
                 if let Some(player) = self.runtime.as_mut().map(|rt| &mut rt.player) {
                     crate::app::services::PlayerService::previous_track(player, playlist);

@@ -9,7 +9,7 @@ use crate::app::player::{Player, TrackState};
 use crate::app::playlist::Playlist;
 use crate::app::services::config_persistence::ConfigPersistence;
 use crate::app::services::db_persistence::DBPersistence;
-use crate::app::state::config::AppConfig;
+use crate::app::state::app_state::AppSettings;
 
 /// Application-level persistence service that coordinates all data persistence operations
 ///
@@ -20,7 +20,7 @@ pub struct PersistenceService;
 
 impl PersistenceService {
     /// Load basic application configuration
-    pub fn load_basic_config() -> Result<AppConfig, AppLoadError> {
+    pub fn load_basic_config() -> Result<AppSettings, AppLoadError> {
         // Initialize i18n
         i18n::init();
 
@@ -30,7 +30,7 @@ impl PersistenceService {
                 error = %AppLoadError::MissingAppState,
                 "Falling back to default settings: {err}"
             );
-            AppConfig::default()
+            AppSettings::default()
         });
 
         Ok(config)
@@ -42,7 +42,7 @@ impl PersistenceService {
         playlists: &mut Vec<Playlist>,
         library: &mut Library,
         player_state: &PlayerStateManager,
-        current_config: &AppConfig,
+        current_config: &AppSettings,
     ) -> (Option<usize>, Option<usize>, bool) {
         tracing::info!("Loading heavy data (library and playlists)...");
 
@@ -119,7 +119,7 @@ impl PersistenceService {
 
     /// Save all application state
     pub fn save_state(
-        config: &AppConfig,
+        config: &AppSettings,
         library: &Library,
         playlists: &mut [Playlist],
         db_conn: &Arc<Mutex<rusqlite::Connection>>,

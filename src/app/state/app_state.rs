@@ -7,7 +7,7 @@ use crate::app::libstate::player_state::PlayerStateManager;
 /// Persistable application settings
 /// These are saved to confy and restored on app startup
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AppConfig {
+pub struct AppSettings {
     /// Language setting
     pub current_language: Language,
 
@@ -26,7 +26,7 @@ pub struct AppConfig {
     pub playing_playlist_idx: Option<usize>,
 }
 
-impl Default for AppConfig {
+impl Default for AppSettings {
     fn default() -> Self {
         Self {
             current_language: Language::English,

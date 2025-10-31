@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 static LAST_PLAYED_TRACK: AtomicUsize = AtomicUsize::new(0);
 
 pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
-    let Some(current_playlist_idx) = ctx.config.current_playlist_idx else {
+    let Some(current_playlist_idx) = ctx.app_settings.current_playlist_idx else {
         return;
     };
 
