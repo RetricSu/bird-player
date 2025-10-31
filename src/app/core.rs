@@ -14,7 +14,7 @@ use super::libstate::lyrics_state::LyricsFetchState;
 use super::libstate::player_state::PlayerStateManager;
 use super::player::Player;
 pub use super::playlist::Playlist;
-use super::state::{persistence::AppConfig, ui_state::UiState};
+use super::state::{config::AppConfig, ui_state::UiState};
 use crate::app::bootstrap;
 use crate::app::db;
 use crate::app::runtime;

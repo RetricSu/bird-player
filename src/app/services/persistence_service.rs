@@ -7,8 +7,9 @@ use crate::app::library::Library;
 use crate::app::libstate::player_state::PlayerStateManager;
 use crate::app::player::{Player, TrackState};
 use crate::app::playlist::Playlist;
-use crate::app::state::persistence::AppConfig;
-use crate::app::state::StatePersistence;
+use crate::app::services::config_persistence::ConfigPersistence;
+use crate::app::services::db_persistence::DBPersistence;
+use crate::app::state::config::AppConfig;
 
 /// Application-level persistence service that coordinates all data persistence operations
 ///
@@ -24,7 +25,7 @@ impl PersistenceService {
         i18n::init();
 
         // Load settings from confy
-        let config = StatePersistence::load_config().unwrap_or_else(|err| {
+        let config = ConfigPersistence::load_config().unwrap_or_else(|err| {
             tracing::warn!(
                 error = %AppLoadError::MissingAppState,
                 "Falling back to default settings: {err}"
@@ -46,7 +47,7 @@ impl PersistenceService {
         tracing::info!("Loading heavy data (library and playlists)...");
 
         // Load library
-        match StatePersistence::load_library(db_conn) {
+        match DBPersistence::load_library(db_conn) {
             Ok(loaded_library) => {
                 *library = loaded_library;
                 tracing::info!("Successfully loaded library from database");
@@ -60,7 +61,7 @@ impl PersistenceService {
         let mut current_playlist_idx = current_config.current_playlist_idx;
         let mut playing_playlist_idx = current_config.playing_playlist_idx;
 
-        match StatePersistence::load_playlists(db_conn) {
+        match DBPersistence::load_playlists(db_conn) {
             Ok(loaded_playlists) => {
                 if !loaded_playlists.is_empty() {
                     *playlists = loaded_playlists;
@@ -126,19 +127,19 @@ impl PersistenceService {
         // Update config from current state - this will be handled by caller
 
         // Save config to confy
-        match StatePersistence::save_config(config) {
+        match ConfigPersistence::save_config(config) {
             Ok(_) => tracing::info!("Settings stored successfully"),
             Err(err) => tracing::error!("Failed to store app settings: {}", err),
         }
 
         // Save library and playlists to SQLite
         // Save library
-        if let Err(e) = StatePersistence::save_library(library, db_conn) {
+        if let Err(e) = DBPersistence::save_library(library, db_conn) {
             tracing::error!("Failed to save library to database: {}", e);
         }
 
         // Save playlists
-        if let Err(e) = StatePersistence::save_playlists(playlists, db_conn) {
+        if let Err(e) = DBPersistence::save_playlists(playlists, db_conn) {
             tracing::error!("Failed to save playlists to database: {}", e);
         }
     }

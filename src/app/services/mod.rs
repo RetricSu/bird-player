@@ -2,6 +2,8 @@
 ///
 /// These services act as coordinators between low-level business services
 /// and application state, handling UI updates and data persistence.
+pub mod config_persistence;
+pub mod db_persistence;
 pub mod library_service;
 pub mod lyrics_service;
 pub mod persistence_service;
