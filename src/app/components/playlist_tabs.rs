@@ -1,6 +1,7 @@
 use super::AppComponent;
+use crate::app::services::PlaylistService;
 use crate::app::t;
-use crate::app::{App, Playlist};
+use crate::app::App;
 use eframe::egui;
 
 pub struct PlaylistTabs;
@@ -32,7 +33,9 @@ impl AppComponent for PlaylistTabs {
                         if !name.is_empty() {
                             playlist.set_name(name);
                         }
-                        ctx.ui_state.playlist_being_renamed = None;
+                        PlaylistService::finish_renaming_playlist_ui(
+                            &mut ctx.ui_state.playlist_being_renamed,
+                        );
                     }
                 } else {
                     // Show normal tab button
@@ -49,13 +52,16 @@ impl AppComponent for PlaylistTabs {
                     }));
 
                     if tab_response.clicked() {
-                        ctx.current_playlist_idx = Some(idx);
+                        PlaylistService::select_playlist(&mut ctx.current_playlist_idx, idx);
                     }
 
                     // Show context menu on right-click
                     tab_response.context_menu(|ui| {
                         if ui.button(t("rename")).clicked() {
-                            ctx.ui_state.playlist_being_renamed = Some(idx);
+                            PlaylistService::start_renaming_playlist(
+                                &mut ctx.ui_state.playlist_being_renamed,
+                                idx,
+                            );
                             ui.close_menu();
                         }
                         if ui.button(t("delete")).clicked() {
@@ -70,28 +76,22 @@ impl AppComponent for PlaylistTabs {
             let create_btn = ui.add(egui::Button::new(egui::RichText::new("+").size(12.0)));
 
             if create_btn.clicked() {
-                let mut new_playlist = Playlist::new();
-                new_playlist.set_name(t("new_playlist")); // Set a default name
-                ctx.playlists.push(new_playlist);
-                let new_idx = ctx.playlists.len() - 1;
-                ctx.current_playlist_idx = Some(new_idx);
-                ctx.ui_state.playlist_being_renamed = Some(new_idx); // Start renaming the new playlist immediately
+                PlaylistService::create_playlist(
+                    &mut ctx.playlists,
+                    &mut ctx.current_playlist_idx,
+                    &mut ctx.ui_state.playlist_being_renamed,
+                    t("new_playlist").to_string(),
+                );
             }
 
             // Handle playlist removal
             if let Some(idx) = ctx.ui_state.playlist_idx_to_remove {
                 ctx.ui_state.playlist_idx_to_remove = None;
-
-                if let Some(mut current_playlist_idx) = ctx.current_playlist_idx {
-                    if current_playlist_idx == 0 && idx == 0 {
-                        ctx.current_playlist_idx = None;
-                    } else if current_playlist_idx >= idx {
-                        current_playlist_idx -= 1;
-                        ctx.current_playlist_idx = Some(current_playlist_idx);
-                    }
-                }
-
-                ctx.playlists.remove(idx);
+                PlaylistService::delete_playlist(
+                    &mut ctx.playlists,
+                    &mut ctx.current_playlist_idx,
+                    idx,
+                );
             }
         });
     }

@@ -7,21 +7,18 @@ use serde::{Deserialize, Serialize};
 
 use super::error::AppLoadError;
 use super::i18n;
-use super::lib_services::{
-    LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService,
-};
+use super::lib_services::{LibraryImportService, LyricsManager, PlayerRestoreService};
 use super::library::{Library, LibraryCommand, LibraryPath};
 pub use super::library::{LibraryItem, LibraryPathId};
 use super::libstate::lyrics_state::LyricsFetchState;
 use super::libstate::player_state::PlayerStateManager;
-use super::player::{Player, TrackState};
+use super::player::Player;
 pub use super::playlist::Playlist;
-use super::state::StatePersistence;
 use super::state::{persistence::AppConfig, ui_state::UiState};
 use crate::app::bootstrap;
 use crate::app::db;
 use crate::app::runtime;
-use crate::app::services::LyricsService;
+use crate::app::services::{LibraryService, LyricsService, PersistenceService};
 
 /// Main application struct
 ///
@@ -50,7 +47,6 @@ pub struct App {
     #[serde(skip_serializing, skip_deserializing)]
     pub lyrics_service: LyricsService,
 
-    #[serde(skip_serializing, skip_deserializing)]
     pub heavy_data_loaded: bool,
 
     pub quit: bool,
@@ -128,11 +124,6 @@ impl App {
         &self.config.player
     }
 
-    pub fn player_state_mut(&mut self) -> &mut PlayerStateManager {
-        &mut self.config.player
-    }
-
-    /// Access to lyrics manager for UI components
     pub fn lyrics_manager(&self) -> &LyricsManager {
         self.lyrics_service.manager()
     }
@@ -142,17 +133,8 @@ impl App {
     }
 
     pub fn load_basic() -> Result<Self, AppLoadError> {
-        // Initialize i18n
-        i18n::init();
-
-        // Load settings from confy
-        let config = StatePersistence::load_config().unwrap_or_else(|err| {
-            tracing::warn!(
-                error = %AppLoadError::MissingAppState,
-                "Falling back to default settings: {err}"
-            );
-            AppConfig::default()
-        });
+        // Load settings from PersistenceService
+        let config = PersistenceService::load_basic_config()?;
 
         let mut app = App {
             config: config.clone(),
@@ -177,66 +159,27 @@ impl App {
 
         let db_connection = self.db().connection();
 
-        // Load library
-        match StatePersistence::load_library(&db_connection) {
-            Ok(library) => {
-                self.library = library;
-                tracing::info!("Successfully loaded library from database");
-            }
-            Err(e) => {
-                tracing::error!("Failed to load library from database: {}", e);
-            }
-        }
+        // Get player state before mutable borrows
+        let player_state = self.player_state().clone();
 
-        // Load playlists
-        match StatePersistence::load_playlists(&db_connection) {
-            Ok(playlists) => {
-                if !playlists.is_empty() {
-                    self.playlists = playlists;
+        // Load library and playlists using PersistenceService
+        let (current_playlist_idx, playing_playlist_idx, should_fetch_lyrics) =
+            PersistenceService::load_heavy_data(
+                &db_connection,
+                &mut self.playlists,
+                &mut self.library,
+                &player_state,
+            );
 
-                    // Find playlist containing the last played track
-                    if let Some(last_track_path) = &self.player_state().last_track_path {
-                        for (idx, playlist) in self.playlists.iter().enumerate() {
-                            if playlist
-                                .tracks
-                                .iter()
-                                .any(|track| track.path() == *last_track_path)
-                            {
-                                self.current_playlist_idx = Some(idx);
-                                self.playing_playlist_idx = Some(idx);
-                                tracing::info!(
-                                    "Found last played track in playlist '{}', selecting it",
-                                    playlist.get_name().unwrap_or_default()
-                                );
-                                break;
-                            }
-                        }
-                    }
-
-                    // Select first playlist if none selected
-                    if self.current_playlist_idx.is_none() {
-                        self.current_playlist_idx = Some(0);
-                        tracing::info!("No last played track found, selecting first playlist");
-                    }
-                } else {
-                    // Create default playlist
-                    let mut default_playlist = Playlist::new();
-                    default_playlist.set_name("Default Playlist".to_string());
-                    self.playlists = vec![default_playlist];
-                    self.current_playlist_idx = Some(0);
-                    tracing::info!("No playlists found in database, created default playlist");
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to load playlists from database: {}", e);
-            }
-        }
+        self.current_playlist_idx = current_playlist_idx;
+        self.playing_playlist_idx = playing_playlist_idx;
 
         // Restore player state after heavy data is loaded
         self.restore_player_state();
 
         // Fetch lyrics for restored track if needed
-        if self.ui_state.should_fetch_lyrics_on_init {
+        if should_fetch_lyrics {
+            self.ui_state.should_fetch_lyrics_on_init = true;
             self.fetch_lyrics_for_current_track();
             self.ui_state.should_fetch_lyrics_on_init = false;
         }
@@ -258,45 +201,19 @@ impl App {
         // Update config from current state
         self.config.ui = self.ui_state.to_settings();
 
-        // Save config to confy
-        match StatePersistence::save_config(&self.config) {
-            Ok(_) => tracing::info!("Settings stored successfully"),
-            Err(err) => tracing::error!("Failed to store app settings: {}", err),
-        }
-
-        // Save library and playlists to SQLite
+        // Save all state using PersistenceService
         let db_conn = self.db().connection();
-
-        // Save library
-        if let Err(e) = StatePersistence::save_library(&self.library, &db_conn) {
-            tracing::error!("Failed to save library to database: {}", e);
-        }
-
-        // Save playlists
-        if let Err(e) = StatePersistence::save_playlists(&mut self.playlists, &db_conn) {
-            tracing::error!("Failed to save playlists to database: {}", e);
-        }
+        PersistenceService::save_state(&self.config, &self.library, &mut self.playlists, &db_conn);
     }
 
     /// Capture the current player state for persistence
     pub fn update_player_persistence(&mut self) {
         if let Some(runtime) = &self.runtime {
-            let last_track_path = runtime
-                .player
-                .selected_track
-                .as_ref()
-                .map(|track| track.path());
-            let last_position = Some(runtime.player.seek_to_timestamp);
-            let last_playback_mode = Some(runtime.player.playback_mode);
-            let last_volume = Some(runtime.player.volume);
-            let was_playing = Some(matches!(runtime.player.track_state, TrackState::Playing));
+            // Extract references to avoid borrowing conflicts
+            let player = &runtime.player;
+            let player_state = &mut self.config.player;
 
-            let player_state = self.player_state_mut();
-            player_state.last_track_path = last_track_path;
-            player_state.last_position = last_position;
-            player_state.last_playback_mode = last_playback_mode;
-            player_state.last_volume = last_volume;
-            player_state.was_playing = was_playing;
+            PersistenceService::update_player_persistence(player, player_state);
         }
     }
 
@@ -361,31 +278,16 @@ impl App {
     ) -> bool {
         let db_conn = self.db().connection();
 
-        // Use the MetadataEditor service
-        let success = MetadataEditor::update_track_metadata(track, field, value, &db_conn);
+        let success = LibraryService::update_track_metadata(
+            track,
+            field,
+            value,
+            &mut self.library,
+            &mut self.playlists,
+            &db_conn,
+        );
 
         if success {
-            // Update all instances of this track in playlists
-            for playlist in &mut self.playlists {
-                for playlist_track in playlist.tracks.iter_mut() {
-                    if playlist_track.key() == track.key() {
-                        let updated_track = match field {
-                            "title" => playlist_track.set_title(Some(value)),
-                            "artist" => playlist_track.set_artist(Some(value)),
-                            "album" => playlist_track.set_album(Some(value)),
-                            "genre" => playlist_track.set_genre(Some(value)),
-                            _ => playlist_track.clone(),
-                        };
-                        *playlist_track = updated_track;
-                    }
-                }
-            }
-
-            // Reload the library from the database
-            if let Ok(updated_library) = Library::load_from_db(&db_conn) {
-                self.library = updated_library;
-            }
-
             // Save the updated state
             self.save_state();
         }
@@ -403,6 +305,45 @@ impl App {
 
     pub fn get_language(&self) -> i18n::Language {
         self.config.current_language
+    }
+
+    // Service convenience methods for common operations
+
+    /// Play the next track, handling playlist navigation
+    pub fn play_next_track(&mut self) {
+        if let Some(playlist_idx) = self.playing_playlist_idx {
+            if let Some(playlist) = self.playlists.get(playlist_idx) {
+                if let Some(player) = self.runtime.as_mut().map(|rt| &mut rt.player) {
+                    crate::app::services::PlayerService::next_track(player, playlist);
+                }
+            }
+        }
+    }
+
+    /// Play the previous track, handling playlist navigation
+    pub fn play_previous_track(&mut self) {
+        if let Some(playlist_idx) = self.playing_playlist_idx {
+            if let Some(playlist) = self.playlists.get(playlist_idx) {
+                if let Some(player) = self.runtime.as_mut().map(|rt| &mut rt.player) {
+                    crate::app::services::PlayerService::previous_track(player, playlist);
+                }
+            }
+        }
+    }
+
+    /// Get the current playlist (convenience method)
+    pub fn get_current_playlist(&self) -> Option<&Playlist> {
+        self.current_playlist_idx
+            .and_then(|idx| self.playlists.get(idx))
+    }
+
+    /// Get the current playlist mutably (convenience method)
+    pub fn get_current_playlist_mut(&mut self) -> Option<&mut Playlist> {
+        if let Some(idx) = self.current_playlist_idx {
+            self.playlists.get_mut(idx)
+        } else {
+            None
+        }
     }
 
     /// Process a freshly received lyrics response.
@@ -441,11 +382,7 @@ impl App {
     }
 
     pub fn process_library_command(&mut self, lib_cmd: LibraryCommand) {
-        match lib_cmd {
-            LibraryCommand::AddItem(lib_item) => self.library.add_item(lib_item),
-            LibraryCommand::AddView(lib_view) => self.library.add_view(lib_view),
-            LibraryCommand::AddPathId(path_id) => self.library.set_path_to_imported(path_id),
-        }
+        LibraryService::process_library_command(&mut self.library, lib_cmd);
     }
 
     /// Fetch lyrics for the currently selected track

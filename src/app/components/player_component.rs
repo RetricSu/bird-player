@@ -1,12 +1,12 @@
-use eframe::egui::{self, vec2};
-use std::time::Instant;
-
 use super::cassette_component::CassetteComponent;
 use super::AppComponent;
+use crate::app::services::PlayerService;
 use crate::app::style::{ButtonExt, SliderExt};
 use crate::app::t;
 use crate::{app::App, app::AudioEvent};
 use eframe::egui::style::HandleShape;
+use eframe::egui::{self, vec2};
+use std::time::Instant;
 
 pub struct PlayerComponent;
 
@@ -61,12 +61,12 @@ impl AppComponent for PlayerComponent {
                     }
 
                     let player = ctx.player_mut_ref();
-                    player.set_seek_to_timestamp(seek_timestamp);
+                    PlayerService::set_seek_to_timestamp(player, seek_timestamp);
                 }
                 AudioEvent::TotalTrackDuration(dur) => {
                     tracing::info!("Received Duration: {}", dur);
                     let player = ctx.player_mut_ref();
-                    player.set_duration(dur);
+                    PlayerService::set_duration(player, dur);
                 }
                 AudioEvent::AudioFinished => {
                     tracing::info!("Track finished, getting next...");
@@ -77,7 +77,7 @@ impl AppComponent for PlayerComponent {
 
                     if let Some(playlist) = playlist_clone {
                         let player = ctx.player_mut_ref();
-                        player.next(&playlist);
+                        PlayerService::next_track(player, &playlist);
                     }
                     ctx.fetch_lyrics_for_current_track();
                 }
@@ -88,9 +88,9 @@ impl AppComponent for PlayerComponent {
                     );
                     let player = ctx.player_mut_ref();
                     if is_playing {
-                        player.track_state = crate::app::player::TrackState::Playing;
+                        PlayerService::play(player);
                     } else {
-                        player.track_state = crate::app::player::TrackState::Paused;
+                        PlayerService::pause(player);
                     }
                 }
             }
@@ -115,11 +115,11 @@ impl AppComponent for PlayerComponent {
                     title: track.title(),
                     artist: track.artist(),
                 });
-            let is_playing = matches!(player.track_state, crate::app::player::TrackState::Playing);
-            let playback_mode = player.playback_mode;
-            let seek_to_timestamp = player.seek_to_timestamp;
-            let duration = player.duration;
-            let volume = player.volume;
+            let is_playing = PlayerService::is_playing(player);
+            let playback_mode = PlayerService::get_playback_mode(player);
+            let seek_to_timestamp = PlayerService::get_seek_timestamp(player);
+            let duration = PlayerService::get_duration(player);
+            let volume = PlayerService::get_volume(player);
 
             let current_playlist_name = ctx
                 .playing_playlist_idx
@@ -223,7 +223,10 @@ impl AppComponent for PlayerComponent {
 
                         // Update in real-time while dragging (just the timestamp, not seeking the audio)
                         if time_slider.dragged() && has_selected_track {
-                            ctx.player_mut_ref().set_seek_to_timestamp(current_seek);
+                            PlayerService::set_seek_to_timestamp(
+                                ctx.player_mut_ref(),
+                                current_seek,
+                            );
                         }
 
                         // Only perform the actual seek when drag is stopped
@@ -231,11 +234,11 @@ impl AppComponent for PlayerComponent {
                             let player = ctx.player_mut_ref();
                             // We already updated seek_to_timestamp during dragging,
                             // now actually seek the audio playback
-                            player.seek_to(current_seek);
+                            PlayerService::seek_to(player, current_seek);
 
                             // When seeking, make sure the track state is set to Playing
                             // This ensures the UI buttons match the actual state
-                            player.track_state = crate::app::player::TrackState::Playing;
+                            PlayerService::play(player);
                         }
 
                         ui.label(format_time(current_seek));
@@ -322,52 +325,22 @@ impl AppComponent for PlayerComponent {
                                     )
                                     .clicked()
                                 {
-                                    if let Some(track) = &selected_track {
-                                        if let Some(current_playlist_idx) = ctx.current_playlist_idx
+                                    if selected_track.is_some() {
+                                        if let Some(removed_key) =
+                                            PlayerService::remove_current_track(
+                                                ctx.player_mut_ref(),
+                                            )
                                         {
-                                            if let Some(current_track_position) = ctx.playlists
-                                                [current_playlist_idx]
-                                                .get_pos_by_key(track.key)
-                                            {
-                                                // Get the next track before removing the current one
-                                                let next_track = if current_track_position
-                                                    < ctx.playlists[current_playlist_idx]
-                                                        .tracks
-                                                        .len()
-                                                        - 1
+                                            // Remove from playlist if we have a current playlist
+                                            if let Some(playlist_idx) = ctx.current_playlist_idx {
+                                                if let Some(playlist) =
+                                                    ctx.playlists.get_mut(playlist_idx)
                                                 {
-                                                    Some(
-                                                        ctx.playlists[current_playlist_idx].tracks
-                                                            [current_track_position + 1]
-                                                            .clone(),
-                                                    )
-                                                } else if !ctx.playlists[current_playlist_idx]
-                                                    .tracks
-                                                    .is_empty()
-                                                    && current_track_position > 0
-                                                {
-                                                    // If we're removing the last track, get the previous one
-                                                    Some(
-                                                        ctx.playlists[current_playlist_idx].tracks
-                                                            [current_track_position - 1]
-                                                            .clone(),
-                                                    )
-                                                } else {
-                                                    None
-                                                };
-
-                                                // Remove the current track
-                                                ctx.playlists[current_playlist_idx]
-                                                    .remove(current_track_position);
-
-                                                // Play the next track if available
-                                                if let Some(next_track) = next_track {
-                                                    let player = ctx.player_mut_ref();
-                                                    player.select_track(Some(next_track));
-                                                    player.play();
-                                                } else {
-                                                    // If no tracks left, clear the selected track
-                                                    ctx.player_mut_ref().select_track(None);
+                                                    if let Some(track_position) =
+                                                        playlist.get_pos_by_key(removed_key)
+                                                    {
+                                                        playlist.remove(track_position);
+                                                    }
                                                 }
                                             }
                                         }
@@ -393,8 +366,11 @@ impl AppComponent for PlayerComponent {
                                     // Only send if the volume is actually changing
                                     if current_volume != previous_vol {
                                         let is_processing_ui_change = ctx.is_processing_ui_change();
-                                        ctx.player_mut_ref()
-                                            .set_volume(current_volume, &is_processing_ui_change);
+                                        PlayerService::set_volume(
+                                            ctx.player_mut_ref(),
+                                            current_volume,
+                                            &is_processing_ui_change,
+                                        );
                                     }
                                 }
 
@@ -424,25 +400,21 @@ impl AppComponent for PlayerComponent {
                                     if let Some(action) = action {
                                         match action {
                                             "toggle_mode" => {
-                                                ctx.player_mut_ref().toggle_playback_mode();
+                                                PlayerService::toggle_playback_mode(
+                                                    ctx.player_mut_ref(),
+                                                );
                                             }
                                             "pause" => {
-                                                ctx.player_mut_ref().pause();
+                                                PlayerService::pause(ctx.player_mut_ref());
                                             }
                                             "play" => {
-                                                ctx.player_mut_ref().play();
+                                                PlayerService::play(ctx.player_mut_ref());
                                             }
                                             "previous" => {
-                                                if let Some(idx) = ctx.playing_playlist_idx {
-                                                    let playlist_clone = ctx.playlists[idx].clone();
-                                                    ctx.player_mut_ref().previous(&playlist_clone);
-                                                }
+                                                ctx.play_previous_track();
                                             }
                                             "next" => {
-                                                if let Some(idx) = ctx.playing_playlist_idx {
-                                                    let playlist_clone = ctx.playlists[idx].clone();
-                                                    ctx.player_mut_ref().next(&playlist_clone);
-                                                }
+                                                ctx.play_next_track();
                                             }
                                             _ => {}
                                         }
