@@ -28,8 +28,6 @@ pub struct App {
     // Core data
     pub library: Library,
     pub playlists: Vec<Playlist>,
-    pub current_playlist_idx: Option<usize>,
-    pub playing_playlist_idx: Option<usize>,
 
     // Persisted settings
     pub config: AppConfig,
@@ -57,8 +55,6 @@ impl Default for App {
         Self {
             library: Library::new(),
             playlists: vec![],
-            current_playlist_idx: None,
-            playing_playlist_idx: None,
             config: AppConfig::default(),
             boot_cfg: None,
             runtime: None,
@@ -169,10 +165,23 @@ impl App {
                 &mut self.playlists,
                 &mut self.library,
                 &player_state,
+                &self.config,
             );
 
-        self.current_playlist_idx = current_playlist_idx;
-        self.playing_playlist_idx = playing_playlist_idx;
+        self.config.current_playlist_idx = current_playlist_idx;
+        self.config.playing_playlist_idx = playing_playlist_idx;
+
+        // Validate indices are within bounds
+        if let Some(idx) = self.config.current_playlist_idx {
+            if idx >= self.playlists.len() {
+                self.config.current_playlist_idx = self.playlists.is_empty().then_some(0);
+            }
+        }
+        if let Some(idx) = self.config.playing_playlist_idx {
+            if idx >= self.playlists.len() {
+                self.config.playing_playlist_idx = self.playlists.is_empty().then_some(0);
+            }
+        }
 
         // Restore player state after heavy data is loaded
         self.restore_player_state();
@@ -240,7 +249,7 @@ impl App {
         };
 
         if let Some(idx) = playing_playlist_idx {
-            self.playing_playlist_idx = Some(idx);
+            self.config.playing_playlist_idx = Some(idx);
         }
 
         if should_fetch_lyrics {
@@ -311,7 +320,7 @@ impl App {
 
     /// Play the next track, handling playlist navigation
     pub fn play_next_track(&mut self) {
-        if let Some(playlist_idx) = self.playing_playlist_idx {
+        if let Some(playlist_idx) = self.config.playing_playlist_idx {
             if let Some(playlist) = self.playlists.get(playlist_idx) {
                 if let Some(player) = self.runtime.as_mut().map(|rt| &mut rt.player) {
                     crate::app::services::PlayerService::next_track(player, playlist);
@@ -322,7 +331,7 @@ impl App {
 
     /// Play the previous track, handling playlist navigation
     pub fn play_previous_track(&mut self) {
-        if let Some(playlist_idx) = self.playing_playlist_idx {
+        if let Some(playlist_idx) = self.config.playing_playlist_idx {
             if let Some(playlist) = self.playlists.get(playlist_idx) {
                 if let Some(player) = self.runtime.as_mut().map(|rt| &mut rt.player) {
                     crate::app::services::PlayerService::previous_track(player, playlist);

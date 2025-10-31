@@ -18,7 +18,7 @@ impl AppComponent for PlaylistContent {
 
         ui.add_space(8.0);
 
-        if let Some(current_playlist_idx) = ctx.current_playlist_idx {
+        if let Some(current_playlist_idx) = ctx.config.current_playlist_idx {
             ui.push_id(("playlist", current_playlist_idx), |ui| {
                 PlaylistTable::add(ctx, ui);
             });

@@ -19,6 +19,12 @@ pub struct AppConfig {
     /// UI state persistence
     #[serde(flatten)]
     pub ui: UiSettings,
+
+    /// Current selected playlist index
+    pub current_playlist_idx: Option<usize>,
+
+    /// Currently playing playlist index
+    pub playing_playlist_idx: Option<usize>,
 }
 
 impl Default for AppConfig {
@@ -27,6 +33,8 @@ impl Default for AppConfig {
             current_language: Language::English,
             player: PlayerStateManager::default(),
             ui: UiSettings::default(),
+            current_playlist_idx: None,
+            playing_playlist_idx: None,
         }
     }
 }

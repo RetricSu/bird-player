@@ -41,6 +41,7 @@ impl PersistenceService {
         playlists: &mut Vec<Playlist>,
         library: &mut Library,
         player_state: &PlayerStateManager,
+        current_config: &AppConfig,
     ) -> (Option<usize>, Option<usize>, bool) {
         tracing::info!("Loading heavy data (library and playlists)...");
 
@@ -56,29 +57,31 @@ impl PersistenceService {
         }
 
         // Load playlists
-        let mut current_playlist_idx = None;
-        let mut playing_playlist_idx = None;
+        let mut current_playlist_idx = current_config.current_playlist_idx;
+        let mut playing_playlist_idx = current_config.playing_playlist_idx;
 
         match StatePersistence::load_playlists(db_conn) {
             Ok(loaded_playlists) => {
                 if !loaded_playlists.is_empty() {
                     *playlists = loaded_playlists;
 
-                    // Find playlist containing the last played track
-                    if let Some(last_track_path) = &player_state.last_track_path {
-                        for (idx, playlist) in playlists.iter().enumerate() {
-                            if playlist
-                                .tracks
-                                .iter()
-                                .any(|track| track.path() == *last_track_path)
-                            {
-                                current_playlist_idx = Some(idx);
-                                playing_playlist_idx = Some(idx);
-                                tracing::info!(
-                                    "Found last played track in playlist '{}', selecting it",
-                                    playlist.get_name().unwrap_or_default()
-                                );
-                                break;
+                    // If no saved indices, find playlist containing the last played track
+                    if current_playlist_idx.is_none() {
+                        if let Some(last_track_path) = &player_state.last_track_path {
+                            for (idx, playlist) in playlists.iter().enumerate() {
+                                if playlist
+                                    .tracks
+                                    .iter()
+                                    .any(|track| track.path() == *last_track_path)
+                                {
+                                    current_playlist_idx = Some(idx);
+                                    playing_playlist_idx = Some(idx);
+                                    tracing::info!(
+                                        "Found last played track in playlist '{}', selecting it",
+                                        playlist.get_name().unwrap_or_default()
+                                    );
+                                    break;
+                                }
                             }
                         }
                     }

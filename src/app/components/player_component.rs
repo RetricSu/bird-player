@@ -71,6 +71,7 @@ impl AppComponent for PlayerComponent {
                     tracing::info!("Track finished, getting next...");
                     // Clone playlist before mutable borrow
                     let playlist_clone = ctx
+                        .config
                         .current_playlist_idx
                         .and_then(|idx| ctx.playlists.get(idx).cloned());
 
@@ -120,6 +121,7 @@ impl AppComponent for PlayerComponent {
             let volume = PlayerService::get_volume(player);
 
             let current_playlist_name = ctx
+                .config
                 .playing_playlist_idx
                 .and_then(|idx| ctx.playlists.get(idx))
                 .and_then(|playlist| playlist.get_name())
@@ -139,7 +141,7 @@ impl AppComponent for PlayerComponent {
         let has_selected_track = selected_track.is_some();
 
         // Get playlist tracks info for the current playlist
-        let current_playlist_idx = ctx.current_playlist_idx;
+        let current_playlist_idx = ctx.config.current_playlist_idx;
         // Use is_some_and instead of map_or
         let has_tracks_in_playlist =
             current_playlist_idx.is_some_and(|idx| !ctx.playlists[idx].tracks.is_empty());
@@ -328,7 +330,8 @@ impl AppComponent for PlayerComponent {
                                         PlayerService::remove_current_track(ctx.player_mut_ref())
                                     {
                                         // Remove from playlist if we have a current playlist
-                                        if let Some(playlist_idx) = ctx.current_playlist_idx {
+                                        if let Some(playlist_idx) = ctx.config.current_playlist_idx
+                                        {
                                             if let Some(playlist) =
                                                 ctx.playlists.get_mut(playlist_idx)
                                             {
@@ -380,12 +383,12 @@ impl AppComponent for PlayerComponent {
                                     } else if play_pause_btn.clicked() {
                                         action = Some(if is_playing { "pause" } else { "play" });
                                     } else if prev_btn.clicked()
-                                        && ctx.playing_playlist_idx.is_some()
+                                        && ctx.config.playing_playlist_idx.is_some()
                                     {
                                         action = Some("previous");
                                         fetch_lyrics = true;
                                     } else if next_btn.clicked()
-                                        && ctx.playing_playlist_idx.is_some()
+                                        && ctx.config.playing_playlist_idx.is_some()
                                     {
                                         action = Some("next");
                                         fetch_lyrics = true;

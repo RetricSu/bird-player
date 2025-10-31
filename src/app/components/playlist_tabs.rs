@@ -13,7 +13,7 @@ impl AppComponent for PlaylistTabs {
         ui.horizontal(|ui| {
             // Add playlist tabs
             for (idx, playlist) in ctx.playlists.iter_mut().enumerate() {
-                let is_selected = ctx.current_playlist_idx == Some(idx);
+                let is_selected = ctx.config.current_playlist_idx == Some(idx);
                 let is_being_renamed = ctx.ui_state.playlist_being_renamed == Some(idx);
 
                 if is_being_renamed {
@@ -52,7 +52,7 @@ impl AppComponent for PlaylistTabs {
                     }));
 
                     if tab_response.clicked() {
-                        PlaylistService::select_playlist(&mut ctx.current_playlist_idx, idx);
+                        PlaylistService::select_playlist(&mut ctx.config.current_playlist_idx, idx);
                     }
 
                     // Show context menu on right-click
@@ -78,7 +78,7 @@ impl AppComponent for PlaylistTabs {
             if create_btn.clicked() {
                 PlaylistService::create_playlist(
                     &mut ctx.playlists,
-                    &mut ctx.current_playlist_idx,
+                    &mut ctx.config.current_playlist_idx,
                     &mut ctx.ui_state.playlist_being_renamed,
                     t("new_playlist").to_string(),
                 );
@@ -89,7 +89,7 @@ impl AppComponent for PlaylistTabs {
                 ctx.ui_state.playlist_idx_to_remove = None;
                 PlaylistService::delete_playlist(
                     &mut ctx.playlists,
-                    &mut ctx.current_playlist_idx,
+                    &mut ctx.config.current_playlist_idx,
                     idx,
                 );
             }

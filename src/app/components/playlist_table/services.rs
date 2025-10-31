@@ -60,7 +60,7 @@ impl<'a> PlaylistTableService<'a> {
             player.play();
         }
 
-        self.ctx.playing_playlist_idx = Some(self.playlist_idx);
+        self.ctx.config.playing_playlist_idx = Some(self.playlist_idx);
         self.ctx.fetch_lyrics_for_current_track();
     }
 
