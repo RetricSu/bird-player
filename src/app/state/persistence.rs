@@ -3,29 +3,29 @@ use std::sync::{Arc, Mutex};
 
 use super::ui_state::UiSettings;
 use crate::app::i18n::Language;
-use crate::app::libstate::player_state::PlayerSettings;
+use crate::app::libstate::player_state::PlayerStateManager;
 
 /// Persistable application settings
 /// These are saved to confy and restored on app startup
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AppSettings {
+pub struct AppConfig {
     /// Language setting
     pub current_language: Language,
 
     /// Player state persistence
     #[serde(flatten)]
-    pub player: PlayerSettings,
+    pub player: PlayerStateManager,
 
     /// UI state persistence
     #[serde(flatten)]
     pub ui: UiSettings,
 }
 
-impl Default for AppSettings {
+impl Default for AppConfig {
     fn default() -> Self {
         Self {
             current_language: Language::English,
-            player: PlayerSettings::default(),
+            player: PlayerStateManager::default(),
             ui: UiSettings::default(),
         }
     }
@@ -36,12 +36,12 @@ pub struct StatePersistence;
 
 impl StatePersistence {
     /// Load application settings from confy
-    pub fn load_settings() -> Result<AppSettings, confy::ConfyError> {
-        confy::load::<AppSettings>("bird-player", None)
+    pub fn load_config() -> Result<AppConfig, confy::ConfyError> {
+        confy::load::<AppConfig>("bird-player", None)
     }
 
     /// Save application settings to confy
-    pub fn save_settings(settings: &AppSettings) -> Result<(), confy::ConfyError> {
+    pub fn save_config(settings: &AppConfig) -> Result<(), confy::ConfyError> {
         confy::store("bird-player", None, settings)
     }
 

@@ -11,11 +11,11 @@ use super::library::{Library, LibraryCommand, LibraryPath};
 pub use super::library::{LibraryItem, LibraryPathId};
 use super::libstate::lyrics_state::LyricsFetchState;
 use super::libstate::player_state::PlayerStateManager;
-use super::player::Player;
+use super::player::{Player, TrackState};
 pub use super::playlist::Playlist;
 use super::services::{LibraryImportService, LyricsManager, MetadataEditor, PlayerRestoreService};
 use super::state::StatePersistence;
-use super::state::{persistence::AppSettings, ui_state::UiState};
+use super::state::{persistence::AppConfig, ui_state::UiState};
 use crate::app::bootstrap;
 use crate::app::db;
 use crate::app::runtime;
@@ -30,11 +30,9 @@ pub struct App {
     pub playlists: Vec<Playlist>,
     pub current_playlist_idx: Option<usize>,
     pub playing_playlist_idx: Option<usize>,
-    pub current_language: i18n::Language,
 
-    // Persisted UI settings
-    pub library_folders_expanded: bool,
-    pub default_window_height: f64,
+    // Persisted settings
+    pub config: AppConfig,
 
     // Runtime state (not serialized)
     #[serde(skip_serializing, skip_deserializing)]
@@ -42,9 +40,6 @@ pub struct App {
 
     #[serde(skip_serializing, skip_deserializing)]
     pub runtime: Option<runtime::BirdRuntime>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub player_state: PlayerStateManager,
 
     #[serde(skip_serializing, skip_deserializing)]
     pub ui_state: UiState,
@@ -68,12 +63,9 @@ impl Default for App {
             playlists: vec![],
             current_playlist_idx: None,
             playing_playlist_idx: None,
-            current_language: i18n::Language::English,
-            library_folders_expanded: false,
-            default_window_height: super::constants::DEFAULT_WINDOW_HEIGHT as f64,
+            config: AppConfig::default(),
             boot_cfg: None,
             runtime: None,
-            player_state: PlayerStateManager::default(),
             ui_state: UiState::default(),
             lyrics_manager: LyricsManager::new(),
             last_window_title: None,
@@ -132,28 +124,38 @@ impl App {
             .player
     }
 
-    pub fn load_basic() -> Result<Self, AppLoadError> {
-        let mut app = App::default();
+    // 便捷访问器 - player state
+    pub fn player_state(&self) -> &PlayerStateManager {
+        &self.config.player
+    }
 
+    pub fn player_state_mut(&mut self) -> &mut PlayerStateManager {
+        &mut self.config.player
+    }
+
+    pub fn load_basic() -> Result<Self, AppLoadError> {
         // Initialize i18n
         i18n::init();
 
         // Load settings from confy
-        StatePersistence::load_settings()
-            .map(|settings| {
-                app.current_language = settings.current_language;
-                app.player_state.apply_settings(settings.player);
-                app.ui_state.apply_settings(settings.ui);
-            })
-            .unwrap_or_else(|err| {
-                tracing::warn!(
-                    error = %AppLoadError::MissingAppState,
-                    "Falling back to default settings: {err}"
-                );
-            });
+        let config = StatePersistence::load_config().unwrap_or_else(|err| {
+            tracing::warn!(
+                error = %AppLoadError::MissingAppState,
+                "Falling back to default settings: {err}"
+            );
+            AppConfig::default()
+        });
 
-        // Set the language from the loaded config
-        i18n::set_language(app.current_language);
+        let mut app = App {
+            config: config.clone(),
+            ..Default::default()
+        };
+
+        // Apply settings to state managers
+        app.ui_state.apply_settings(config.ui);
+
+        // Set the language
+        i18n::set_language(config.current_language);
 
         Ok(app)
     }
@@ -185,7 +187,7 @@ impl App {
                     self.playlists = playlists;
 
                     // Find playlist containing the last played track
-                    if let Some(last_track_path) = &self.player_state.last_track_path {
+                    if let Some(last_track_path) = &self.player_state().last_track_path {
                         for (idx, playlist) in self.playlists.iter().enumerate() {
                             if playlist
                                 .tracks
@@ -245,15 +247,11 @@ impl App {
     }
 
     pub fn save_state(&mut self) {
-        // Build settings from current state
-        let settings = AppSettings {
-            current_language: self.current_language,
-            player: self.player_state.to_settings(),
-            ui: self.ui_state.to_settings(),
-        };
+        // Update config from current state
+        self.config.ui = self.ui_state.to_settings();
 
-        // Save settings to confy
-        match StatePersistence::save_settings(&settings) {
+        // Save config to confy
+        match StatePersistence::save_config(&self.config) {
             Ok(_) => tracing::info!("Settings stored successfully"),
             Err(err) => tracing::error!("Failed to store app settings: {}", err),
         }
@@ -275,7 +273,22 @@ impl App {
     /// Capture the current player state for persistence
     pub fn update_player_persistence(&mut self) {
         if let Some(runtime) = &self.runtime {
-            self.player_state.update_from_player(&runtime.player);
+            let last_track_path = runtime
+                .player
+                .selected_track
+                .as_ref()
+                .map(|track| track.path());
+            let last_position = Some(runtime.player.seek_to_timestamp);
+            let last_playback_mode = Some(runtime.player.playback_mode);
+            let last_volume = Some(runtime.player.volume);
+            let was_playing = Some(matches!(runtime.player.track_state, TrackState::Playing));
+
+            let player_state = self.player_state_mut();
+            player_state.last_track_path = last_track_path;
+            player_state.last_position = last_position;
+            player_state.last_playback_mode = last_playback_mode;
+            player_state.last_volume = last_volume;
+            player_state.was_playing = was_playing;
         }
     }
 
@@ -288,18 +301,14 @@ impl App {
         let is_processing = self.is_processing_ui_change();
 
         let (playing_playlist_idx, should_fetch_lyrics) = {
-            let Self {
-                runtime,
-                player_state,
-                playlists,
-                ..
-            } = self;
             let runtime: &mut runtime::BirdRuntime =
-                runtime.as_mut().expect("runtime not initialized");
+                self.runtime.as_mut().expect("runtime not initialized");
+
+            let playlists = &self.playlists;
 
             PlayerRestoreService::restore_player_state(
                 &mut runtime.player,
-                player_state,
+                &mut self.config.player,
                 playlists,
                 is_processing,
             )
@@ -436,14 +445,14 @@ impl App {
 
     // Add these new methods for language handling
     pub fn set_language(&mut self, lang: i18n::Language) {
-        self.current_language = lang;
+        self.config.current_language = lang;
         i18n::set_language(lang);
         // Save state to persist language preference
         self.save_state();
     }
 
     pub fn get_language(&self) -> i18n::Language {
-        self.current_language
+        self.config.current_language
     }
 
     /// Process a freshly received lyrics response.

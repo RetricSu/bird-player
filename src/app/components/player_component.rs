@@ -287,7 +287,7 @@ impl AppComponent for PlayerComponent {
                                         !ctx.ui_state.show_library_and_playlist;
                                     // Adjust window height based on visibility
                                     let new_height = if ctx.ui_state.show_library_and_playlist {
-                                        ctx.default_window_height as f32
+                                        ctx.ui_state.default_window_height as f32
                                     } else {
                                         200.0 // Compact height when library and playlist are hidden
                                     };

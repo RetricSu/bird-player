@@ -24,7 +24,7 @@ impl AppComponent for LibraryComponent {
                 music_label.context_menu(|ui| {
                     if ui.button(t("expand_all")).clicked() {
                         // Set all folders to expanded
-                        ctx.library_folders_expanded = true;
+                        ctx.ui_state.library_folders_expanded = true;
 
                         // Force clear the memory to make all folders expand
                         ui.ctx().memory_mut(|mem| {
@@ -36,7 +36,7 @@ impl AppComponent for LibraryComponent {
 
                     if ui.button(t("collapse_all")).clicked() {
                         // Set all folders to collapsed
-                        ctx.library_folders_expanded = false;
+                        ctx.ui_state.library_folders_expanded = false;
 
                         // Force clear the memory to make all folders collapse
                         ui.ctx().memory_mut(|mem| {
@@ -124,7 +124,7 @@ impl AppComponent for LibraryComponent {
                     // Create a header with default behavior that allows individual control
                     // but is also affected by the global expand/collapse actions
                     let header = CollapsingHeader::new(RichText::new(folder_name).strong())
-                        .default_open(ctx.library_folders_expanded); // Use the global setting after memory clear
+                        .default_open(ctx.ui_state.library_folders_expanded); // Use the global setting after memory clear
 
                     // Show the header and get its response
                     let section = header.show(ui, |ui| {
