@@ -331,21 +331,6 @@ impl App {
         }
     }
 
-    /// Get the current playlist (convenience method)
-    pub fn get_current_playlist(&self) -> Option<&Playlist> {
-        self.current_playlist_idx
-            .and_then(|idx| self.playlists.get(idx))
-    }
-
-    /// Get the current playlist mutably (convenience method)
-    pub fn get_current_playlist_mut(&mut self) -> Option<&mut Playlist> {
-        if let Some(idx) = self.current_playlist_idx {
-            self.playlists.get_mut(idx)
-        } else {
-            None
-        }
-    }
-
     /// Process a freshly received lyrics response.
     pub fn handle_lyrics_response(&mut self, should_show_panel: bool) {
         let track_key = self

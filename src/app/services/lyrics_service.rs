@@ -98,7 +98,7 @@ impl LyricsService {
 
         match update_result {
             Ok(0) => {
-                if let Err(e) = library.save_to_db(&db_conn) {
+                if let Err(e) = library.save_to_db(db_conn) {
                     tracing::error!(
                         "Failed to persist lyrics update for track {}: {}",
                         track_key,

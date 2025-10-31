@@ -64,25 +64,4 @@ impl PlaylistService {
     pub fn finish_renaming_playlist_ui(playlist_being_renamed: &mut Option<usize>) {
         *playlist_being_renamed = None;
     }
-
-    /// Cancel renaming a playlist
-    pub fn cancel_renaming_playlist(playlist_being_renamed: &mut Option<usize>) {
-        *playlist_being_renamed = None;
-    }
-
-    /// Get the current playlist (mutable reference)
-    pub fn get_current_playlist_mut<'a>(
-        playlists: &'a mut Vec<Playlist>,
-        current_playlist_idx: Option<usize>,
-    ) -> Option<&'a mut Playlist> {
-        current_playlist_idx.and_then(|idx| playlists.get_mut(idx))
-    }
-
-    /// Get the current playlist (immutable reference)
-    pub fn get_current_playlist<'a>(
-        playlists: &'a Vec<Playlist>,
-        current_playlist_idx: Option<usize>,
-    ) -> Option<&'a Playlist> {
-        current_playlist_idx.and_then(|idx| playlists.get(idx))
-    }
 }

@@ -1,7 +1,6 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use crate::app::library::LibraryItem;
 use crate::app::player::{PlaybackMode, Player};
 use crate::app::playlist::Playlist;
 
@@ -21,11 +20,6 @@ impl PlayerService {
     /// Pause playback
     pub fn pause(player: &mut Player) {
         player.pause();
-    }
-
-    /// Stop playback
-    pub fn stop(player: &mut Player) {
-        player.stop();
     }
 
     /// Play the next track in the playlist
@@ -61,11 +55,6 @@ impl PlayerService {
     /// Set the total duration of the current track
     pub fn set_duration(player: &mut Player, duration: u64) {
         player.set_duration(duration);
-    }
-
-    /// Select a specific track to play
-    pub fn select_track(player: &mut Player, track: Option<LibraryItem>) {
-        player.select_track(track);
     }
 
     /// Remove the currently selected track from the playlist and handle playback continuation
@@ -104,10 +93,5 @@ impl PlayerService {
     /// Get the current track duration
     pub fn get_duration(player: &Player) -> u64 {
         player.duration
-    }
-
-    /// Get the currently selected track
-    pub fn get_selected_track(player: &Player) -> Option<&LibraryItem> {
-        player.selected_track.as_ref()
     }
 }

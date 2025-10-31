@@ -13,7 +13,6 @@ pub struct PlayerComponent;
 const CASSETTE_WIDTH: f32 = 280.0;
 
 struct SelectedTrackSummary {
-    key: usize,
     title: Option<String>,
     artist: Option<String>,
 }
@@ -111,7 +110,6 @@ impl AppComponent for PlayerComponent {
                 .selected_track
                 .as_ref()
                 .map(|track| SelectedTrackSummary {
-                    key: track.key(),
                     title: track.title(),
                     artist: track.artist(),
                 });
@@ -324,23 +322,20 @@ impl AppComponent for PlayerComponent {
                                         egui::Button::new(t("remove_song")),
                                     )
                                     .clicked()
+                                    && selected_track.is_some()
                                 {
-                                    if selected_track.is_some() {
-                                        if let Some(removed_key) =
-                                            PlayerService::remove_current_track(
-                                                ctx.player_mut_ref(),
-                                            )
-                                        {
-                                            // Remove from playlist if we have a current playlist
-                                            if let Some(playlist_idx) = ctx.current_playlist_idx {
-                                                if let Some(playlist) =
-                                                    ctx.playlists.get_mut(playlist_idx)
+                                    if let Some(removed_key) =
+                                        PlayerService::remove_current_track(ctx.player_mut_ref())
+                                    {
+                                        // Remove from playlist if we have a current playlist
+                                        if let Some(playlist_idx) = ctx.current_playlist_idx {
+                                            if let Some(playlist) =
+                                                ctx.playlists.get_mut(playlist_idx)
+                                            {
+                                                if let Some(track_position) =
+                                                    playlist.get_pos_by_key(removed_key)
                                                 {
-                                                    if let Some(track_position) =
-                                                        playlist.get_pos_by_key(removed_key)
-                                                    {
-                                                        playlist.remove(track_position);
-                                                    }
+                                                    playlist.remove(track_position);
                                                 }
                                             }
                                         }
