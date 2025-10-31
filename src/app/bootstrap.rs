@@ -46,11 +46,9 @@ pub fn start_app() -> Result<()> {
     let cursor = Arc::new(AtomicU32::new(0));
 
     let player = Player::new(audio_tx, ui_rx, cursor);
-
     let runtime = runtime::BirdRuntime { player };
 
-    // 加载 App 基础状态
-    let mut app = App::load_basic().unwrap_or_default();
+    let mut app = App::initialize_app().unwrap_or_default();
 
     // 设置启动配置和运行时
     app.boot_cfg = Some(boot_cfg);

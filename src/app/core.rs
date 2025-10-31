@@ -128,7 +128,7 @@ impl App {
         self.lyrics_service.manager_mut()
     }
 
-    pub fn load_basic() -> Result<Self, AppLoadError> {
+    pub fn initialize_app() -> Result<Self, AppLoadError> {
         // Load settings from PersistenceService
         let config = PersistenceService::load_basic_config()?;
 
