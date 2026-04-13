@@ -33,6 +33,7 @@ pub enum AudioOutputError {
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
+#[allow(dead_code)]
 mod constants {
     /// ring buffer capacity: 170 ms frames (≈ 8 160 frames at 48 kHz)
     pub const TARGET_LATENCY_MS: usize = 170;
@@ -136,7 +137,7 @@ mod pulseaudio {
             let bytes = unsafe {
                 std::slice::from_raw_parts(
                     samples.as_ptr() as *const u8,
-                    samples.len() * std::mem::size_of::<f32>(),
+                    std::mem::size_of_val(samples),
                 )
             };
 
