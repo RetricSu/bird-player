@@ -92,7 +92,7 @@ impl LibraryImportService {
         // Send items as they're processed
         for item in &items {
             lib_cmd_tx
-                .send(LibraryCommand::AddItem(item.clone()))
+                .send(LibraryCommand::AddItem(Box::new(item.clone())))
                 .map_err(|e| format!("Failed to send library item: {}", e))?;
         }
 

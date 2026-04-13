@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 pub enum LibraryCommand {
     AddView(LibraryView),
-    AddItem(LibraryItem),
+    AddItem(Box<LibraryItem>),
     AddPathId(LibraryPathId),
 }
 
@@ -312,9 +312,10 @@ impl Library {
         }
 
         // Load all pictures at once to prevent N+1 queries
-        let mut pictures_map: std::collections::HashMap<String, Vec<Picture>> = std::collections::HashMap::new();
+        let mut pictures_map: std::collections::HashMap<String, Vec<Picture>> =
+            std::collections::HashMap::new();
         let mut pic_stmt = conn_guard.prepare(
-            "SELECT library_item_id, mime_type, picture_type, description, file_path FROM pictures"
+            "SELECT library_item_id, mime_type, picture_type, description, file_path FROM pictures",
         )?;
 
         let picture_rows = pic_stmt.query_map([], |row| {
@@ -324,13 +325,19 @@ impl Library {
             let description: String = row.get(3)?;
             let file_path: String = row.get(4)?;
 
-            Ok((item_id, Picture::new(mime_type, picture_type, description, PathBuf::from(file_path))))
+            Ok((
+                item_id,
+                Picture::new(
+                    mime_type,
+                    picture_type,
+                    description,
+                    PathBuf::from(file_path),
+                ),
+            ))
         })?;
 
-        for pic_res in picture_rows {
-            if let Ok((item_id, pic)) = pic_res {
-                pictures_map.entry(item_id).or_default().push(pic);
-            }
+        for (item_id, pic) in picture_rows.flatten() {
+            pictures_map.entry(item_id).or_default().push(pic);
         }
 
         for item in &mut items {

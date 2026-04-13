@@ -54,7 +54,7 @@ impl LibraryService {
     /// Process a library command and update the library accordingly
     pub fn process_library_command(library: &mut Library, lib_cmd: LibraryCommand) {
         match lib_cmd {
-            LibraryCommand::AddItem(lib_item) => library.add_item(lib_item),
+            LibraryCommand::AddItem(lib_item) => library.add_item(*lib_item),
             LibraryCommand::AddView(lib_view) => library.add_view(lib_view),
             LibraryCommand::AddPathId(path_id) => library.set_path_to_imported(path_id),
         }
