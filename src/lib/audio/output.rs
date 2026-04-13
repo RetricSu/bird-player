@@ -58,14 +58,14 @@ mod pulseaudio {
 
     pub struct PulseAudioOutput {
         pa: psimple::Simple,
-        sample_buf: RawSampleBuffer<f32>,
+        sample_buf: SampleBuffer<f32>,
     }
 
     impl PulseAudioOutput {
         pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
             // An interleaved buffer is required to send data to PulseAudio. Use a SampleBuffer to
             // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
-            let sample_buf = RawSampleBuffer::<f32>::new(duration, spec);
+            let sample_buf = SampleBuffer::<f32>::new(duration, spec);
 
             // Create a PulseAudio stream specification.
             let pa_spec = pulse::sample::Spec {
@@ -132,7 +132,15 @@ mod pulseaudio {
             }
 
             // Write interleaved samples to PulseAudio.
-            match self.pa.write(self.sample_buf.as_bytes()) {
+            let samples = self.sample_buf.samples();
+            let bytes = unsafe {
+                std::slice::from_raw_parts(
+                    samples.as_ptr() as *const u8,
+                    samples.len() * std::mem::size_of::<f32>(),
+                )
+            };
+
+            match self.pa.write(bytes) {
                 Err(err) => {
                     error!("audio output stream write error: {}", err);
                     Err(AudioOutputError::StreamClosedError)
