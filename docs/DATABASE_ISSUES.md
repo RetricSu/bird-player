@@ -39,8 +39,3 @@ Currently, a music file's uniqueness is determined solely by its absolute file p
   ```
 - **Impact**: Relying on SQLite's implicit type conversion (from `TEXT` to `i64`) can cause unexpected query failures, index misses, and potential panics if a generated `usize` exceeds `i64::MAX`.
 - **Solution**: Use standardized unique identifiers (such as ULIDs or UUIDs), store them strictly as `TEXT`, and query them as strings.
-
-## 5. Destructive Schema Migrations
-- **The Issue**: The initialization logic compares `current_version` with `SCHEMA_VERSION`. If they don't match, it executes `drop_tables_if_exist()`.
-- **Impact**: Any future update that increments the schema version will permanently and silently delete all user playlists, play records, and library data during application startup.
-- **Solution**: Implement a proper migration system (using `ALTER TABLE` statements or via a migration crate like `refinery` or `rusqlite_migration`) to evolve the database schema safely without data loss.

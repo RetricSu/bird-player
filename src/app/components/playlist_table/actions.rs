@@ -1,6 +1,6 @@
 #[derive(Default)]
 pub(crate) struct PendingActions {
-    pub clear_lyrics: Vec<usize>,
+    pub clear_lyrics: Vec<String>,
     pub toggle_selection: Option<usize>,
     pub metadata_updates: Vec<(usize, String, String)>,
     pub play_track: Option<usize>,
@@ -8,7 +8,7 @@ pub(crate) struct PendingActions {
 }
 
 impl PendingActions {
-    pub(crate) fn clear_lyrics(&mut self, key: usize) {
+    pub(crate) fn clear_lyrics(&mut self, key: String) {
         self.clear_lyrics.push(key);
     }
 

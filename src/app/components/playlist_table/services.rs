@@ -15,7 +15,7 @@ impl<'a> PlaylistTableService<'a> {
         }
     }
 
-    pub(crate) fn clear_lyrics(&mut self, track_key: usize) {
+    pub(crate) fn clear_lyrics(&mut self, track_key: String) {
         self.ctx.update_track_lyrics(track_key, None);
     }
 

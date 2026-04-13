@@ -7,7 +7,7 @@ pub struct DBPersistence;
 impl DBPersistence {
     /// Save library to database
     pub fn save_library(
-        library: &crate::app::library::Library,
+        library: &mut crate::app::library::Library,
         db_conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         library.save_to_db(db_conn)?;

@@ -214,7 +214,7 @@ impl App {
         let db_conn = self.db().connection();
         PersistenceService::save_state(
             &self.app_settings,
-            &self.library,
+            &mut self.library,
             &mut self.playlists,
             &db_conn,
         );
@@ -270,7 +270,7 @@ impl App {
         LibraryImportService::import_library_path(lib_path, lib_cmd_tx, album_art_dir);
     }
 
-    pub fn update_track_lyrics(&mut self, track_key: usize, lyrics: Option<&str>) {
+    pub fn update_track_lyrics(&mut self, track_key: String, lyrics: Option<&str>) {
         let db_conn = self.db().connection();
         let player = self.runtime.as_mut().map(|rt| &mut rt.player);
 

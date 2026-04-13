@@ -8,7 +8,7 @@ pub struct Database {
 
 impl Database {
     // The current schema version - increment this when making schema changes
-    const SCHEMA_VERSION: i32 = 2;
+    const SCHEMA_VERSION: i32 = 3;
 
     pub fn new() -> Result<Self> {
         // Get the app's configuration directory
@@ -89,6 +89,7 @@ impl Database {
                 key TEXT PRIMARY KEY,
                 library_path_id INTEGER NOT NULL,
                 path TEXT NOT NULL,
+                file_hash TEXT,
                 title TEXT,
                 artist TEXT,
                 album TEXT,
@@ -112,6 +113,12 @@ impl Database {
                 file_path TEXT NOT NULL,
                 FOREIGN KEY (library_item_id) REFERENCES library_items (key)
             )",
+            [],
+        )?;
+
+        // Create index on pictures table to prevent N+1 full table scans
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pictures_lib_id ON pictures(library_item_id)",
             [],
         )?;
 

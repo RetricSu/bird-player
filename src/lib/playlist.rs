@@ -14,6 +14,8 @@ pub struct Playlist {
     pub selected: Option<LibraryItem>,
     #[serde(skip_serializing, skip_deserializing)]
     pub selected_indices: HashSet<usize>,
+    #[serde(skip)]
+    pub is_dirty: bool,
 }
 
 impl Default for Playlist {
@@ -30,11 +32,13 @@ impl Playlist {
             tracks: vec![],
             selected: None,
             selected_indices: HashSet::new(),
+            is_dirty: true,
         }
     }
 
     pub fn set_name(&mut self, name: String) {
         self.name = Some(name);
+        self.is_dirty = true;
     }
 
     pub fn get_name(&self) -> Option<String> {
@@ -43,12 +47,14 @@ impl Playlist {
 
     pub fn add(&mut self, track: LibraryItem) {
         self.tracks.push(track);
+        self.is_dirty = true;
     }
 
     // TODO - should probably return a Result
     pub fn remove(&mut self, idx: usize) {
         self.tracks.remove(idx);
         self.selected_indices.remove(&idx);
+        self.is_dirty = true;
 
         // Update indices greater than the removed index
         let mut to_remove = Vec::new();
@@ -74,6 +80,7 @@ impl Playlist {
     pub fn reorder(&mut self, current_pos: usize, destination_pos: usize) {
         let track = self.tracks.remove(current_pos);
         self.tracks.insert(destination_pos, track);
+        self.is_dirty = true;
 
         // Update selected indices after reordering
         let mut new_selected = HashSet::new();
@@ -108,10 +115,10 @@ impl Playlist {
     }
 
     pub fn get_pos(&self, track: &LibraryItem) -> Option<usize> {
-        self.get_pos_by_key(track.key())
+        self.get_pos_by_key(&track.key())
     }
 
-    pub fn get_pos_by_key(&self, key: usize) -> Option<usize> {
+    pub fn get_pos_by_key(&self, key: &str) -> Option<usize> {
         self.tracks.iter().position(|t| t.key() == key)
     }
 
@@ -140,7 +147,11 @@ impl Playlist {
 
     // Database methods
 
-    pub fn save_to_db(&self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
+    pub fn save_to_db(&mut self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
+        if !self.is_dirty {
+            return Ok(());
+        }
+
         let mut conn = conn.lock().unwrap();
 
         // Start a transaction
@@ -183,11 +194,16 @@ impl Playlist {
 
         // Commit the transaction
         tx.commit()?;
+        self.is_dirty = false;
 
         Ok(())
     }
 
     pub fn save_to_db_and_update_id(&mut self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
+        if !self.is_dirty {
+            return Ok(());
+        }
+
         let mut conn = conn.lock().unwrap();
 
         // Start a transaction
@@ -235,6 +251,7 @@ impl Playlist {
 
         // Commit the transaction
         tx.commit()?;
+        self.is_dirty = false;
 
         Ok(())
     }
@@ -258,6 +275,7 @@ impl Playlist {
                 tracks: vec![],
                 selected: None,
                 selected_indices: HashSet::new(),
+                is_dirty: false,
             };
 
             // Get the tracks
@@ -289,9 +307,7 @@ impl Playlist {
                 item.set_lyrics(row.get::<_, Option<String>>(9)?.as_deref());
 
                 // Set the key from the database
-                if let Ok(key_val) = key_str.parse::<usize>() {
-                    item.set_key(key_val);
-                }
+                item.set_key(key_str.clone());
 
                 // Load album art (pictures) from the database
                 let mut pic_stmt = conn_guard.prepare(
@@ -431,6 +447,7 @@ mod tests {
             ],
             selected: None,
             selected_indices: HashSet::new(),
+            is_dirty: false,
         };
 
         assert_eq!(playlist.tracks.len(), 3);
@@ -458,6 +475,7 @@ mod tests {
             ],
             selected: None,
             selected_indices: HashSet::new(),
+            is_dirty: false,
         };
 
         assert_eq!(playlist.tracks.len(), 3);
