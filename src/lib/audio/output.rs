@@ -33,6 +33,7 @@ pub enum AudioOutputError {
 
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
+#[allow(dead_code)]
 mod constants {
     /// ring buffer capacity: 170 ms frames (≈ 8 160 frames at 48 kHz)
     pub const TARGET_LATENCY_MS: usize = 170;
@@ -58,14 +59,14 @@ mod pulseaudio {
 
     pub struct PulseAudioOutput {
         pa: psimple::Simple,
-        sample_buf: RawSampleBuffer<f32>,
+        sample_buf: SampleBuffer<f32>,
     }
 
     impl PulseAudioOutput {
         pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
             // An interleaved buffer is required to send data to PulseAudio. Use a SampleBuffer to
             // move data between Symphonia AudioBuffers and the byte buffers required by PulseAudio.
-            let sample_buf = RawSampleBuffer::<f32>::new(duration, spec);
+            let sample_buf = SampleBuffer::<f32>::new(duration, spec);
 
             // Create a PulseAudio stream specification.
             let pa_spec = pulse::sample::Spec {
@@ -132,7 +133,15 @@ mod pulseaudio {
             }
 
             // Write interleaved samples to PulseAudio.
-            match self.pa.write(self.sample_buf.as_bytes()) {
+            let samples = self.sample_buf.samples();
+            let bytes = unsafe {
+                std::slice::from_raw_parts(
+                    samples.as_ptr() as *const u8,
+                    std::mem::size_of_val(samples),
+                )
+            };
+
+            match self.pa.write(bytes) {
                 Err(err) => {
                     error!("audio output stream write error: {}", err);
                     Err(AudioOutputError::StreamClosedError)

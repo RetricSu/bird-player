@@ -29,9 +29,21 @@ impl PlaylistService {
         playlists: &mut Vec<Playlist>,
         current_playlist_idx: &mut Option<usize>,
         playlist_idx_to_remove: usize,
+        db_conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
     ) {
         if playlist_idx_to_remove >= playlists.len() {
             return;
+        }
+
+        // Try to delete from DB first if it has an id
+        if let Some(playlist) = playlists.get(playlist_idx_to_remove) {
+            if let Some(playlist_id) = playlist.id {
+                if let Err(e) = Playlist::delete_from_db(db_conn, playlist_id) {
+                    tracing::error!("Failed to delete playlist from database: {}", e);
+                    // Do not remove from memory to keep it in sync with DB failure
+                    return;
+                }
+            }
         }
 
         // Update current playlist index if necessary
