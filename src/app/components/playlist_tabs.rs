@@ -90,6 +90,19 @@ impl AppComponent for PlaylistTabs {
             // Handle playlist removal
             if let Some(idx) = ctx.ui_state.playlist_idx_to_remove {
                 ctx.ui_state.playlist_idx_to_remove = None;
+
+                // Delete from database first, before removing from memory
+                if let Some(playlist) = ctx.playlists.get(idx) {
+                    if let Some(playlist_id) = playlist.id {
+                        let db_conn = ctx.db().connection();
+                        if let Err(e) =
+                            crate::app::playlist::Playlist::delete_from_db(&db_conn, playlist_id)
+                        {
+                            tracing::error!("Failed to delete playlist from database: {}", e);
+                        }
+                    }
+                }
+
                 PlaylistService::delete_playlist(
                     &mut ctx.playlists,
                     &mut ctx.app_settings.current_playlist_idx,
