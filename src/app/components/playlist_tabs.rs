@@ -90,7 +90,7 @@ impl AppComponent for PlaylistTabs {
             // Handle playlist removal
             if let Some(idx) = ctx.ui_state.playlist_idx_to_remove {
                 ctx.ui_state.playlist_idx_to_remove = None;
-                
+
                 let db_conn = ctx.db().connection();
                 PlaylistService::delete_playlist(
                     &mut ctx.playlists,
