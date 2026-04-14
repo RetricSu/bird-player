@@ -114,6 +114,10 @@ impl App {
 }
 
 impl eframe::App for App {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0] // Fix macOS ghosting inside transparent windows
+    }
+
     fn on_exit(&mut self, _ctx: Option<&eframe::glow::Context>) {
         tracing::info!("exiting and saving");
         self.update_player_persistence();
