@@ -176,29 +176,19 @@ impl AppComponent for PlayerComponent {
                             format!("{:02}:{:02}", minutes, seconds)
                         };
 
-                        ui.horizontal(|ui| {
-                            ui.label(eframe::egui::RichText::new(format!("{}{}", t("song"), title)).strong());
-                            ui.separator();
-                            ui.label(format!("{} / {}", format_time(seek_to_timestamp), format_time(duration)));
-                        });
-
-                        ui.horizontal(|ui| {
-                            ui.label(format!("{}{}", t("artist"), artist));
-                            ui.separator();
-                            ui.label(format!("{}{}", t("playlist"), current_playlist_name));
-                        });
+                        ui.label(eframe::egui::RichText::new(format!("{}{}", t("song"), title)).strong());
+                        ui.label(format!("{}{}", t("artist"), artist));
+                        ui.label(format!("{} / {}", format_time(seek_to_timestamp), format_time(duration)));
+                        ui.label(format!("{}{}", t("playlist"), current_playlist_name));
                     } else {
-                        ui.horizontal(|ui| {
-                            ui.label(eframe::egui::RichText::new(t("no_track")).strong());
-                            ui.separator();
-                            if has_tracks_in_playlist {
-                                ui.label(t("select_track"));
-                            } else if current_playlist_idx.is_some() {
-                                ui.label(t("add_tracks"));
-                            } else {
-                                ui.label(t("create_playlist"));
-                            }
-                        });
+                        ui.label(eframe::egui::RichText::new(t("no_track")).strong());
+                        if has_tracks_in_playlist {
+                            ui.label(t("select_track"));
+                        } else if current_playlist_idx.is_some() {
+                            ui.label(t("add_tracks"));
+                        } else {
+                            ui.label(t("create_playlist"));
+                        }
                     }
 
                     // Tightly packed controls
