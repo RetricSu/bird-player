@@ -76,9 +76,8 @@ impl App {
                 let frame = egui::Frame::NONE.fill(egui::Color32::TRANSPARENT);
                 
                 egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-                    let response = ui.allocate_response(ui.available_size(), egui::Sense::drag());
-                    
-                    if response.dragged() {
+                    // Allow dragging by clicking anywhere in the lyrics window
+                    if ui.input(|i| i.pointer.primary_pressed()) {
                         ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
                     
