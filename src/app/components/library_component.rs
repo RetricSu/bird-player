@@ -91,7 +91,11 @@ impl AppComponent for LibraryComponent {
 
                         // If it existed, find it and rescan. If new, import the bottom-most path.
                         let path_to_import = if path_exists {
-                            ctx.library.paths().iter().find(|p| *p.path() == new_path).cloned()
+                            ctx.library
+                                .paths()
+                                .iter()
+                                .find(|p| *p.path() == new_path)
+                                .cloned()
                         } else {
                             ctx.library.paths().last().cloned()
                         };

@@ -1,7 +1,7 @@
 use lofty::file::TaggedFileExt;
 use lofty::picture::Picture as LoftyPicture;
 use lofty::probe::Probe;
-use lofty::tag::{Accessor};
+use lofty::tag::Accessor;
 use lofty::tag::Tag;
 use rand::Rng;
 use rayon::prelude::*;
@@ -78,8 +78,13 @@ impl LibraryImportService {
                 if !entry.file_type().is_file() {
                     return false;
                 }
-                
-                let ext = entry.path().extension().unwrap_or(std::ffi::OsStr::new("")).to_string_lossy().to_lowercase();
+
+                let ext = entry
+                    .path()
+                    .extension()
+                    .unwrap_or(std::ffi::OsStr::new(""))
+                    .to_string_lossy()
+                    .to_lowercase();
                 matches!(ext.as_str(), "mp3" | "flac" | "wav" | "ogg" | "m4a")
             })
             .collect::<Vec<_>>();
@@ -144,7 +149,9 @@ impl LibraryImportService {
             .unwrap_or("Unknown Title")
             .to_string();
 
-        let title = tag.title().unwrap_or(std::borrow::Cow::Borrowed(&filename_title));
+        let title = tag
+            .title()
+            .unwrap_or(std::borrow::Cow::Borrowed(&filename_title));
 
         let mut item = LibraryItem::new(file_path.to_path_buf(), path_id)
             .set_title(Some(&title))
@@ -172,7 +179,6 @@ impl LibraryImportService {
         LibraryItem::new(file_path.to_path_buf(), path_id).set_title(Some(&filename_title))
     }
 
-
     /// Extract and save album art from tag
     fn extract_album_art(
         item: &mut LibraryItem,
@@ -186,7 +192,10 @@ impl LibraryImportService {
             if let Ok(mut file) = fs::File::create(&file_name) {
                 if file.write_all(pic.data()).is_ok() {
                     item.add_picture(Picture::new(
-                        pic.mime_type().map(|m| m.as_str()).unwrap_or("image/jpeg").to_string(),
+                        pic.mime_type()
+                            .map(|m| m.as_str())
+                            .unwrap_or("image/jpeg")
+                            .to_string(),
                         pic.pic_type().as_u8(),
                         pic.description().unwrap_or("").to_string(),
                         file_name,

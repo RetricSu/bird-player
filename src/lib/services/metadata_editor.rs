@@ -1,8 +1,8 @@
 use lofty::file::TaggedFileExt;
 use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::probe::Probe;
-use lofty::tag::{Accessor, TagExt};
 use lofty::tag::Tag;
+use lofty::tag::{Accessor, TagExt};
 use std::fs;
 use std::path::PathBuf;
 
@@ -89,10 +89,7 @@ impl MetadataEditor {
     }
 
     /// Update the track's album cover
-    pub fn update_track_cover(
-        track: &mut LibraryItem,
-        image_path: &PathBuf,
-    ) -> bool {
+    pub fn update_track_cover(track: &mut LibraryItem, image_path: &PathBuf) -> bool {
         let path = track.path();
 
         let image_data = match fs::read(image_path) {
@@ -123,7 +120,11 @@ impl MetadataEditor {
         };
 
         // Determine MimeType based on extension
-        let ext = image_path.extension().unwrap_or_default().to_string_lossy().to_lowercase();
+        let ext = image_path
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
         let mime_type = match ext.as_str() {
             "png" => MimeType::Png,
             "jpeg" | "jpg" => MimeType::Jpeg,
@@ -133,12 +134,8 @@ impl MetadataEditor {
             _ => MimeType::Jpeg,
         };
 
-        let picture = Picture::new_unchecked(
-            PictureType::CoverFront,
-            Some(mime_type),
-            None,
-            image_data,
-        );
+        let picture =
+            Picture::new_unchecked(PictureType::CoverFront, Some(mime_type), None, image_data);
 
         // Remove old front covers
         tag.remove_picture_type(PictureType::CoverFront);

@@ -1,7 +1,7 @@
 use lofty::file::TaggedFileExt;
 use lofty::probe::Probe;
-use lofty::tag::{ItemKey, TagExt};
 use lofty::tag::Tag;
+use lofty::tag::{ItemKey, TagExt};
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -268,8 +268,10 @@ impl LyricsService {
         let probe_result = Probe::open(&path).and_then(|p| p.read());
         match probe_result {
             Ok(tagged_file) => {
-                let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
-                
+                let tag = tagged_file
+                    .primary_tag()
+                    .or_else(|| tagged_file.first_tag());
+
                 if let Some(tag) = tag {
                     // Check for lyrics item
                     if let Some(text) = tag.get_string(&ItemKey::Lyrics) {
@@ -303,9 +305,8 @@ impl LyricsService {
                         if is_synced {
                             // Store as synced lyrics and parse the lines
                             lyrics.synced_lyrics = Some(text);
-                            lyrics.lines = Lyrics::parse_synced_lyrics(
-                                lyrics.synced_lyrics.as_ref().unwrap(),
-                            );
+                            lyrics.lines =
+                                Lyrics::parse_synced_lyrics(lyrics.synced_lyrics.as_ref().unwrap());
                             tracing::debug!(
                                 "🎵 Parsed {} synced lyric lines from cache",
                                 lyrics.lines.len()
