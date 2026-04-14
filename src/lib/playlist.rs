@@ -280,7 +280,7 @@ impl Playlist {
 
             // Get the tracks
             let mut items_stmt = conn_guard.prepare(
-                "SELECT li.key, li.library_id, li.path, li.title, li.artist, li.album, li.year, li.genre, li.track_number, li.lyrics 
+                "SELECT li.key, li.library_path_id, li.path, li.title, li.artist, li.album, li.year, li.genre, li.track_number, li.lyrics 
                  FROM library_items li
                  JOIN playlist_items pi ON li.key = pi.library_item_id
                  WHERE pi.playlist_id = ?1

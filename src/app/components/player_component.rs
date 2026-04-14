@@ -33,13 +33,17 @@ impl AppComponent for PlayerComponent {
             return;
         }
 
-        // Process UI commands first
-        let ui_cmd = {
+        // Process ALL pending UI commands first
+        let ui_cmds: Vec<_> = {
             let player = ctx.player_mut_ref();
-            player.ui_rx.try_recv().ok()
+            let mut cmds = Vec::new();
+            while let Ok(cmd) = player.ui_rx.try_recv() {
+                cmds.push(cmd);
+            }
+            cmds
         };
 
-        if let Some(new_seek_cmd) = ui_cmd {
+        for new_seek_cmd in ui_cmds {
             match new_seek_cmd {
                 AudioEvent::CurrentTimestamp(seek_timestamp) => {
                     // Check if we need to save
