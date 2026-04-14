@@ -89,7 +89,7 @@ impl Database {
                 key TEXT PRIMARY KEY,
                 library_path_id INTEGER NOT NULL,
                 path TEXT NOT NULL,
-                file_hash TEXT,
+                file_hash TEXT NOT NULL DEFAULT '',
                 title TEXT,
                 artist TEXT,
                 album TEXT,

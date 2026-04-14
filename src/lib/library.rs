@@ -288,9 +288,8 @@ impl Library {
             let library_id = LibraryPathId::new(library_id_raw as usize);
             let path = PathBuf::from(path_str);
 
-            // Create a new library item
-            let mut item = LibraryItem::new(path, library_id);
-            item.set_file_hash(file_hash);
+            // Create a new library item from database records directly without filesystem I/O
+            let mut item = LibraryItem::from_db(key_str, library_id, path, file_hash);
 
             // Set all metadata
             item.set_title(row.get::<_, Option<String>>(4)?.as_deref());
@@ -300,8 +299,6 @@ impl Library {
             item.set_genre(row.get::<_, Option<String>>(8)?.as_deref());
             item.set_track_number(row.get::<_, Option<u32>>(9)?);
             item.set_lyrics(row.get::<_, Option<String>>(10)?.as_deref());
-
-            item.set_key(key_str);
 
             Ok(item)
         })?;
@@ -336,7 +333,8 @@ impl Library {
             ))
         })?;
 
-        for (item_id, pic) in picture_rows.flatten() {
+        for picture_result in picture_rows {
+            let (item_id, pic) = picture_result?;
             pictures_map.entry(item_id).or_default().push(pic);
         }
 
@@ -482,7 +480,7 @@ impl LibraryItem {
                         .as_secs()
                 )
             })
-            .unwrap_or_else(|_| format!("unknown_{}", uuid::Uuid::new_v4()));
+            .unwrap_or_else(|_| format!("unknown_{}", path.to_string_lossy()));
 
         Self {
             library_id,
@@ -501,6 +499,29 @@ impl LibraryItem {
         }
     }
 
+    pub fn from_db(
+        key: String,
+        library_id: LibraryPathId,
+        path: PathBuf,
+        file_hash: String,
+    ) -> Self {
+        Self {
+            library_id,
+            path,
+            title: None,
+            artist: None,
+            album: None,
+            year: None,
+            genre: None,
+            track_number: None,
+            key,
+            pictures: vec![],
+            lyrics: None,
+            is_dirty: false,
+            file_hash,
+        }
+    }
+
     pub fn library_id(&self) -> LibraryPathId {
         self.library_id
     }
@@ -515,6 +536,10 @@ impl LibraryItem {
 
     pub fn key(&self) -> String {
         self.key.clone()
+    }
+
+    pub fn key_str(&self) -> &str {
+        &self.key
     }
 
     pub fn set_key(&mut self, key: String) {
