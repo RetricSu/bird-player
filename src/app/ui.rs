@@ -40,7 +40,7 @@ impl App {
     }
 
     fn refresh_library_command_processor(&mut self) {
-        if let Ok(lib_cmd) = self.lib_cmd_rx().try_recv() {
+        while let Ok(lib_cmd) = self.lib_cmd_rx().try_recv() {
             self.process_library_command(lib_cmd);
         }
     }
@@ -58,6 +58,10 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.refresh_library_command_processor();
+
+        if self.ui_state.is_importing {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
         self.refresh_lyrics_display();
         self.refresh_window_title(ctx);
 

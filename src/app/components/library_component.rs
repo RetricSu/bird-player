@@ -64,13 +64,14 @@ impl AppComponent for LibraryComponent {
                             ctx.library.set_path_to_not_imported(path_id);
 
                             // Re-import the path, which will update existing items
-                            ctx.import_library_paths(
-                                ctx.library
-                                    .paths()
-                                    .iter()
-                                    .find(|p| p.id() == path_id)
-                                    .unwrap(),
-                            );
+                            let path_to_import = ctx
+                                .library
+                                .paths()
+                                .iter()
+                                .find(|p| p.id() == path_id)
+                                .cloned()
+                                .unwrap();
+                            ctx.import_library_paths(&path_to_import);
                         }
 
                         ui.close_menu();

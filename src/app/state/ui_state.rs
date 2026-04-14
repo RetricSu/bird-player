@@ -35,6 +35,9 @@ pub struct UiState {
 
     /// Last window title to avoid redundant updates
     pub last_window_title: Option<String>,
+
+    /// Whether library import is currently running
+    pub is_importing: bool,
 }
 
 impl Default for UiState {
@@ -51,6 +54,7 @@ impl Default for UiState {
             should_fetch_lyrics_on_init: false,
             lyrics_fetch_state: LyricsFetchState::Idle,
             last_window_title: None,
+            is_importing: false,
         }
     }
 }

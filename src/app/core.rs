@@ -263,7 +263,8 @@ impl App {
     }
 
     // Spawns a background thread and imports files from a library path
-    pub fn import_library_paths(&self, lib_path: &LibraryPath) {
+    pub fn import_library_paths(&mut self, lib_path: &LibraryPath) {
+        self.ui_state.is_importing = true;
         let lib_cmd_tx = self.lib_cmd_tx().clone();
         let album_art_dir = App::get_album_art_dir();
 
@@ -404,6 +405,11 @@ impl App {
     }
 
     pub fn process_library_command(&mut self, lib_cmd: LibraryCommand) {
+        if matches!(lib_cmd, LibraryCommand::AddPathId(_)) {
+            self.ui_state.is_importing = false;
+            // Also explicitly save state after completing an import!
+            self.save_state();
+        }
         LibraryService::process_library_command(&mut self.library, lib_cmd);
     }
 
