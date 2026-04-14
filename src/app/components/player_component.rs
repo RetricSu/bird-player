@@ -221,21 +221,6 @@ impl AppComponent for PlayerComponent {
                         };
                         let mode_btn = ui.add_enabled(has_selected_track, egui::Button::new(mode_icon).player_style());
 
-                        ui.separator();
-
-                        ui.label("📢");
-                        let mut current_volume = volume;
-                        let previous_vol = current_volume;
-                        ui.style_mut().spacing.slider_width = 80.0;
-                        let volume_slider = ui.add(eframe::egui::Slider::new(&mut current_volume, 0.0_f32..=1.0_f32).volume_style());
-
-                        if volume_slider.dragged() {
-                            if current_volume != previous_vol {
-                                let is_processing_ui_change = ctx.is_processing_ui_change();
-                                PlayerService::set_volume(ctx.player_mut_ref(), current_volume, &is_processing_ui_change);
-                            }
-                        }
-
                         // Playback Action Logic
                         let mut fetch_lyrics = false;
                         if has_selected_track {
@@ -265,6 +250,21 @@ impl AppComponent for PlayerComponent {
                         }
                         if fetch_lyrics {
                             ctx.fetch_lyrics_for_current_track();
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("📢");
+                        let mut current_volume = volume;
+                        let previous_vol = current_volume;
+                        ui.style_mut().spacing.slider_width = 160.0; // make it longer now that it has its own row
+                        let volume_slider = ui.add(eframe::egui::Slider::new(&mut current_volume, 0.0_f32..=1.0_f32).volume_style());
+
+                        if volume_slider.dragged() {
+                            if current_volume != previous_vol {
+                                let is_processing_ui_change = ctx.is_processing_ui_change();
+                                PlayerService::set_volume(ctx.player_mut_ref(), current_volume, &is_processing_ui_change);
+                            }
                         }
                     });
 
