@@ -337,7 +337,7 @@ impl AppComponent for PlayerComponent {
                                                 ctx.playlists.get_mut(playlist_idx)
                                             {
                                                 if let Some(track_position) =
-                                                    playlist.get_pos_by_key(removed_key)
+                                                    playlist.get_pos_by_key(&removed_key)
                                                 {
                                                     playlist.remove(track_position);
                                                 }

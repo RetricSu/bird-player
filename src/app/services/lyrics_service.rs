@@ -40,14 +40,14 @@ impl LyricsService {
     /// Update lyrics for a track and persist to database
     pub fn update_track_lyrics(
         &mut self,
-        track_key: usize,
+        track_key: String,
         lyrics: Option<&str>,
         library: &mut Library,
         playlists: &mut [crate::app::Playlist],
         player: Option<&mut Player>,
         db_conn: &Arc<Mutex<rusqlite::Connection>>,
     ) {
-        let lyrics_owned = library.update_item_lyrics(track_key, lyrics);
+        let lyrics_owned = library.update_item_lyrics(track_key.clone(), lyrics);
 
         // Update lyrics in all playlists
         for playlist in playlists.iter_mut() {
@@ -83,7 +83,7 @@ impl LyricsService {
             match db_conn.lock() {
                 Ok(conn_guard) => conn_guard.execute(
                     "UPDATE library_items SET lyrics = ?1 WHERE key = ?2",
-                    rusqlite::params![lyrics_param, track_key.to_string()],
+                    rusqlite::params![lyrics_param, track_key],
                 ),
                 Err(e) => {
                     tracing::error!(

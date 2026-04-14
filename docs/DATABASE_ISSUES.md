@@ -43,4 +43,4 @@ Currently, a music file's uniqueness is determined solely by its absolute file p
 ## 5. Destructive Schema Migrations
 - **The Issue**: The initialization logic compares `current_version` with `SCHEMA_VERSION`. If they don't match, it executes `drop_tables_if_exist()`.
 - **Impact**: Any future update that increments the schema version will permanently and silently delete all user playlists, play records, and library data during application startup.
-- **Solution**: Implement a proper migration system (using `ALTER TABLE` statements or via a migration crate like `refinery` or `rusqlite_migration`) to evolve the database schema safely without data loss.
+- **Status (Pre-MVP)**: While a non-destructive migration system (e.g. `ALTER TABLE` or migration crates) is normally required, we are intentionally bypassing forward compatibility during our rapid iteration phase prior to reaching an MVP. Destructive migrations are currently acceptable.

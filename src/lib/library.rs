@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 pub enum LibraryCommand {
     AddView(LibraryView),
-    AddItem(LibraryItem),
+    AddItem(Box<LibraryItem>),
     AddPathId(LibraryPathId),
 }
 
@@ -110,11 +110,11 @@ impl Library {
     }
 
     pub fn add_item(&mut self, library_item: LibraryItem) {
-        // Check if an item with this path already exists
+        // Check if an item with this file_hash already exists
         if let Some(idx) = self
             .items
             .iter()
-            .position(|item| item.path() == library_item.path())
+            .position(|item| item.file_hash() == library_item.file_hash())
         {
             // Update the existing item but preserve its key
             let existing_key = self.items[idx].key();
@@ -133,7 +133,7 @@ impl Library {
         self.library_view.containers.append(&mut new);
     }
 
-    pub fn update_item_lyrics(&mut self, key: usize, lyrics: Option<&str>) -> Option<String> {
+    pub fn update_item_lyrics(&mut self, key: String, lyrics: Option<&str>) -> Option<String> {
         let lyrics_owned = lyrics.map(|text| text.to_string());
 
         for item in self.items.iter_mut() {
@@ -155,7 +155,7 @@ impl Library {
 
     // Database methods
 
-    pub fn save_to_db(&self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
+    pub fn save_to_db(&mut self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {
         let mut conn_guard = conn.lock().unwrap();
 
         // Start a transaction
@@ -181,15 +181,20 @@ impl Library {
         }
 
         // Save all library items
-        for item in &self.items {
+        for item in &mut self.items {
+            if !item.is_dirty() {
+                continue;
+            }
+
             tx.execute(
                 "INSERT OR REPLACE INTO library_items 
-                 (key, library_path_id, path, title, artist, album, year, genre, track_number, lyrics) 
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                 (key, library_path_id, path, file_hash, title, artist, album, year, genre, track_number, lyrics) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 rusqlite::params![
                     item.key().to_string(),
                     item.library_id().0 as i64,
                     item.path().to_string_lossy().to_string(),
+                    item.file_hash(),
                     item.title(),
                     item.artist(),
                     item.album(),
@@ -222,6 +227,8 @@ impl Library {
                     ],
                 )?;
             }
+
+            item.reset_dirty();
         }
 
         // Commit the transaction
@@ -268,7 +275,7 @@ impl Library {
 
         // Load library items
         let mut item_stmt = conn_guard.prepare(
-            "SELECT key, library_path_id, path, title, artist, album, year, genre, track_number, lyrics 
+            "SELECT key, library_path_id, path, file_hash, title, artist, album, year, genre, track_number, lyrics 
              FROM library_items"
         )?;
 
@@ -276,26 +283,22 @@ impl Library {
             let key_str: String = row.get(0)?;
             let library_id_raw: i64 = row.get(1)?;
             let path_str: String = row.get(2)?;
+            let file_hash: String = row.get(3)?;
 
             let library_id = LibraryPathId::new(library_id_raw as usize);
             let path = PathBuf::from(path_str);
 
-            // Create a new library item
-            let mut item = LibraryItem::new(path, library_id);
+            // Create a new library item from database records directly without filesystem I/O
+            let mut item = LibraryItem::from_db(key_str, library_id, path, file_hash);
 
             // Set all metadata
-            item.set_title(row.get::<_, Option<String>>(3)?.as_deref());
-            item.set_artist(row.get::<_, Option<String>>(4)?.as_deref());
-            item.set_album(row.get::<_, Option<String>>(5)?.as_deref());
-            item.set_year(row.get::<_, Option<i32>>(6)?);
-            item.set_genre(row.get::<_, Option<String>>(7)?.as_deref());
-            item.set_track_number(row.get::<_, Option<u32>>(8)?);
-            item.set_lyrics(row.get::<_, Option<String>>(9)?.as_deref());
-
-            // Force the key to match the database
-            if let Ok(key_val) = key_str.parse::<usize>() {
-                item.set_key(key_val);
-            }
+            item.set_title(row.get::<_, Option<String>>(4)?.as_deref());
+            item.set_artist(row.get::<_, Option<String>>(5)?.as_deref());
+            item.set_album(row.get::<_, Option<String>>(6)?.as_deref());
+            item.set_year(row.get::<_, Option<i32>>(7)?);
+            item.set_genre(row.get::<_, Option<String>>(8)?.as_deref());
+            item.set_track_number(row.get::<_, Option<u32>>(9)?);
+            item.set_lyrics(row.get::<_, Option<String>>(10)?.as_deref());
 
             Ok(item)
         })?;
@@ -305,32 +308,43 @@ impl Library {
             items.push(item_result?);
         }
 
-        // Load pictures for each item
-        for item in &mut items {
-            let item_key = item.key() as i64;
+        // Load all pictures at once to prevent N+1 queries
+        let mut pictures_map: std::collections::HashMap<String, Vec<Picture>> =
+            std::collections::HashMap::new();
+        let mut pic_stmt = conn_guard.prepare(
+            "SELECT library_item_id, mime_type, picture_type, description, file_path FROM pictures",
+        )?;
 
-            let mut pic_stmt = conn_guard.prepare(
-                "SELECT mime_type, picture_type, description, file_path 
-                 FROM pictures WHERE library_item_id = ?",
-            )?;
+        let picture_rows = pic_stmt.query_map([], |row| {
+            let item_id: String = row.get(0)?;
+            let mime_type: String = row.get(1)?;
+            let picture_type: u8 = row.get(2)?;
+            let description: String = row.get(3)?;
+            let file_path: String = row.get(4)?;
 
-            let picture_rows = pic_stmt.query_map(rusqlite::params![item_key], |row| {
-                let mime_type: String = row.get(0)?;
-                let picture_type: u8 = row.get(1)?;
-                let description: String = row.get(2)?;
-                let file_path: String = row.get(3)?;
-
-                Ok(Picture::new(
+            Ok((
+                item_id,
+                Picture::new(
                     mime_type,
                     picture_type,
                     description,
                     PathBuf::from(file_path),
-                ))
-            })?;
+                ),
+            ))
+        })?;
 
-            for picture_result in picture_rows {
-                item.add_picture(picture_result?);
+        for picture_result in picture_rows {
+            let (item_id, pic) = picture_result?;
+            pictures_map.entry(item_id).or_default().push(pic);
+        }
+
+        for item in &mut items {
+            if let Some(pics) = pictures_map.remove(&item.key()) {
+                for pic in pics {
+                    item.add_picture(pic);
+                }
             }
+            item.reset_dirty();
         }
 
         // Add items to the library
@@ -444,14 +458,30 @@ pub struct LibraryItem {
     year: Option<i32>,
     genre: Option<String>,
     track_number: Option<u32>,
-    key: usize,
+    key: String,
     pictures: Vec<Picture>,
     lyrics: Option<String>,
+    #[serde(skip)]
+    is_dirty: bool,
+    file_hash: String,
 }
 
 impl LibraryItem {
     pub fn new(path: PathBuf, library_id: LibraryPathId) -> Self {
-        use rand::Rng; // TODO - use ULID?
+        let file_hash = std::fs::metadata(&path)
+            .map(|m| {
+                format!(
+                    "{}_{}",
+                    m.len(),
+                    m.modified()
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                )
+            })
+            .unwrap_or_else(|_| format!("unknown_{}", path.to_string_lossy()));
+
         Self {
             library_id,
             path,
@@ -461,9 +491,34 @@ impl LibraryItem {
             year: None,
             genre: None,
             track_number: None,
-            key: rand::thread_rng().gen(),
+            key: uuid::Uuid::new_v4().to_string(),
             pictures: Vec::new(),
             lyrics: None,
+            is_dirty: true,
+            file_hash,
+        }
+    }
+
+    pub fn from_db(
+        key: String,
+        library_id: LibraryPathId,
+        path: PathBuf,
+        file_hash: String,
+    ) -> Self {
+        Self {
+            library_id,
+            path,
+            title: None,
+            artist: None,
+            album: None,
+            year: None,
+            genre: None,
+            track_number: None,
+            key,
+            pictures: vec![],
+            lyrics: None,
+            is_dirty: false,
+            file_hash,
         }
     }
 
@@ -479,11 +534,15 @@ impl LibraryItem {
         &self.path
     }
 
-    pub fn key(&self) -> usize {
-        self.key
+    pub fn key(&self) -> String {
+        self.key.clone()
     }
 
-    pub fn set_key(&mut self, key: usize) {
+    pub fn key_str(&self) -> &str {
+        &self.key
+    }
+
+    pub fn set_key(&mut self, key: String) {
         self.key = key;
     }
 
@@ -491,7 +550,7 @@ impl LibraryItem {
         if let Some(title) = title {
             self.title = Some(title.to_string());
         }
-
+        self.is_dirty = true;
         self.to_owned()
     }
 
@@ -507,6 +566,7 @@ impl LibraryItem {
         if let Some(artist) = artist {
             self.artist = Some(artist.to_string());
         }
+        self.is_dirty = true;
         self.to_owned()
     }
 
@@ -522,6 +582,7 @@ impl LibraryItem {
         if let Some(album) = album {
             self.album = Some(album.to_string());
         }
+        self.is_dirty = true;
         self.to_owned()
     }
 
@@ -535,6 +596,7 @@ impl LibraryItem {
 
     pub fn set_year(&mut self, year: Option<i32>) -> Self {
         self.year = year;
+        self.is_dirty = true;
         self.to_owned()
     }
 
@@ -546,6 +608,7 @@ impl LibraryItem {
         if let Some(genre) = genre {
             self.genre = Some(genre.to_string());
         }
+        self.is_dirty = true;
         self.to_owned()
     }
 
@@ -559,6 +622,7 @@ impl LibraryItem {
 
     pub fn set_track_number(&mut self, track_number: Option<u32>) -> Self {
         self.track_number = track_number;
+        self.is_dirty = true;
         self.to_owned()
     }
 
@@ -572,10 +636,12 @@ impl LibraryItem {
 
     pub fn add_picture(&mut self, picture: Picture) {
         self.pictures.push(picture);
+        self.is_dirty = true;
     }
 
     pub fn clear_pictures(&mut self) {
         self.pictures.clear();
+        self.is_dirty = true;
     }
 
     pub fn set_lyrics(&mut self, lyrics: Option<&str>) -> Self {
@@ -587,6 +653,7 @@ impl LibraryItem {
                 Some(trimmed.to_owned())
             }
         });
+        self.is_dirty = true;
         self.to_owned()
     }
 
@@ -601,6 +668,7 @@ impl LibraryItem {
                 Some(trimmed.to_owned())
             }
         });
+        self.is_dirty = true;
     }
 
     pub fn lyrics(&self) -> Option<String> {
@@ -609,6 +677,22 @@ impl LibraryItem {
 
     pub fn has_lyrics(&self) -> bool {
         self.lyrics.is_some()
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.is_dirty
+    }
+
+    pub fn reset_dirty(&mut self) {
+        self.is_dirty = false;
+    }
+
+    pub fn file_hash(&self) -> &str {
+        &self.file_hash
+    }
+
+    pub fn set_file_hash(&mut self, file_hash: String) {
+        self.file_hash = file_hash;
     }
 }
 

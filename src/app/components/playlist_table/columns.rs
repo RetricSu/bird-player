@@ -268,7 +268,7 @@ pub(crate) fn render_lyrics_column(
     row_id: egui::Id,
     column_width: f32,
     has_lyrics: bool,
-    track_key: usize,
+    track_key: String,
     track_path: &Path,
     localization: &PlaylistLocalization,
     actions: &mut PendingActions,

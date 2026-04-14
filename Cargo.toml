@@ -50,6 +50,7 @@ libpulse-binding = { version = "2.27.1", optional = true }
 libpulse-simple-binding = { version = "2.27.1", optional = true }
 urlencoding = "2.1"
 ureq = "2.9"
+uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
 
 [features]
 default = []

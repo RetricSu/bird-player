@@ -120,7 +120,7 @@ impl PersistenceService {
     /// Save all application state
     pub fn save_state(
         config: &AppSettings,
-        library: &Library,
+        library: &mut Library,
         playlists: &mut [Playlist],
         db_conn: &Arc<Mutex<rusqlite::Connection>>,
     ) {
