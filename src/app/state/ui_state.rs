@@ -27,6 +27,9 @@ pub struct UiState {
     /// Whether the lyrics panel is shown
     pub show_lyrics_panel: bool,
 
+    /// Whether the desktop lyrics mode is active
+    pub desktop_lyrics_enabled: bool,
+
     /// Whether to fetch lyrics on init (after heavy data loaded)
     pub should_fetch_lyrics_on_init: bool,
 
@@ -51,6 +54,7 @@ impl Default for UiState {
             default_window_height: crate::app::constants::DEFAULT_WINDOW_HEIGHT as f64,
             is_maximized: false,
             show_lyrics_panel: false,
+            desktop_lyrics_enabled: false,
             should_fetch_lyrics_on_init: false,
             lyrics_fetch_state: LyricsFetchState::Idle,
             last_window_title: None,
@@ -65,6 +69,7 @@ pub struct UiSettings {
     pub library_folders_expanded: bool,
     pub default_window_height: f64,
     pub show_lyrics_panel: bool,
+    pub desktop_lyrics_enabled: bool,
 }
 
 impl Default for UiSettings {
@@ -73,6 +78,7 @@ impl Default for UiSettings {
             library_folders_expanded: false,
             default_window_height: crate::app::constants::DEFAULT_WINDOW_HEIGHT as f64,
             show_lyrics_panel: false,
+            desktop_lyrics_enabled: false,
         }
     }
 }
@@ -84,6 +90,7 @@ impl UiState {
             library_folders_expanded: self.library_folders_expanded,
             default_window_height: self.default_window_height,
             show_lyrics_panel: self.show_lyrics_panel,
+            desktop_lyrics_enabled: self.desktop_lyrics_enabled,
         }
     }
 
@@ -92,5 +99,6 @@ impl UiState {
         self.library_folders_expanded = settings.library_folders_expanded;
         self.default_window_height = settings.default_window_height;
         self.show_lyrics_panel = settings.show_lyrics_panel;
+        self.desktop_lyrics_enabled = settings.desktop_lyrics_enabled;
     }
 }

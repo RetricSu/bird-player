@@ -256,6 +256,12 @@ impl AppComponent for PlayerComponent {
                                 PlayerService::set_volume(ctx.player_mut_ref(), current_volume, &is_processing_ui_change);
                             }
                         }
+
+                        ui.add_space(8.0);
+                        let label = if ctx.ui_state.desktop_lyrics_enabled { "关闭桌面歌词" } else { "桌面歌词" };
+                        if ui.add(egui::Button::new(label).player_style()).clicked() {
+                            ctx.ui_state.desktop_lyrics_enabled = !ctx.ui_state.desktop_lyrics_enabled;
+                        }
                     });
 
 
