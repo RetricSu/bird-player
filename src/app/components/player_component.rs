@@ -211,6 +211,10 @@ impl AppComponent for PlayerComponent {
                         };
                         let mode_btn = ui.add_enabled(has_selected_track, egui::Button::new(mode_icon).player_style());
 
+                        ui.add_space(8.0);
+                        let lyrics_icon = if ctx.ui_state.desktop_lyrics_enabled { "词" } else { "词" };
+                        let lyrics_btn = ui.add(egui::Button::new(lyrics_icon).player_style());
+
                         // Playback Action Logic
                         let mut fetch_lyrics = false;
                         if has_selected_track {
@@ -226,10 +230,14 @@ impl AppComponent for PlayerComponent {
                                 action = Some("next");
                                 fetch_lyrics = true;
                             }
+                            else if lyrics_btn.clicked() {
+                                action = Some("toggle_desktop_lyrics");
+                            }
 
                             if let Some(action) = action {
                                 match action {
                                     "toggle_mode" => PlayerService::toggle_playback_mode(ctx.player_mut_ref()),
+                                    "toggle_desktop_lyrics" => ctx.ui_state.desktop_lyrics_enabled = !ctx.ui_state.desktop_lyrics_enabled,
                                     "pause" => PlayerService::pause(ctx.player_mut_ref()),
                                     "play"  => PlayerService::play(ctx.player_mut_ref()),
                                     "previous" => ctx.play_previous_track(),
@@ -255,12 +263,6 @@ impl AppComponent for PlayerComponent {
                                 let is_processing_ui_change = ctx.is_processing_ui_change();
                                 PlayerService::set_volume(ctx.player_mut_ref(), current_volume, &is_processing_ui_change);
                             }
-                        }
-
-                        ui.add_space(8.0);
-                        let label = if ctx.ui_state.desktop_lyrics_enabled { "关闭桌面歌词" } else { "桌面歌词" };
-                        if ui.add(egui::Button::new(label).player_style()).clicked() {
-                            ctx.ui_state.desktop_lyrics_enabled = !ctx.ui_state.desktop_lyrics_enabled;
                         }
                     });
 
