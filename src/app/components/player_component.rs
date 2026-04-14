@@ -275,7 +275,13 @@ impl AppComponent for PlayerComponent {
             ui.separator();
 
             // Right Column: Lyrics inside the player panel
-            crate::app::components::lyrics_component::LyricsComponent::add(ctx, ui);
+            ui.allocate_ui_with_layout(
+                eframe::egui::vec2(ui.available_width(), ui.available_height()),
+                eframe::egui::Layout::top_down(eframe::egui::Align::LEFT),
+                |ui| {
+                    crate::app::components::lyrics_component::LyricsComponent::add(ctx, ui);
+                }
+            );
         });
     }
 }
