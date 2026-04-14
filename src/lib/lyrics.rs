@@ -1,4 +1,7 @@
-use id3::TagLike;
+use lofty::file::TaggedFileExt;
+use lofty::probe::Probe;
+use lofty::tag::Tag;
+use lofty::tag::{ItemKey, TagExt};
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -256,140 +259,149 @@ impl LyricsService {
         }
     }
 
-    /// Read lyrics from ID3 tag of an audio file
+    /// Read lyrics from tag of an audio file
     pub fn read_lyrics_from_file<P: AsRef<std::path::Path>>(
         path: P,
         artist: &str,
         title: &str,
     ) -> Option<Lyrics> {
-        match id3::Tag::read_from_path(path) {
-            Ok(tag) => {
-                // Check for unsynchronized lyrics (USLT) frames
-                if let Some(lyrics_frame) = tag.lyrics().next() {
-                    let text = lyrics_frame.text.clone();
-                    let is_synced = lyrics_frame.description == "SyncedLyrics"
-                        || text.contains("[00:")
-                        || text.contains("[01:")
-                        || text.contains("[02:")
-                        || text.contains("[03:")
-                        || text.contains("[04:")
-                        || text.contains("[05:");
+        let probe_result = Probe::open(&path).and_then(|p| p.read());
+        match probe_result {
+            Ok(tagged_file) => {
+                let tag = tagged_file
+                    .primary_tag()
+                    .or_else(|| tagged_file.first_tag());
 
-                    tracing::debug!(
-                        "📖 Found lyrics in ID3 tag ({} characters, synced: {})",
-                        text.len(),
-                        is_synced
-                    );
+                if let Some(tag) = tag {
+                    // Check for lyrics item
+                    if let Some(text) = tag.get_string(&ItemKey::Lyrics) {
+                        let text = text.to_string();
+                        let is_synced = text.contains("[00:")
+                            || text.contains("[01:")
+                            || text.contains("[02:")
+                            || text.contains("[03:")
+                            || text.contains("[04:")
+                            || text.contains("[05:");
 
-                    let mut lyrics = Lyrics {
-                        id: 0, // Not applicable for cached lyrics
-                        name: "Cached Lyrics".to_string(),
-                        track_name: title.to_string(),
-                        artist_name: artist.to_string(),
-                        album_name: None,
-                        duration: None,
-                        instrumental: false,
-                        plain_lyrics: None,
-                        synced_lyrics: None,
-                        lines: Vec::new(),
-                    };
-
-                    if is_synced {
-                        // Store as synced lyrics and parse the lines
-                        lyrics.synced_lyrics = Some(text);
-                        lyrics.lines =
-                            Lyrics::parse_synced_lyrics(lyrics.synced_lyrics.as_ref().unwrap());
                         tracing::debug!(
-                            "🎵 Parsed {} synced lyric lines from cache",
-                            lyrics.lines.len()
+                            "📖 Found lyrics in tag ({} characters, synced: {})",
+                            text.len(),
+                            is_synced
                         );
-                    } else {
-                        // Store as plain lyrics
-                        lyrics.plain_lyrics = Some(text);
-                        tracing::debug!("📝 Loaded plain lyrics from cache");
-                    }
 
-                    Some(lyrics)
+                        let mut lyrics = Lyrics {
+                            id: 0, // Not applicable for cached lyrics
+                            name: "Cached Lyrics".to_string(),
+                            track_name: title.to_string(),
+                            artist_name: artist.to_string(),
+                            album_name: None,
+                            duration: None,
+                            instrumental: false,
+                            plain_lyrics: None,
+                            synced_lyrics: None,
+                            lines: Vec::new(),
+                        };
+
+                        if is_synced {
+                            // Store as synced lyrics and parse the lines
+                            lyrics.synced_lyrics = Some(text);
+                            lyrics.lines =
+                                Lyrics::parse_synced_lyrics(lyrics.synced_lyrics.as_ref().unwrap());
+                            tracing::debug!(
+                                "🎵 Parsed {} synced lyric lines from cache",
+                                lyrics.lines.len()
+                            );
+                        } else {
+                            // Store as plain lyrics
+                            lyrics.plain_lyrics = Some(text);
+                            tracing::debug!("📝 Loaded plain lyrics from cache");
+                        }
+
+                        Some(lyrics)
+                    } else {
+                        tracing::debug!("📖 No lyrics found in tag");
+                        None
+                    }
                 } else {
-                    tracing::debug!("📖 No lyrics found in ID3 tag");
+                    tracing::debug!("📖 No tag found in file");
                     None
                 }
             }
             Err(e) => {
-                tracing::debug!("📖 Failed to read ID3 tag: {}", e);
+                tracing::debug!("📖 Failed to read tag: {}", e);
                 None
             }
         }
     }
 
-    /// Write lyrics to ID3 tag of an audio file
+    /// Write lyrics to tag of an audio file
     pub fn write_lyrics_to_file<P: AsRef<std::path::Path>>(
         path: P,
         lyrics: &Lyrics,
-    ) -> Result<(), id3::Error> {
-        // Read existing tag or create new one
-        let mut tag = match id3::Tag::read_from_path(&path) {
-            Ok(tag) => tag,
+    ) -> Result<(), lofty::error::LoftyError> {
+        let path = path.as_ref();
+        let mut tagged_file = match Probe::open(path).and_then(|p| p.read()) {
+            Ok(file) => file,
             Err(e) => {
-                if let id3::ErrorKind::NoTag = e.kind {
-                    tracing::debug!("📝 Creating new ID3 tag for lyrics storage");
-                    id3::Tag::new()
+                tracing::error!("Failed to open file for lyrics writing");
+                return Err(e);
+            }
+        };
+
+        let mut tag = match tagged_file.primary_tag_mut() {
+            Some(t) => t.clone(),
+            None => {
+                if let Some(t) = tagged_file.first_tag_mut() {
+                    t.clone()
                 } else {
-                    return Err(e);
+                    Tag::new(tagged_file.primary_tag_type())
                 }
             }
         };
 
-        // Remove existing lyrics frames
-        tag.remove_all_lyrics();
-
-        // Determine which lyrics to store (prefer synced over plain for better experience)
-        let (lyrics_text, is_synced) = if let Some(synced) = &lyrics.synced_lyrics {
-            (synced.clone(), true)
+        // Determine which lyrics to store
+        let lyrics_text = if let Some(synced) = &lyrics.synced_lyrics {
+            synced.clone()
         } else if let Some(plain) = &lyrics.plain_lyrics {
-            (plain.clone(), false)
+            plain.clone()
         } else {
             tracing::warn!("📝 No lyrics content to write to file");
             return Ok(()); // Nothing to write
         };
 
-        // Add the lyrics as unsynchronized lyrics
-        // For synced lyrics, we store the raw LRC format which can be detected when reading
-        use id3::frame::Lyrics;
-        let description = if is_synced { "SyncedLyrics" } else { "Lyrics" };
-        tag.add_frame(Lyrics {
-            lang: "eng".to_string(),
-            description: description.to_string(),
-            text: lyrics_text,
-        });
+        // Add the lyrics as text
+        tag.insert_text(ItemKey::Lyrics, lyrics_text);
 
         // Write the tag back to the file
-        tag.write_to_path(path, id3::Version::Id3v24)?;
-        tracing::info!("📝 Successfully wrote lyrics to ID3 tag");
+        tag.save_to_path(path, lofty::config::WriteOptions::new())?;
+        tracing::info!("📝 Successfully wrote lyrics to file");
         Ok(())
     }
 
-    /// Remove lyrics from ID3 tag of an audio file
-    pub fn remove_lyrics_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<(), id3::Error> {
-        // Read existing tag
-        let mut tag = match id3::Tag::read_from_path(&path) {
-            Ok(tag) => tag,
-            Err(e) => {
-                if let id3::ErrorKind::NoTag = e.kind {
-                    // No tag means no lyrics to remove
-                    return Ok(());
+    /// Remove lyrics from tag of an audio file
+    pub fn remove_lyrics_from_file<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<(), lofty::error::LoftyError> {
+        let path = path.as_ref();
+        let mut tagged_file = Probe::open(path).and_then(|p| p.read())?;
+
+        let mut tag = match tagged_file.primary_tag_mut() {
+            Some(t) => t.clone(),
+            None => {
+                if let Some(t) = tagged_file.first_tag_mut() {
+                    t.clone()
                 } else {
-                    return Err(e);
+                    return Ok(()); // No tag means no lyrics to remove
                 }
             }
         };
 
-        // Remove all lyrics frames
-        tag.remove_all_lyrics();
+        // Remove lyrics frame
+        tag.remove_key(&ItemKey::Lyrics);
 
         // Write the tag back to the file
-        tag.write_to_path(path, id3::Version::Id3v24)?;
-        tracing::info!("🗑️ Successfully removed lyrics from ID3 tag");
+        tag.save_to_path(path, lofty::config::WriteOptions::new())?;
+        tracing::info!("🗑️ Successfully removed lyrics from file tag");
         Ok(())
     }
 }

@@ -8,7 +8,7 @@ pub struct Database {
 
 impl Database {
     // The current schema version - increment this when making schema changes
-    const SCHEMA_VERSION: i32 = 3;
+    const SCHEMA_VERSION: i32 = 4;
 
     pub fn new() -> Result<Self> {
         // Get the app's configuration directory

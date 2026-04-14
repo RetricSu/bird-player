@@ -1,4 +1,9 @@
-use id3::{Tag, TagLike, Version};
+use lofty::file::TaggedFileExt;
+use lofty::picture::{MimeType, Picture, PictureType};
+use lofty::probe::Probe;
+use lofty::tag::Tag;
+use lofty::tag::{Accessor, TagExt};
+use std::fs;
 use std::path::PathBuf;
 
 use crate::library::LibraryItem;
@@ -19,12 +24,23 @@ impl MetadataEditor {
     ) -> bool {
         let path = track.path();
 
-        // Read or create ID3 tag
-        let mut tag = match Self::read_or_create_tag(&path) {
-            Ok(tag) => tag,
+        let mut tagged_file = match Probe::open(&path).and_then(|p| p.read()) {
+            Ok(file) => file,
             Err(e) => {
-                tracing::error!("Failed to read/create ID3 tag for {:?}: {}", path, e);
+                tracing::error!("Failed to open file {:?} for metadata editing: {}", path, e);
                 return false;
+            }
+        };
+
+        let mut tag = match tagged_file.primary_tag_mut() {
+            Some(t) => t.clone(),
+            None => {
+                if let Some(t) = tagged_file.first_tag_mut() {
+                    t.clone()
+                } else {
+                    tracing::info!("Creating new tag for file: {:?}", path);
+                    Tag::new(tagged_file.primary_tag_type())
+                }
             }
         };
 
@@ -34,46 +50,34 @@ impl MetadataEditor {
         }
 
         // Write tag to file
-        if !Self::write_tag_to_file(&tag, &path) {
+        if let Err(e) = tag.save_to_path(&path, lofty::config::WriteOptions::new()) {
+            tracing::error!("Failed to write tag to file {:?}: {}", path, e);
             return false;
         }
 
+        tracing::info!("Successfully updated metadata in file: {:?}", path);
+
         // Update database
         Self::update_database(track, field, value, db_conn)
-    }
-
-    /// Read existing tag or create a new one
-    fn read_or_create_tag(path: &PathBuf) -> Result<Tag, id3::Error> {
-        match Tag::read_from_path(path) {
-            Ok(tag) => Ok(tag),
-            Err(err) => {
-                if let id3::ErrorKind::NoTag = err.kind {
-                    tracing::info!("Creating new ID3 tag for file: {:?}", path);
-                    Ok(Tag::new())
-                } else {
-                    Err(err)
-                }
-            }
-        }
     }
 
     /// Update the specified field in both tag and track
     fn update_tag_field(tag: &mut Tag, track: &mut LibraryItem, field: &str, value: &str) -> bool {
         match field {
             "title" => {
-                tag.set_title(value);
+                tag.set_title(value.to_string());
                 track.set_title(Some(value));
             }
             "artist" => {
-                tag.set_artist(value);
+                tag.set_artist(value.to_string());
                 track.set_artist(Some(value));
             }
             "album" => {
-                tag.set_album(value);
+                tag.set_album(value.to_string());
                 track.set_album(Some(value));
             }
             "genre" => {
-                tag.set_genre(value);
+                tag.set_genre(value.to_string());
                 track.set_genre(Some(value));
             }
             _ => {
@@ -84,18 +88,66 @@ impl MetadataEditor {
         true
     }
 
-    /// Write tag to file
-    fn write_tag_to_file(tag: &Tag, path: &PathBuf) -> bool {
-        match tag.write_to_path(path, Version::Id3v24) {
-            Ok(_) => {
-                tracing::info!("Successfully updated metadata in file: {:?}", path);
-                true
-            }
+    /// Update the track's album cover
+    pub fn update_track_cover(track: &mut LibraryItem, image_path: &PathBuf) -> bool {
+        let path = track.path();
+
+        let image_data = match fs::read(image_path) {
+            Ok(data) => data,
             Err(e) => {
-                tracing::error!("Failed to write tag to file {:?}: {}", path, e);
-                false
+                tracing::error!("Failed to read new cover image: {}", e);
+                return false;
             }
+        };
+
+        let mut tagged_file = match Probe::open(&path).and_then(|p| p.read()) {
+            Ok(file) => file,
+            Err(e) => {
+                tracing::error!("Failed to open file {:?} for cover editing: {}", path, e);
+                return false;
+            }
+        };
+
+        let mut tag = match tagged_file.primary_tag_mut() {
+            Some(t) => t.clone(),
+            None => {
+                if let Some(t) = tagged_file.first_tag_mut() {
+                    t.clone()
+                } else {
+                    Tag::new(tagged_file.primary_tag_type())
+                }
+            }
+        };
+
+        // Determine MimeType based on extension
+        let ext = image_path
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
+        let mime_type = match ext.as_str() {
+            "png" => MimeType::Png,
+            "jpeg" | "jpg" => MimeType::Jpeg,
+            "gif" => MimeType::Gif,
+            "bmp" => MimeType::Bmp,
+            "tiff" => MimeType::Tiff,
+            _ => MimeType::Jpeg,
+        };
+
+        let picture =
+            Picture::new_unchecked(PictureType::CoverFront, Some(mime_type), None, image_data);
+
+        // Remove old front covers
+        tag.remove_picture_type(PictureType::CoverFront);
+        tag.push_picture(picture);
+
+        if let Err(e) = tag.save_to_path(&path, lofty::config::WriteOptions::new()) {
+            tracing::error!("Failed to save new cover to file {:?}: {}", path, e);
+            return false;
         }
+
+        tracing::info!("Successfully embedded new album cover for {:?}", path);
+        true
     }
 
     /// Update the database with new metadata
