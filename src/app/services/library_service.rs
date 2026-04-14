@@ -66,7 +66,7 @@ impl LibraryService {
         track: &mut LibraryItem,
         image_path: &std::path::PathBuf,
         library: &mut Library,
-        playlists: &mut [Playlist],
+        _playlists: &mut [Playlist],
         db_conn: &Arc<Mutex<rusqlite::Connection>>,
     ) -> bool {
         let success = MetadataEditor::update_track_cover(track, image_path);

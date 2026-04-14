@@ -383,10 +383,7 @@ impl LyricsService {
         path: P,
     ) -> Result<(), lofty::error::LoftyError> {
         let path = path.as_ref();
-        let mut tagged_file = match Probe::open(path).and_then(|p| p.read()) {
-            Ok(file) => file,
-            Err(e) => return Err(e),
-        };
+        let mut tagged_file = Probe::open(path).and_then(|p| p.read())?;
 
         let mut tag = match tagged_file.primary_tag_mut() {
             Some(t) => t.clone(),

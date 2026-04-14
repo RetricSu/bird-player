@@ -13,8 +13,8 @@ use walkdir::WalkDir;
 
 use crate::{
     library::{
-        LibraryItem, LibraryItemContainer, LibraryPath, LibraryPathId, LibraryPathStatus,
-        LibraryView, Picture, ViewType,
+        LibraryItem, LibraryItemContainer, LibraryPath, LibraryPathId, LibraryView, Picture,
+        ViewType,
     },
     LibraryCommand,
 };
