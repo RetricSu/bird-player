@@ -118,27 +118,53 @@ pub fn load_file(
             }
 
             // Convert duration to milliseconds
-            // Primary method: estimate based on file size and typical bitrate
-            let file_size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-            let mut estimated_duration_ms = 0;
-
-            if file_size_bytes > 100000 {
-                // Only use file size if it's a reasonable size (>100KB)
-                // Assume 160 kbps MP3 = 160 * 1024 / 8 = 20480 bytes per second
-                let bytes_per_second = 160 * 1024 / 8; // 20480
-                estimated_duration_ms = (file_size_bytes * 1000) / bytes_per_second as u64;
-                tracing::debug!(
-                    "Estimated duration from file size: {} ms (file size: {} bytes, {} bytes/sec)",
-                    estimated_duration_ms,
-                    file_size_bytes,
-                    bytes_per_second
-                );
+            let mut exact_duration_ms = None;
+            
+            // Primary method: extract precise duration using codec params
+            if let Some(n_frames) = track.codec_params.n_frames {
+                if let Some(tb) = tb {
+                    // Calc duration via frames * (time_base_num / time_base_den)
+                    
+                    // Frac is scaled by tb.denom. Or rather, frac is directly 
+                    // proportional to the time_base denominator. But calc_time yields fractional
+                    // part in terms of a rational but it has a specific fraction value.
+                    // Instead of using 'frac', using raw arithmetic is absolutely precise:
+                    let raw_duration_ms = (n_frames as f64 * tb.numer as f64 / tb.denom as f64 * 1000.0) as u64;
+                    exact_duration_ms = Some(raw_duration_ms);
+                } else if let Some(sample_rate) = track.codec_params.sample_rate {
+                    // Fallback using sample rate
+                    let raw_duration_ms = (n_frames as f64 / sample_rate as f64 * 1000.0) as u64;
+                    exact_duration_ms = Some(raw_duration_ms);
+                }
             }
 
-            // Ensure minimum duration for music files (2 minutes = 120,000 ms)
-            audio_engine_state.duration = estimated_duration_ms.max(120000);
+            // Fallback method: estimate based on file size and typical bitrate if exact isn't available
+            let mut estimated_duration_ms = 0;
+            if exact_duration_ms.is_none() {
+                let file_size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+                if file_size_bytes > 100000 {
+                    // Only use file size if it's a reasonable size (>100KB)
+                    // Assume 160 kbps MP3 = 160 * 1024 / 8 = 20480 bytes per second
+                    let bytes_per_second = 160 * 1024 / 8; // 20480
+                    estimated_duration_ms = (file_size_bytes * 1000) / bytes_per_second as u64;
+                    tracing::debug!(
+                        "Estimated duration from file size: {} ms (file size: {} bytes, {} bytes/sec)",
+                        estimated_duration_ms,
+                        file_size_bytes,
+                        bytes_per_second
+                    );
+                }
+            }
 
-            if estimated_duration_ms < 120000 {
+            // Set final duration, preferring exact duration if possible
+            if let Some(exact) = exact_duration_ms {
+                audio_engine_state.duration = exact;
+            } else {
+                // Ensure minimum duration for music files ONLY if we relied on fallback (2 minutes = 120,000 ms)
+                audio_engine_state.duration = estimated_duration_ms.max(120000);
+            }
+
+            if exact_duration_ms.is_none() && estimated_duration_ms < 120000 {
                 tracing::debug!(
                     "Using minimum duration: {} ms (estimated was {} ms)",
                     audio_engine_state.duration,
