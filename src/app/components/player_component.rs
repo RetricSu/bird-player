@@ -157,11 +157,8 @@ impl AppComponent for PlayerComponent {
             // Add minimum width constraint for the vertical layout
             let min_width = 200.0; // Minimum width in pixels
             let available_width = ui.available_width();
-            let panel_width = if available_width > CASSETTE_WIDTH {
-                available_width
-            } else {
-                min_width
-            };
+            // Constrain middle pane width to make it a dense column
+            let panel_width = 320.0;
 
             ui.allocate_ui_with_layout(
                 vec2(panel_width, ui.available_height()),
@@ -271,44 +268,14 @@ impl AppComponent for PlayerComponent {
                         }
                     });
 
-                    // Row 2: Secondary buttons
-                    ui.horizontal(|ui| {
-                        ui.add_enabled_ui(false, |ui| ui.button("1.0x"));
-                        
-                        if ui.button(t("playlist_btn")).clicked() {
-                            ctx.ui_state.show_library_and_playlist = !ctx.ui_state.show_library_and_playlist;
-                            let new_height = if ctx.ui_state.show_library_and_playlist {
-                                ctx.ui_state.default_window_height as f32
-                            } else {
-                                200.0 
-                            };
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(vec2(ui.ctx().screen_rect().width(), new_height)));
-                        }
-
-                        if ui.button(t("lyrics")).clicked() {
-                            ctx.ui_state.show_lyrics_panel = !ctx.ui_state.show_lyrics_panel;
-                        }
-
-                        if ui.button(t("mini")).clicked() {
-                            ctx.ui_state.show_library_and_playlist = false;
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(vec2(300.0, 200.0)));
-                        }
-
-                        if ui.add_enabled(has_selected_track, egui::Button::new(t("remove_song"))).clicked() && selected_track.is_some() {
-                            if let Some(removed_key) = PlayerService::remove_current_track(ctx.player_mut_ref()) {
-                                if let Some(playlist_idx) = ctx.app_settings.current_playlist_idx {
-                                    if let Some(playlist) = ctx.playlists.get_mut(playlist_idx) {
-                                        if let Some(track_position) = playlist.get_pos_by_key(&removed_key) {
-                                            playlist.remove(track_position);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
 
                 },
             );
+
+            ui.separator();
+
+            // Right Column: Lyrics inside the player panel
+            crate::app::components::lyrics_component::LyricsComponent::add(ctx, ui);
         });
     }
 }

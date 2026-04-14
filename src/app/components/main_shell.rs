@@ -27,14 +27,7 @@ impl MainShell {
             Footer::add(app, ui);
         });
 
-        if app.ui_state.show_lyrics_panel {
-            egui::SidePanel::right("Lyrics Panel")
-                .default_width(300.0)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    LyricsComponent::add(app, ui);
-                });
-        }
+
 
         egui::SidePanel::left("Library Window")
             .default_width(200.0)
