@@ -87,15 +87,17 @@ impl AppComponent for LibraryComponent {
                 {
                     if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
                         // Add the path to the library
-                        ctx.library.add_path(new_path);
+                        let path_exists = !ctx.library.add_path(new_path.clone());
 
-                        // Get the last added path and import it
-                        if let Some(newest_path) = ctx.library.paths().last() {
-                            if newest_path.status()
-                                == crate::app::library::LibraryPathStatus::NotImported
-                            {
-                                ctx.import_library_paths(newest_path);
-                            }
+                        // If it existed, find it and rescan. If new, import the bottom-most path.
+                        let path_to_import = if path_exists {
+                            ctx.library.paths().iter().find(|p| *p.path() == new_path).cloned()
+                        } else {
+                            ctx.library.paths().last().cloned()
+                        };
+
+                        if let Some(p) = path_to_import {
+                            ctx.import_library_paths(&p);
                         }
                     }
                 }

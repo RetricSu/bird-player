@@ -36,11 +36,6 @@ impl LibraryImportService {
         lib_cmd_tx: Sender<LibraryCommand>,
         album_art_dir: PathBuf,
     ) {
-        if lib_path.status() == LibraryPathStatus::Imported {
-            tracing::info!("Library path already imported, skipping");
-            return;
-        }
-
         tracing::info!("Starting library path import: {:?}", lib_path.path());
 
         let path = lib_path.path().clone();
