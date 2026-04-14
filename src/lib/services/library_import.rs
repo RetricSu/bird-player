@@ -1,4 +1,8 @@
-use id3::{Tag, TagLike};
+use lofty::file::TaggedFileExt;
+use lofty::picture::Picture as LoftyPicture;
+use lofty::probe::Probe;
+use lofty::tag::{Accessor};
+use lofty::tag::Tag;
 use rand::Rng;
 use rayon::prelude::*;
 use std::fs;
@@ -76,12 +80,16 @@ impl LibraryImportService {
             .filter_map(|e| e.ok())
             .skip(1)
             .filter(|entry| {
-                entry.file_type().is_file()
-                    && entry.path().extension().unwrap_or(std::ffi::OsStr::new("")) == "mp3"
+                if !entry.file_type().is_file() {
+                    return false;
+                }
+                
+                let ext = entry.path().extension().unwrap_or(std::ffi::OsStr::new("")).to_string_lossy().to_lowercase();
+                matches!(ext.as_str(), "mp3" | "flac" | "wav" | "ogg" | "m4a")
             })
             .collect::<Vec<_>>();
 
-        tracing::info!("Found {} MP3 files to import", files.len());
+        tracing::info!("Found {} audio files to import", files.len());
 
         // Parse files in parallel
         let items: Vec<LibraryItem> = files
@@ -107,21 +115,27 @@ impl LibraryImportService {
         path_id: LibraryPathId,
         album_art_dir: &Path,
     ) -> LibraryItem {
-        let tag_result = Tag::read_from_path(file_path);
+        let probe_result = Probe::open(file_path).and_then(|p| p.read());
 
-        match tag_result {
-            Ok(tag) => {
-                tracing::debug!("Successfully read ID3 tag from: {}", file_path.display());
-                Self::create_item_from_tag(file_path, path_id, &tag, album_art_dir)
+        match probe_result {
+            Ok(tagged_file) => {
+                tracing::debug!("Successfully read metadata from: {}", file_path.display());
+                if let Some(tag) = tagged_file.primary_tag() {
+                    Self::create_item_from_tag(file_path, path_id, tag, album_art_dir)
+                } else if let Some(tag) = tagged_file.first_tag() {
+                    Self::create_item_from_tag(file_path, path_id, tag, album_art_dir)
+                } else {
+                    Self::create_fallback_item(file_path, path_id)
+                }
             }
             Err(err) => {
-                tracing::warn!("Failed to read ID3 tag from {:?}: {}", file_path, err);
+                tracing::warn!("Failed to read metadata from {:?}: {}", file_path, err);
                 Self::create_fallback_item(file_path, path_id)
             }
         }
     }
 
-    /// Create LibraryItem from ID3 tag
+    /// Create LibraryItem from Tag
     fn create_item_from_tag(
         file_path: &std::path::Path,
         path_id: LibraryPathId,
@@ -135,16 +149,16 @@ impl LibraryImportService {
             .unwrap_or("Unknown Title")
             .to_string();
 
-        let title = tag.title().unwrap_or(&filename_title);
+        let title = tag.title().unwrap_or(std::borrow::Cow::Borrowed(&filename_title));
 
         let mut item = LibraryItem::new(file_path.to_path_buf(), path_id)
-            .set_title(Some(title))
-            .set_artist(tag.artist())
-            .set_album(tag.album())
-            .set_year(tag.year())
-            .set_genre(tag.genre())
-            .set_track_number(Self::extract_track_number(tag))
-            .set_lyrics(tag.lyrics().next().map(|l| l.text.as_str()));
+            .set_title(Some(&title))
+            .set_artist(tag.artist().as_deref())
+            .set_album(tag.album().as_deref())
+            .set_year(tag.year().map(|y| y as i32))
+            .set_genre(tag.genre().as_deref())
+            .set_track_number(tag.track())
+            .set_lyrics(None); // Lyrics will be handled via Lofty's ItemKey::Lyrics in lyrics.rs
 
         // Extract and save album art
         Self::extract_album_art(&mut item, tag, file_path, album_art_dir);
@@ -163,20 +177,8 @@ impl LibraryImportService {
         LibraryItem::new(file_path.to_path_buf(), path_id).set_title(Some(&filename_title))
     }
 
-    /// Extract track number from ID3 tag
-    fn extract_track_number(tag: &Tag) -> Option<u32> {
-        tag.get("TRCK").and_then(|frame| {
-            frame.content().text().map(|t| {
-                t.split('/')
-                    .next()
-                    .unwrap_or("0")
-                    .parse::<u32>()
-                    .unwrap_or(0)
-            })
-        })
-    }
 
-    /// Extract and save album art from ID3 tag
+    /// Extract and save album art from tag
     fn extract_album_art(
         item: &mut LibraryItem,
         tag: &Tag,
@@ -187,11 +189,11 @@ impl LibraryImportService {
             let file_name = Self::generate_picture_filename(file_path, pic, album_art_dir);
 
             if let Ok(mut file) = fs::File::create(&file_name) {
-                if file.write_all(&pic.data).is_ok() {
+                if file.write_all(pic.data()).is_ok() {
                     item.add_picture(Picture::new(
-                        pic.mime_type.to_string(),
-                        u8::from(pic.picture_type),
-                        pic.description.to_string(),
+                        pic.mime_type().map(|m| m.as_str()).unwrap_or("image/jpeg").to_string(),
+                        pic.pic_type().as_u8(),
+                        pic.description().unwrap_or("").to_string(),
                         file_name,
                     ));
                 }
@@ -202,19 +204,20 @@ impl LibraryImportService {
     /// Generate unique filename for album art
     fn generate_picture_filename(
         file_path: &std::path::Path,
-        pic: &id3::frame::Picture,
+        pic: &LoftyPicture,
         album_art_dir: &Path,
     ) -> PathBuf {
-        let extension = match pic.mime_type.as_str() {
-            "image/jpeg" => "jpg",
-            "image/png" => "png",
-            _ => "jpg",
+        let mime_str = pic.mime_type().map(|m| m.as_str()).unwrap_or("image/jpeg");
+        let extension = if mime_str.contains("png") {
+            "png"
+        } else {
+            "jpg"
         };
 
         album_art_dir.join(format!(
             "{}_{}_{}.{}",
             file_path.file_stem().unwrap_or_default().to_string_lossy(),
-            u8::from(pic.picture_type),
+            pic.pic_type().as_u8(),
             rand::thread_rng().gen::<u64>(),
             extension
         ))

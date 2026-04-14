@@ -45,6 +45,25 @@ impl<'a> PlaylistTableService<'a> {
         }
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn update_cover(&mut self, idx: usize, image_path: std::path::PathBuf) {
+        let Some(mut track) = self
+            .playlist()
+            .and_then(|playlist| playlist.tracks.get(idx).cloned())
+        else {
+            return;
+        };
+
+        if self.ctx.update_track_cover(&mut track, &image_path) {
+            if let Some(slot) = self
+                .playlist_mut()
+                .and_then(|playlist| playlist.tracks.get_mut(idx))
+            {
+                *slot = track;
+            }
+        }
+    }
+
     pub(crate) fn play_track(&mut self, idx: usize) {
         let Some(track) = self
             .playlist()

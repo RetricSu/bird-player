@@ -19,7 +19,7 @@ impl LibraryService {
         field: &str,
         value: &str,
         library: &mut Library,
-        playlists: &mut [Playlist],
+        _playlists: &mut [Playlist],
         db_conn: &Arc<Mutex<rusqlite::Connection>>,
     ) -> bool {
         // Use the MetadataEditor service
@@ -58,5 +58,27 @@ impl LibraryService {
             LibraryCommand::AddView(lib_view) => library.add_view(lib_view),
             LibraryCommand::AddPathId(path_id) => library.set_path_to_imported(path_id),
         }
+    }
+
+    /// Update track cover image
+    #[allow(dead_code)]
+    pub fn update_track_cover(
+        track: &mut LibraryItem,
+        image_path: &std::path::PathBuf,
+        library: &mut Library,
+        _playlists: &mut [Playlist],
+        db_conn: &Arc<Mutex<rusqlite::Connection>>,
+    ) -> bool {
+        let success = MetadataEditor::update_track_cover(track, image_path);
+
+        // When the cover changes, we simply reload the library from the database
+        // and playlists just like `update_track_metadata` does because the cover
+        // path needs to be refreshed from the newly extracted data
+        if success {
+            if let Ok(updated_library) = Library::load_from_db(db_conn) {
+                *library = updated_library;
+            }
+        }
+        success
     }
 }

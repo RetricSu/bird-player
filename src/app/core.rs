@@ -309,6 +309,29 @@ impl App {
         success
     }
 
+    #[allow(dead_code)]
+    pub fn update_track_cover(
+        &mut self,
+        track: &mut LibraryItem,
+        image_path: &std::path::PathBuf,
+    ) -> bool {
+        let db_conn = self.db().connection();
+
+        let success = LibraryService::update_track_cover(
+            track,
+            image_path,
+            &mut self.library,
+            &mut self.playlists,
+            &db_conn,
+        );
+
+        if success {
+            self.save_state();
+        }
+
+        success
+    }
+
     // Add these new methods for language handling
     pub fn set_language(&mut self, lang: i18n::Language) {
         self.app_settings.current_language = lang;

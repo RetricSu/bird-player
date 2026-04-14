@@ -27,7 +27,6 @@ deb_depends = ["libasound2", "libpulse0", "libgtk-3-0"]
 cpal = "0.15"
 eframe = "0.31.1"
 egui_extras = { version = "0.31.1", features = ["all_loaders", "image"] }
-id3 = "1.16.2"
 itertools = "0.12"
 lazy_static = "1.4.0"
 rayon = "1.10"
@@ -51,6 +50,7 @@ libpulse-simple-binding = { version = "2.27.1", optional = true }
 urlencoding = "2.1"
 ureq = "2.9"
 uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
+lofty = "0.21.0"
 
 [features]
 default = []
