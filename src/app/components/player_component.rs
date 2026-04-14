@@ -4,13 +4,12 @@ use crate::app::services::PlayerService;
 use crate::app::style::{ButtonExt, SliderExt};
 use crate::app::t;
 use crate::{app::App, app::AudioEvent};
-use eframe::egui::style::HandleShape;
 use eframe::egui::{self, vec2};
 use std::time::Instant;
 
 pub struct PlayerComponent;
 
-const CASSETTE_WIDTH: f32 = 280.0;
+const CASSETTE_WIDTH: f32 = 200.0;
 
 struct SelectedTrackSummary {
     title: Option<String>,
@@ -199,6 +198,7 @@ impl AppComponent for PlayerComponent {
                     ui.add_space(ui.available_height() - 70.0);
 
                     // Time Slider
+                    // Time Information
                     ui.horizontal(|ui| {
                         let format_time = |timestamp: u64| -> String {
                             let total_seconds = timestamp / 1000;
@@ -208,38 +208,7 @@ impl AppComponent for PlayerComponent {
                             format!("{:02}:{:02}", minutes, seconds)
                         };
 
-                        let mut current_seek = seek_to_timestamp;
-
-                        ui.style_mut().spacing.slider_width = ui.available_width() - 100.0;
-                        ui.style_mut().visuals.slider_trailing_fill = true;
-                        let time_slider = ui.add(
-                            eframe::egui::Slider::new(&mut current_seek, 0..=duration)
-                                .logarithmic(false)
-                                .show_value(false)
-                                .clamping(eframe::egui::SliderClamping::Always)
-                                .trailing_fill(true)
-                                .handle_shape(HandleShape::Rect { aspect_ratio: 0.5 }),
-                        );
-
-                        // Update in real-time while dragging (just the timestamp, not seeking the audio)
-                        if time_slider.dragged() && has_selected_track {
-                            PlayerService::set_seek_to_timestamp(
-                                ctx.player_mut_ref(),
-                                current_seek,
-                            );
-                        }
-
-                        // Only perform the actual seek when drag is stopped
-                        if time_slider.drag_stopped() && has_selected_track {
-                            let player = ctx.player_mut_ref();
-                            // We already updated seek_to_timestamp during dragging,
-                            // now actually seek the audio playback
-                            PlayerService::seek_to(player, current_seek);
-
-                            // When seeking, make sure the track state is set to Playing
-                            // This ensures the UI buttons match the actual state
-                            PlayerService::play(player);
-                        }
+                        let current_seek = seek_to_timestamp;
 
                         ui.label(format_time(current_seek));
                         ui.label("/");

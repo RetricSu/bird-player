@@ -43,6 +43,7 @@ impl PlayerService {
     }
 
     /// Seek to a specific timestamp in the current track
+    #[allow(dead_code)]
     pub fn seek_to(player: &mut Player, timestamp: u64) {
         player.seek_to(timestamp);
     }
