@@ -32,7 +32,7 @@ pub mod size {
     /// Square icon-button side length used in the player control row.
     pub const ICON_BTN: f32 = 32.0;
     /// Album-art / cassette square side length.
-    pub const ALBUM: f32 = 120.0;
+    pub const ALBUM: f32 = 88.0;
     /// Volume slider width.
     pub const SLIDER_VOLUME: f32 = 140.0;
     /// Stroke width used by the player buttons and album-art card.

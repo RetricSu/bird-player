@@ -17,7 +17,10 @@ impl AppComponent for PlaylistContent {
                 PlaylistTabs::add(ctx, ui);
             });
 
-        ui.add_space(tokens::spacing::MD);
+        // Visually anchor the tab strip to the table beneath it — mirrors
+        // the separator the lyrics panel already uses under its header.
+        ui.add_space(tokens::spacing::XS);
+        ui.separator();
 
         if let Some(current_playlist_idx) = ctx.app_settings.current_playlist_idx {
             ui.push_id(("playlist", current_playlist_idx), |ui| {

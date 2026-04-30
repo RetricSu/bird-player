@@ -23,15 +23,20 @@ impl AppComponent for CassetteComponent {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal(|ui| {
-            let rect = ui.available_rect_before_wrap().shrink(10.0);
-            // Responsive size — never exceed ALBUM_ART_SIZE, but shrink down
-            // when the player panel is short (e.g. on small windows). Keeps
-            // the cover square in every layout.
+            // Lay the cover out flush against the left edge of the player band
+            // and vertically centred against the info column on its right —
+            // the previous 10 px shrink made the artwork hover well above the
+            // text baselines, which read as misalignment in compact mode.
+            let avail = ui.available_rect_before_wrap();
             let side = ALBUM_ART_SIZE
-                .min(rect.width())
-                .min(rect.height())
+                .min(avail.width())
+                .min(avail.height())
                 .max(64.0);
-            let rect = Rect::from_min_size(rect.min, vec2(side, side));
+            let center_y = avail.center().y;
+            let rect = Rect::from_min_size(
+                eframe::egui::pos2(avail.min.x, center_y - side / 2.0),
+                vec2(side, side),
+            );
 
             ui.allocate_rect(rect, Sense::hover());
 

@@ -110,6 +110,7 @@ impl AppComponent for LibraryComponent {
 
             // Add some vertical spacing
             ui.add_space(crate::app::style::tokens::spacing::XS);
+            ui.separator();
 
             // Group library items by their library_id (which corresponds to folder paths)
             let mut folder_items: HashMap<LibraryPathId, Vec<&LibraryItem>> = HashMap::new();
