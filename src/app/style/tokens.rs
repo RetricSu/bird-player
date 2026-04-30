@@ -56,12 +56,14 @@ pub mod color {
     use super::Color32;
 
     // ─── Brand palette ────────────────────────────────────────────────────
-    /// Primary brand blue. Reserved for phase 2 — see notes above.
-    #[allow(dead_code)]
+    /// Primary brand blue. Used for selection backgrounds and active toggle
+    /// buttons (desktop-lyrics on, non-default playback modes, etc.).
     pub const BRAND: Color32 = Color32::from_rgb(0x2D, 0x7D, 0xEC);
+    /// Hover variant of the brand colour. Reserved for hover-state styling
+    /// once we push per-button visuals (see phase 3).
     #[allow(dead_code)]
     pub const BRAND_HOVER: Color32 = Color32::from_rgb(0x4A, 0x93, 0xF0);
-    #[allow(dead_code)]
+    /// Pressed/active variant of the brand colour.
     pub const BRAND_ACTIVE: Color32 = Color32::from_rgb(0x1E, 0x68, 0xCF);
 
     // ─── Lyrics ───────────────────────────────────────────────────────────

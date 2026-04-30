@@ -41,6 +41,11 @@ pub struct UiState {
     /// Whether library import is currently running
     pub is_importing: bool,
 
+    /// Volume value to restore when the user un-mutes via the speaker icon.
+    /// `None` while not muted. Not serialized: a fresh launch always starts
+    /// with whatever volume the player itself remembers.
+    pub volume_before_mute: Option<f32>,
+
     /// Last time player persistence was flushed (used to throttle disk writes
     /// while a track is playing). Not serialized.
     pub last_persistence_save: Instant,
@@ -61,6 +66,7 @@ impl Default for UiState {
             lyrics_fetch_state: LyricsFetchState::Idle,
             last_window_title: None,
             is_importing: false,
+            volume_before_mute: None,
             last_persistence_save: Instant::now(),
         }
     }

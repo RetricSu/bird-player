@@ -1,7 +1,7 @@
 use super::cassette_component::CassetteComponent;
 use super::AppComponent;
 use crate::app::services::PlayerService;
-use crate::app::style::{icons, tokens, ButtonExt, SliderExt};
+use crate::app::style::{icons, player_button, tokens, ButtonExt, SliderExt};
 use crate::app::t;
 use crate::app::App;
 use eframe::egui::{self, vec2};
@@ -82,6 +82,8 @@ impl AppComponent for PlayerComponent {
         };
 
         let has_selected_track = selected_track.is_some();
+        let desktop_lyrics_enabled = ctx.ui_state.desktop_lyrics_enabled;
+        let is_muted = ctx.ui_state.volume_before_mute.is_some();
 
         // Get playlist tracks info for the current playlist
         let current_playlist_idx = ctx.app_settings.current_playlist_idx;
@@ -150,9 +152,10 @@ impl AppComponent for PlayerComponent {
                         } else {
                             icons::PLAY
                         };
+                        // Highlight the play button while audio is actually playing.
                         let play_pause_btn = ui.add_enabled(
                             has_selected_track,
-                            egui::Button::new(play_pause_icon).player_style(),
+                            player_button(play_pause_icon, is_playing && has_selected_track),
                         );
                         let next_btn = ui.add_enabled(
                             has_selected_track,
@@ -165,15 +168,16 @@ impl AppComponent for PlayerComponent {
                             crate::app::player::PlaybackMode::RepeatOne => icons::MODE_REPEAT_ONE,
                             crate::app::player::PlaybackMode::Shuffle => icons::MODE_SHUFFLE,
                         };
-                        let mode_btn = ui.add_enabled(
-                            has_selected_track,
-                            egui::Button::new(mode_icon).player_style(),
-                        );
+                        // Any mode other than Normal counts as "active" — give it the brand fill.
+                        let mode_active =
+                            !matches!(playback_mode, crate::app::player::PlaybackMode::Normal);
+                        let mode_btn = ui
+                            .add_enabled(has_selected_track, player_button(mode_icon, mode_active));
 
                         ui.add_space(tokens::spacing::MD);
-                        // TODO(phase-2): differentiate icon / colour by `desktop_lyrics_enabled`
+                        // Desktop-lyrics toggle — fills with the brand colour when enabled.
                         let lyrics_btn =
-                            ui.add(egui::Button::new(icons::LYRICS_TOGGLE).player_style());
+                            ui.add(player_button(icons::LYRICS_TOGGLE, desktop_lyrics_enabled));
 
                         // Translate UI clicks into a single, type-checked action
                         let action: Option<PlayerAction> =
@@ -230,7 +234,14 @@ impl AppComponent for PlayerComponent {
                     });
 
                     ui.horizontal(|ui| {
-                        ui.label(icons::VOLUME);
+                        let mute_icon = if is_muted {
+                            icons::VOLUME_MUTE
+                        } else {
+                            icons::VOLUME
+                        };
+                        let mute_btn = ui.add(player_button(mute_icon, is_muted));
+                        let mute_clicked = mute_btn.clicked();
+
                         let mut current_volume = volume;
                         let previous_vol = current_volume;
                         ui.style_mut().spacing.slider_width = tokens::size::SLIDER_VOLUME; // make it longer now that it has its own row
@@ -240,12 +251,32 @@ impl AppComponent for PlayerComponent {
                         );
 
                         if volume_slider.dragged() && current_volume != previous_vol {
+                            // Manually moving the slider clears any sticky mute.
+                            ctx.ui_state.volume_before_mute = None;
                             let is_processing_ui_change = ctx.is_processing_ui_change();
                             PlayerService::set_volume(
                                 ctx.player_mut_ref(),
                                 current_volume,
                                 &is_processing_ui_change,
                             );
+                        }
+
+                        if mute_clicked {
+                            let is_processing_ui_change = ctx.is_processing_ui_change();
+                            if let Some(prev) = ctx.ui_state.volume_before_mute.take() {
+                                PlayerService::set_volume(
+                                    ctx.player_mut_ref(),
+                                    prev,
+                                    &is_processing_ui_change,
+                                );
+                            } else {
+                                ctx.ui_state.volume_before_mute = Some(volume);
+                                PlayerService::set_volume(
+                                    ctx.player_mut_ref(),
+                                    0.0,
+                                    &is_processing_ui_change,
+                                );
+                            }
                         }
                     });
                 },

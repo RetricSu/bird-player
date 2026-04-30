@@ -40,6 +40,10 @@ pub fn setup_fonts() -> FontDefinitions {
         load_fallback_font(&mut fonts, &source);
     }
 
+    // Register the Phosphor icon font as a fallback so the icon constants in
+    // `style::icons` render in the same labels/buttons as ordinary text.
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+
     fonts
 }
 

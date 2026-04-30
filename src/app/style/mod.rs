@@ -8,15 +8,37 @@ pub trait ButtonExt {
 }
 
 impl ButtonExt for Button<'_> {
+    /// Default styling for the player's icon buttons. Inherits stroke / fill
+    /// from the active egui theme so the button reads in both light and dark
+    /// modes. For an *active* (toggled-on) variant, use [`player_button`].
     fn player_style(self) -> Self {
-        // NOTE(phase-2): the black stroke is invisible in dark mode. Phase 2
-        // will switch this to a `&Ui`-aware helper that pulls the stroke
-        // colour from `ui.visuals().widgets.inactive.bg_stroke`.
         self.min_size(vec2(tokens::size::ICON_BTN, tokens::size::ICON_BTN))
             .fill(Color32::TRANSPARENT)
-            .stroke(Stroke::new(tokens::size::STROKE_WIDTH, Color32::BLACK))
             .corner_radius(tokens::radius::SM)
     }
+}
+
+/// Convenience constructor for player icon buttons that need an *active*
+/// state visual (e.g. desktop-lyrics on, non-default playback mode). When
+/// `active` is true the button is filled with the brand colour and gets a
+/// matching stroke; when false it falls back to the regular `player_style`.
+pub fn player_button(label: &str, active: bool) -> Button<'_> {
+    let btn = Button::new(label).player_style();
+    if active {
+        btn.fill(tokens::color::BRAND).stroke(Stroke::new(
+            tokens::size::STROKE_WIDTH,
+            tokens::color::BRAND_ACTIVE,
+        ))
+    } else {
+        btn
+    }
+}
+
+/// Apply brand-aware visual tweaks on top of the default egui visuals.
+/// Used at boot via `egui_ctx.style_mut(...)` — see `bootstrap.rs`.
+pub fn apply_brand_visuals(visuals: &mut eframe::egui::Visuals) {
+    visuals.selection.bg_fill = tokens::color::BRAND;
+    visuals.selection.stroke.color = tokens::color::BRAND_ACTIVE;
 }
 
 pub trait SliderExt {

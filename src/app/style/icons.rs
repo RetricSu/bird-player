@@ -1,30 +1,34 @@
 //! Icon glyph constants.
 //!
-//! Phase 1 keeps the existing emoji / ASCII icons but routes every call site
-//! through a single module so phase 2 can swap to an icon font (e.g.
-//! `egui_phosphor`) by editing one file.
+//! All icons resolve to glyphs from the bundled Phosphor regular font, which
+//! is registered in `font::setup_fonts`. Keeping every icon string in one
+//! place lets us swap variants (regular / fill / bold) globally by editing
+//! this file alone.
+
+use egui_phosphor::regular as p;
 
 // ─── Playback transport ──────────────────────────────────────────────────
-pub const PREV: &str = "|◀";
-pub const NEXT: &str = "▶|";
-pub const PLAY: &str = "▶";
-pub const PAUSE: &str = "⏸";
+pub const PREV: &str = p::SKIP_BACK;
+pub const NEXT: &str = p::SKIP_FORWARD;
+pub const PLAY: &str = p::PLAY;
+pub const PAUSE: &str = p::PAUSE;
 
 // ─── Playback modes ──────────────────────────────────────────────────────
-pub const MODE_NORMAL: &str = "➡";
-pub const MODE_REPEAT: &str = "🔁";
-pub const MODE_REPEAT_ONE: &str = "🔂";
-pub const MODE_SHUFFLE: &str = "🔀";
+pub const MODE_NORMAL: &str = p::ARROW_RIGHT;
+pub const MODE_REPEAT: &str = p::REPEAT;
+pub const MODE_REPEAT_ONE: &str = p::REPEAT_ONCE;
+pub const MODE_SHUFFLE: &str = p::SHUFFLE;
 
 // ─── Misc controls ───────────────────────────────────────────────────────
-pub const VOLUME: &str = "📢";
+pub const VOLUME: &str = p::SPEAKER_HIGH;
+pub const VOLUME_MUTE: &str = p::SPEAKER_X;
 /// Toggles the desktop-lyrics floating viewport.
-pub const LYRICS_TOGGLE: &str = "词";
-pub const SEARCH: &str = "🔍";
-pub const CLOSE: &str = "x";
+pub const LYRICS_TOGGLE: &str = p::MICROPHONE_STAGE;
+pub const SEARCH: &str = p::MAGNIFYING_GLASS;
+pub const CLOSE: &str = p::X;
 
 // ─── Lyrics type indicators ──────────────────────────────────────────────
-pub const LYRICS_SYNCED: &str = "🎤";
-pub const LYRICS_PLAIN: &str = "📝";
-pub const LYRICS_INSTRUMENTAL: &str = "🎸";
-pub const LYRICS_NONE: &str = "-";
+pub const LYRICS_SYNCED: &str = p::MICROPHONE;
+pub const LYRICS_PLAIN: &str = p::NOTE_PENCIL;
+pub const LYRICS_INSTRUMENTAL: &str = p::GUITAR;
+pub const LYRICS_NONE: &str = p::MINUS;
