@@ -3,7 +3,6 @@ use super::playlist_tabs::PlaylistTabs;
 use super::AppComponent;
 use crate::app::style::tokens;
 use crate::app::App;
-use eframe::egui;
 
 pub struct PlaylistContent;
 
@@ -11,14 +10,13 @@ impl AppComponent for PlaylistContent {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        egui::ScrollArea::horizontal()
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                PlaylistTabs::add(ctx, ui);
-            });
+        // Header (tab strip) is rendered OUTSIDE any ScrollArea so its
+        // bottom separator stays on the same horizontal seam as the
+        // library / lyrics panel separators. Wrapping it in
+        // ScrollArea::horizontal previously reserved a few pixels for the
+        // scrollbar gutter and pushed this separator down.
+        PlaylistTabs::add(ctx, ui);
 
-        // Visually anchor the tab strip to the table beneath it — mirrors
-        // the separator the lyrics panel already uses under its header.
         ui.add_space(tokens::spacing::XS);
         ui.separator();
 
