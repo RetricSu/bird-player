@@ -180,38 +180,62 @@ impl AppComponent for WindowChrome {
 
             // Take up remaining space
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // Window operation buttons
-                let button_size = egui::vec2(30.0, 20.0);
+                use crate::app::style::icons;
 
-                // Close button with hover detection
-                let close_btn =
-                    egui::Button::new(crate::app::style::icons::CLOSE).min_size(button_size);
-                let close_response = ui.add(close_btn.fill(Color32::TRANSPARENT));
-                if close_response.clicked() {
+                // Helper: a borderless chrome button with a subtle hover fill.
+                // `danger_hover` makes the hover state read red (used on close).
+                let chrome_button =
+                    |ui: &mut egui::Ui, glyph: &str, danger_hover: bool| -> egui::Response {
+                        let size = egui::vec2(32.0, 22.0);
+                        let hover_fill = if danger_hover {
+                            Color32::from_rgb(232, 17, 35)
+                        } else {
+                            ui.visuals().widgets.hovered.weak_bg_fill
+                        };
+                        let hover_text = if danger_hover {
+                            Color32::WHITE
+                        } else {
+                            ui.visuals().widgets.hovered.fg_stroke.color
+                        };
+                        let mut visuals = ui.visuals().widgets.clone();
+                        visuals.hovered.weak_bg_fill = hover_fill;
+                        visuals.hovered.bg_fill = hover_fill;
+                        visuals.hovered.fg_stroke.color = hover_text;
+                        visuals.hovered.bg_stroke = egui::Stroke::NONE;
+                        visuals.inactive.bg_stroke = egui::Stroke::NONE;
+                        visuals.active.bg_stroke = egui::Stroke::NONE;
+                        ui.scope(|ui| {
+                            ui.visuals_mut().widgets = visuals;
+                            ui.add(
+                                egui::Button::new(RichText::new(glyph).size(14.0))
+                                    .min_size(size)
+                                    .fill(Color32::TRANSPARENT)
+                                    .stroke(egui::Stroke::NONE),
+                            )
+                        })
+                        .inner
+                    };
+
+                // Close — red on hover.
+                if chrome_button(ui, icons::WINDOW_CLOSE, true).clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
 
-                // Maximize button
-                let maximize_response = ui.add(
-                    egui::Button::new(RichText::new("↗").size(14.0))
-                        .min_size(button_size)
-                        .fill(Color32::TRANSPARENT),
-                );
-                if maximize_response.clicked() {
-                    // Toggle maximize
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(
-                        !ctx.ui_state.is_maximized,
-                    ));
+                // Maximize / restore — swap the icon based on current state.
+                let maximize_icon = if ctx.ui_state.is_maximized {
+                    icons::WINDOW_RESTORE
+                } else {
+                    icons::WINDOW_MAXIMIZE
+                };
+                if chrome_button(ui, maximize_icon, false).clicked() {
                     ctx.ui_state.is_maximized = !ctx.ui_state.is_maximized;
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(
+                        ctx.ui_state.is_maximized,
+                    ));
                 }
 
-                // Minimize button
-                let minimize_response = ui.add(
-                    egui::Button::new(RichText::new("−").size(14.0))
-                        .min_size(button_size)
-                        .fill(Color32::TRANSPARENT),
-                );
-                if minimize_response.clicked() {
+                // Minimize.
+                if chrome_button(ui, icons::WINDOW_MINIMIZE, false).clicked() {
                     ui.ctx()
                         .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                 }

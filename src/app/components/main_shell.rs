@@ -15,6 +15,14 @@ impl MainShell {
     pub fn show(app: &mut App, ctx: &egui::Context) {
         egui::TopBottomPanel::top("Window Chrome")
             .show_separator_line(true)
+            .frame(
+                egui::Frame::side_top_panel(&ctx.style()).inner_margin(egui::Margin {
+                    left: tokens::spacing::SM as i8,
+                    right: tokens::spacing::XS as i8,
+                    top: 2,
+                    bottom: 2,
+                }),
+            )
             .show(ctx, |ui| {
                 WindowChrome::add(app, ui);
             });

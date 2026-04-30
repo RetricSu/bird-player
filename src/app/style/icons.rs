@@ -32,3 +32,9 @@ pub const LYRICS_SYNCED: &str = p::MICROPHONE;
 pub const LYRICS_PLAIN: &str = p::NOTE_PENCIL;
 pub const LYRICS_INSTRUMENTAL: &str = p::GUITAR;
 pub const LYRICS_NONE: &str = p::MINUS;
+
+// ─── Window chrome ───────────────────────────────────────────────────────
+pub const WINDOW_MINIMIZE: &str = p::MINUS;
+pub const WINDOW_MAXIMIZE: &str = p::CORNERS_OUT;
+pub const WINDOW_RESTORE: &str = p::CORNERS_IN;
+pub const WINDOW_CLOSE: &str = p::X;
