@@ -3,8 +3,8 @@ use crate::app::style::tokens;
 use crate::app::App;
 use ::image::io::Reader as ImageReader;
 use eframe::egui::epaint::*;
+use eframe::egui::Sense;
 use eframe::egui::{vec2, ColorImage, Shape, TextureHandle};
-use eframe::egui::{Rect, Sense};
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -23,22 +23,15 @@ impl AppComponent for CassetteComponent {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal(|ui| {
-            // Lay the cover out flush against the left edge of the player band
-            // and vertically centred against the info column on its right —
-            // the previous 10 px shrink made the artwork hover well above the
-            // text baselines, which read as misalignment in compact mode.
-            let avail = ui.available_rect_before_wrap();
-            let side = ALBUM_ART_SIZE
-                .min(avail.width())
-                .min(avail.height())
-                .max(64.0);
-            let center_y = avail.center().y;
-            let rect = Rect::from_min_size(
-                eframe::egui::pos2(avail.min.x, center_y - side / 2.0),
-                vec2(side, side),
-            );
-
-            ui.allocate_rect(rect, Sense::hover());
+            // Reserve a square slot via the layout itself: in a horizontal
+            // strip with the default Align::Center, allocate_exact_size will
+            // vertically centre the cover against the info column on its
+            // right. Doing the math by hand against `available_rect_before_wrap`
+            // is wrong because that rect's height extends to the bottom of
+            // the parent panel, not to the row's content height — which used
+            // to push the cover above the visible band entirely.
+            let side = ALBUM_ART_SIZE.max(64.0);
+            let (rect, _resp) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
 
             let mut show_default = true;
 
