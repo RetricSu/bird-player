@@ -121,16 +121,34 @@ impl AppComponent for PlayerComponent {
                                 .truncate(),
                             );
                             ui.add(egui::Label::new(RichText::new(artist).weak()).truncate());
-                            ui.add(egui::Label::new(
-                                RichText::new(format!(
-                                    "{} / {}  ·  {}",
-                                    format_time(seek_to_timestamp),
-                                    format_time(duration),
-                                    current_playlist_name,
-                                ))
-                                .size(tokens::text::SM)
-                                .weak(),
-                            ));
+                            // Time on its own line so a long playlist name
+                            // never collides with the elapsed/duration counter.
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(format!(
+                                        "{} / {}",
+                                        format_time(seek_to_timestamp),
+                                        format_time(duration),
+                                    ))
+                                    .size(tokens::text::SM)
+                                    .weak(),
+                                )
+                                .truncate(),
+                            );
+                            if !current_playlist_name.is_empty() {
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(format!(
+                                            "{}: {}",
+                                            t("playlist_label"),
+                                            current_playlist_name,
+                                        ))
+                                        .size(tokens::text::SM)
+                                        .weak(),
+                                    )
+                                    .truncate(),
+                                );
+                            }
                         } else {
                             ui.add(egui::Label::new(
                                 RichText::new(t("no_track")).size(tokens::text::LG).strong(),
