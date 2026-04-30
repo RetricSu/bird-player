@@ -37,6 +37,9 @@ pub mod size {
     pub const SLIDER_VOLUME: f32 = 140.0;
     /// Stroke width used by the player buttons and album-art card.
     pub const STROKE_WIDTH: f32 = 1.0;
+    /// Shared header band height for the library / playlist tabs / lyrics
+    /// panels so the three side-by-side panels line up across the seam.
+    pub const HEADER_HEIGHT: f32 = 28.0;
 }
 
 /// Typography sizes (in egui logical pixels).

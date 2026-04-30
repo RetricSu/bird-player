@@ -15,6 +15,7 @@ impl AppComponent for LibraryComponent {
 
         eframe::egui::ScrollArea::both().show(ui, |ui| {
             ui.horizontal(|ui| {
+                ui.set_min_height(crate::app::style::tokens::size::HEADER_HEIGHT);
                 // Create a clickable label for "Music Files" with context menu
                 let music_label = ui.add(
                     Label::new(RichText::new(t("music_files")).strong()).sense(Sense::click()),

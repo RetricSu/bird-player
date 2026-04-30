@@ -12,6 +12,7 @@ impl AppComponent for PlaylistTabs {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal(|ui| {
+            ui.set_min_height(tokens::size::HEADER_HEIGHT);
             // Add playlist tabs
             for (idx, playlist) in ctx.playlists.iter_mut().enumerate() {
                 let is_selected = ctx.app_settings.current_playlist_idx == Some(idx);
