@@ -45,8 +45,7 @@ impl LyricsComponent {
         if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
             ui.label(
                 egui::RichText::new(format!("{} — {}", &lyrics.track_name, &lyrics.artist_name))
-                    .size(tokens::text::MD)
-                    .strong(),
+                    .size(tokens::text::SM),
             );
         }
 

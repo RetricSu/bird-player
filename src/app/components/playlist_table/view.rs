@@ -92,7 +92,6 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                     let header_text = move |s: &str| {
                         egui::RichText::new(s)
                             .size(crate::app::style::tokens::text::SM)
-                            .strong()
                             .color(header_color)
                     };
                     ui.scope(|ui| {

@@ -21,9 +21,7 @@ impl AppComponent for LibraryComponent {
             // Create a clickable label for "Music Files" with context menu
             let music_label = ui.add(
                 Label::new(
-                    RichText::new(t("music_files"))
-                        .size(crate::app::style::tokens::text::MD)
-                        .strong(),
+                    RichText::new(t("music_files")).size(crate::app::style::tokens::text::SM),
                 )
                 .sense(Sense::click()),
             );

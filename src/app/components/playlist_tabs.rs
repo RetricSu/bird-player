@@ -46,9 +46,9 @@ impl AppComponent for PlaylistTabs {
                     // by the player; unselected tabs render flat to keep the
                     // tab strip from looking like a row of buttons.
                     let mut tab_text = egui::RichText::new(playlist.get_name().unwrap_or_default())
-                        .size(tokens::text::MD);
+                        .size(tokens::text::SM);
                     if is_selected {
-                        tab_text = tab_text.strong().color(egui::Color32::WHITE);
+                        tab_text = tab_text.color(egui::Color32::WHITE);
                     }
 
                     let mut button = egui::Button::new(tab_text).corner_radius(tokens::radius::SM);
