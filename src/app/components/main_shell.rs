@@ -1,5 +1,6 @@
 use super::footer::Footer;
 use super::library_component::LibraryComponent;
+use super::lyrics_component::LyricsComponent;
 use super::player_component::PlayerComponent;
 use super::playlist_content::PlaylistContent;
 use super::window_chrome::WindowChrome;
@@ -32,6 +33,16 @@ impl MainShell {
             .show(ctx, |ui| {
                 LibraryComponent::add(app, ui);
             });
+
+        if app.ui_state.show_lyrics_panel {
+            egui::SidePanel::right("Lyrics Panel")
+                .default_width(280.0)
+                .min_width(220.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    LyricsComponent::add(app, ui);
+                });
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             PlaylistContent::add(app, ui);
