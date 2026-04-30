@@ -1,4 +1,5 @@
 use super::AppComponent;
+use crate::app::style::tokens;
 use crate::app::App;
 use ::image::io::Reader as ImageReader;
 use eframe::egui::epaint::*;
@@ -11,7 +12,7 @@ use std::path::PathBuf;
 
 pub struct CassetteComponent;
 
-const ALBUM_ART_SIZE: f32 = 180.0;
+const ALBUM_ART_SIZE: f32 = tokens::size::ALBUM;
 
 thread_local! {
     static IMAGE_CACHE: std::cell::RefCell<HashMap<PathBuf, TextureHandle>> = std::cell::RefCell::new(HashMap::new());
@@ -114,22 +115,22 @@ impl AppComponent for CassetteComponent {
 
 fn show_default_album_art(ctx: &App, ui: &mut eframe::egui::Ui, rect: eframe::egui::Rect) {
     let fill_color = if ui.visuals().dark_mode {
-        Color32::from_rgb(30, 30, 35)
+        tokens::color::ALBUM_BG_DARK
     } else {
-        Color32::from_rgb(220, 220, 225)
+        tokens::color::ALBUM_BG_LIGHT
     };
 
     let stroke_color = if ui.visuals().dark_mode {
-        Color32::from_rgb(60, 60, 65)
+        tokens::color::ALBUM_STROKE_DARK
     } else {
-        Color32::from_rgb(160, 160, 165)
+        tokens::color::ALBUM_STROKE_LIGHT
     };
 
     ui.painter().add(Shape::Rect(RectShape {
         rect,
-        corner_radius: 8.0.into(),
+        corner_radius: tokens::radius::LG.into(),
         fill: fill_color,
-        stroke: Stroke::new(1.0, stroke_color),
+        stroke: Stroke::new(tokens::size::STROKE_WIDTH, stroke_color),
         stroke_kind: StrokeKind::Middle,
         round_to_pixels: None,
         blur_width: 0.0,
@@ -145,8 +146,8 @@ fn show_default_album_art(ctx: &App, ui: &mut eframe::egui::Ui, rect: eframe::eg
     if let Some(selected_track) = &ctx.player_ref().selected_track {
         // Calculate maximum text width (80% of rect width to leave some margin)
 
-        let title_font = eframe::egui::FontId::proportional(14.0);
-        let artist_font = eframe::egui::FontId::proportional(12.0);
+        let title_font = eframe::egui::FontId::proportional(tokens::text::MD);
+        let artist_font = eframe::egui::FontId::proportional(tokens::text::SM);
 
         // Draw title with truncation
         let title = selected_track
@@ -179,7 +180,7 @@ fn show_default_album_art(ctx: &App, ui: &mut eframe::egui::Ui, rect: eframe::eg
             rect.center(),
             eframe::egui::Align2::CENTER_CENTER,
             "No Cover",
-            eframe::egui::FontId::proportional(14.0),
+            eframe::egui::FontId::proportional(tokens::text::MD),
             ui.visuals().text_color(),
         );
     }

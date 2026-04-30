@@ -154,7 +154,8 @@ impl AppComponent for WindowChrome {
                 let button_size = egui::vec2(30.0, 20.0);
 
                 // Close button with hover detection
-                let close_btn = egui::Button::new("x").min_size(button_size);
+                let close_btn =
+                    egui::Button::new(crate::app::style::icons::CLOSE).min_size(button_size);
                 let close_response = ui.add(close_btn.fill(Color32::TRANSPARENT));
                 if close_response.clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);

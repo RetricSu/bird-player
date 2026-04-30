@@ -1,7 +1,7 @@
 use super::cassette_component::CassetteComponent;
 use super::AppComponent;
 use crate::app::services::PlayerService;
-use crate::app::style::{ButtonExt, SliderExt};
+use crate::app::style::{icons, tokens, ButtonExt, SliderExt};
 use crate::app::t;
 use crate::app::App;
 use eframe::egui::{self, vec2};
@@ -95,7 +95,7 @@ impl AppComponent for PlayerComponent {
             CassetteComponent::add(ctx, ui);
 
             // Constrain middle pane width to make it a dense column
-            let panel_width = 320.0;
+            let panel_width = tokens::size::PLAYER_PANEL;
 
             ui.allocate_ui_with_layout(
                 vec2(panel_width, ui.available_height()),
@@ -135,40 +135,45 @@ impl AppComponent for PlayerComponent {
                     }
 
                     // Tightly packed controls
-                    ui.add_space(2.0);
+                    ui.add_space(tokens::spacing::XS);
                     ui.separator();
-                    ui.add_space(2.0);
+                    ui.add_space(tokens::spacing::XS);
 
                     // Row 1: Playback Controls & Volume
                     ui.horizontal(|ui| {
                         let prev_btn = ui.add_enabled(
                             has_selected_track,
-                            egui::Button::new("|◀").player_style(),
+                            egui::Button::new(icons::PREV).player_style(),
                         );
-                        let play_pause_icon = if is_playing { "⏸" } else { "▶" };
+                        let play_pause_icon = if is_playing {
+                            icons::PAUSE
+                        } else {
+                            icons::PLAY
+                        };
                         let play_pause_btn = ui.add_enabled(
                             has_selected_track,
                             egui::Button::new(play_pause_icon).player_style(),
                         );
                         let next_btn = ui.add_enabled(
                             has_selected_track,
-                            egui::Button::new("▶|").player_style(),
+                            egui::Button::new(icons::NEXT).player_style(),
                         );
 
                         let mode_icon = match playback_mode {
-                            crate::app::player::PlaybackMode::Normal => "➡",
-                            crate::app::player::PlaybackMode::Repeat => "🔁",
-                            crate::app::player::PlaybackMode::RepeatOne => "🔂",
-                            crate::app::player::PlaybackMode::Shuffle => "🔀",
+                            crate::app::player::PlaybackMode::Normal => icons::MODE_NORMAL,
+                            crate::app::player::PlaybackMode::Repeat => icons::MODE_REPEAT,
+                            crate::app::player::PlaybackMode::RepeatOne => icons::MODE_REPEAT_ONE,
+                            crate::app::player::PlaybackMode::Shuffle => icons::MODE_SHUFFLE,
                         };
                         let mode_btn = ui.add_enabled(
                             has_selected_track,
                             egui::Button::new(mode_icon).player_style(),
                         );
 
-                        ui.add_space(8.0);
-                        // TODO(ui-phase): differentiate icon / colour by `desktop_lyrics_enabled`
-                        let lyrics_btn = ui.add(egui::Button::new("词").player_style());
+                        ui.add_space(tokens::spacing::MD);
+                        // TODO(phase-2): differentiate icon / colour by `desktop_lyrics_enabled`
+                        let lyrics_btn =
+                            ui.add(egui::Button::new(icons::LYRICS_TOGGLE).player_style());
 
                         // Translate UI clicks into a single, type-checked action
                         let action: Option<PlayerAction> =
@@ -225,10 +230,10 @@ impl AppComponent for PlayerComponent {
                     });
 
                     ui.horizontal(|ui| {
-                        ui.label("📢");
+                        ui.label(icons::VOLUME);
                         let mut current_volume = volume;
                         let previous_vol = current_volume;
-                        ui.style_mut().spacing.slider_width = 160.0; // make it longer now that it has its own row
+                        ui.style_mut().spacing.slider_width = tokens::size::SLIDER_VOLUME; // make it longer now that it has its own row
                         let volume_slider = ui.add(
                             eframe::egui::Slider::new(&mut current_volume, 0.0_f32..=1.0_f32)
                                 .volume_style(),

@@ -1,6 +1,7 @@
 use super::playlist_table::PlaylistTable;
 use super::playlist_tabs::PlaylistTabs;
 use super::AppComponent;
+use crate::app::style::tokens;
 use crate::app::App;
 use eframe::egui;
 
@@ -16,7 +17,7 @@ impl AppComponent for PlaylistContent {
                 PlaylistTabs::add(ctx, ui);
             });
 
-        ui.add_space(8.0);
+        ui.add_space(tokens::spacing::MD);
 
         if let Some(current_playlist_idx) = ctx.app_settings.current_playlist_idx {
             ui.push_id(("playlist", current_playlist_idx), |ui| {

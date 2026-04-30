@@ -56,7 +56,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
 
     // Cache selection color once instead of fetching on every row
     let selection_bg_color = ui.style().visuals.selection.bg_fill;
-    let drag_color = egui::Color32::from_rgb(120, 120, 180);
+    let drag_color = crate::app::style::tokens::color::PLAYLIST_DRAG_BORDER;
 
     let current_track_idx = ctx
         .player_ref()

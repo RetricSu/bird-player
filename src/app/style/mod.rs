@@ -1,15 +1,21 @@
 use eframe::egui::{style::HandleShape, vec2, Button, Color32, Slider, Stroke};
 
+pub mod icons;
+pub mod tokens;
+
 pub trait ButtonExt {
     fn player_style(self) -> Self;
 }
 
 impl ButtonExt for Button<'_> {
     fn player_style(self) -> Self {
-        self.min_size(vec2(40.0, 40.0))
+        // NOTE(phase-2): the black stroke is invisible in dark mode. Phase 2
+        // will switch this to a `&Ui`-aware helper that pulls the stroke
+        // colour from `ui.visuals().widgets.inactive.bg_stroke`.
+        self.min_size(vec2(tokens::size::ICON_BTN, tokens::size::ICON_BTN))
             .fill(Color32::TRANSPARENT)
-            .stroke(Stroke::new(1.0, Color32::BLACK))
-            .corner_radius(5.0)
+            .stroke(Stroke::new(tokens::size::STROKE_WIDTH, Color32::BLACK))
+            .corner_radius(tokens::radius::SM)
     }
 }
 

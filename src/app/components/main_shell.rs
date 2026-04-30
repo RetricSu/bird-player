@@ -4,6 +4,7 @@ use super::player_component::PlayerComponent;
 use super::playlist_content::PlaylistContent;
 use super::window_chrome::WindowChrome;
 use super::AppComponent;
+use crate::app::style::tokens;
 use crate::app::App;
 use eframe::egui;
 
@@ -19,7 +20,7 @@ impl MainShell {
 
         egui::TopBottomPanel::top("Player").show(ctx, |ui| {
             PlayerComponent::add(app, ui);
-            ui.add_space(5.0);
+            ui.add_space(tokens::spacing::SM + 1.0);
         });
 
         egui::TopBottomPanel::bottom("Footer").show(ctx, |ui| {

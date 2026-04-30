@@ -84,9 +84,9 @@ impl App {
 
                     let text = egui::RichText::new(current_lyric_text.clone())
                         .size(48.0)
-                        .color(egui::Color32::from_rgb(0, 255, 255))
+                        .color(crate::app::style::tokens::color::DESKTOP_LYRICS_FG)
                         .strong()
-                        .background_color(egui::Color32::from_rgba_unmultiplied(0, 0, 0, 100)); // slight background for readability
+                        .background_color(crate::app::style::tokens::color::DESKTOP_LYRICS_BG); // slight background for readability
 
                     ui.centered_and_justified(|ui| {
                         ui.label(text);

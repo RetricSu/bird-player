@@ -78,7 +78,7 @@ impl AppComponent for LibraryComponent {
                     }
                 });
 
-                ui.add_space(5.0); // Add a small space between label and buttons
+                ui.add_space(crate::app::style::tokens::spacing::SM + 1.0); // Add a small space between label and buttons
 
                 // Add a button to select and import a folder
                 if ui
@@ -109,7 +109,7 @@ impl AppComponent for LibraryComponent {
             });
 
             // Add some vertical spacing
-            ui.add_space(5.0);
+            ui.add_space(crate::app::style::tokens::spacing::SM + 1.0);
 
             // Group library items by their library_id (which corresponds to folder paths)
             let mut folder_items: HashMap<LibraryPathId, Vec<&LibraryItem>> = HashMap::new();

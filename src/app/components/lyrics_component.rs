@@ -3,6 +3,7 @@ use eframe::egui;
 use super::AppComponent;
 use crate::app::libstate::lyrics_state::LyricsFetchState;
 use crate::app::lyrics::{Lyrics, LyricsService};
+use crate::app::style::{icons, tokens};
 use crate::app::{t, App};
 
 enum ManualUploadResult {
@@ -23,7 +24,7 @@ impl AppComponent for LyricsComponent {
             Self::show_status(ui, ctx);
         });
 
-        ui.add_space(6.0);
+        ui.add_space(tokens::spacing::MD - tokens::spacing::XS);
         ui.separator();
 
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -56,17 +57,17 @@ impl LyricsComponent {
         if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
             // Show lyrics type indicator
             let lyrics_type = if !lyrics.lines.is_empty() {
-                "🎤"
+                icons::LYRICS_SYNCED
             } else if lyrics.plain_lyrics.is_some() {
-                "📝"
+                icons::LYRICS_PLAIN
             } else if lyrics.instrumental {
-                "🎸"
+                icons::LYRICS_INSTRUMENTAL
             } else {
-                "-"
+                icons::LYRICS_NONE
             };
             ui.label(
                 egui::RichText::new(lyrics_type)
-                    .color(egui::Color32::from_rgb(100, 150, 255))
+                    .color(tokens::color::LYRICS_TYPE_ICON)
                     .italics(),
             );
 
@@ -82,7 +83,7 @@ impl LyricsComponent {
             }
             LyricsFetchState::Failed(message) => {
                 ui.colored_label(
-                    egui::Color32::from_rgb(230, 80, 80),
+                    tokens::color::LYRICS_FAILED,
                     format!("Lyrics unavailable: {}", message),
                 );
             }
@@ -146,8 +147,8 @@ impl LyricsComponent {
                 // Highlight current line and scroll to it
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::BLUE)
-                        .size(14.0)
+                        .color(tokens::color::LYRICS_CURRENT_LINE)
+                        .size(tokens::text::MD)
                         .strong(),
                 ))
             } else {
@@ -160,14 +161,14 @@ impl LyricsComponent {
             }
 
             // Add some spacing between lines
-            ui.add_space(4.0);
+            ui.add_space(tokens::spacing::SM);
         }
     }
 
     fn show_plain_lyrics(ui: &mut eframe::egui::Ui, plain_lyrics: &str) {
         for line in plain_lyrics.lines() {
             if line.trim().is_empty() {
-                ui.add_space(8.0);
+                ui.add_space(tokens::spacing::MD);
             } else {
                 ui.add(egui::Label::new(egui::RichText::new(line)));
             }
