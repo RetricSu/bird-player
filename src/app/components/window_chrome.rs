@@ -136,6 +136,36 @@ impl AppComponent for WindowChrome {
                     ctx.ui_state.show_lyrics_panel = !ctx.ui_state.show_lyrics_panel;
                     ui.close_menu();
                 }
+
+                ui.separator();
+
+                ui.menu_button("Desktop Lyrics", |ui| {
+                    ui.checkbox(&mut ctx.ui_state.desktop_lyrics_enabled, "Enabled");
+                    ui.checkbox(&mut ctx.ui_state.desktop_lyrics_locked, "Locked");
+                    ui.horizontal(|ui| {
+                        ui.label("Font size");
+                        ui.add(
+                            egui::Slider::new(
+                                &mut ctx.ui_state.desktop_lyrics_font_size,
+                                16.0..=120.0,
+                            )
+                            .step_by(1.0),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Color");
+                        let mut srgba = egui::Color32::from_rgba_unmultiplied(
+                            ctx.ui_state.desktop_lyrics_color[0],
+                            ctx.ui_state.desktop_lyrics_color[1],
+                            ctx.ui_state.desktop_lyrics_color[2],
+                            ctx.ui_state.desktop_lyrics_color[3],
+                        );
+                        if ui.color_edit_button_srgba(&mut srgba).changed() {
+                            ctx.ui_state.desktop_lyrics_color =
+                                [srgba.r(), srgba.g(), srgba.b(), srgba.a()];
+                        }
+                    });
+                });
             });
 
             ui.menu_button(t("help"), |ui| {

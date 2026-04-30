@@ -49,6 +49,15 @@ pub struct UiState {
     /// Last time player persistence was flushed (used to throttle disk writes
     /// while a track is playing). Not serialized.
     pub last_persistence_save: Instant,
+
+    /// Font size for the desktop lyrics overlay.
+    pub desktop_lyrics_font_size: f32,
+
+    /// Foreground color for the desktop lyrics overlay (sRGBA).
+    pub desktop_lyrics_color: [u8; 4],
+
+    /// When true, the desktop lyrics overlay ignores drag input.
+    pub desktop_lyrics_locked: bool,
 }
 
 impl Default for UiState {
@@ -68,6 +77,9 @@ impl Default for UiState {
             is_importing: false,
             volume_before_mute: None,
             last_persistence_save: Instant::now(),
+            desktop_lyrics_font_size: 48.0,
+            desktop_lyrics_color: [0, 255, 255, 255],
+            desktop_lyrics_locked: false,
         }
     }
 }
@@ -79,6 +91,20 @@ pub struct UiSettings {
     pub default_window_height: f64,
     pub show_lyrics_panel: bool,
     pub desktop_lyrics_enabled: bool,
+    #[serde(default = "default_desktop_lyrics_font_size")]
+    pub desktop_lyrics_font_size: f32,
+    #[serde(default = "default_desktop_lyrics_color")]
+    pub desktop_lyrics_color: [u8; 4],
+    #[serde(default)]
+    pub desktop_lyrics_locked: bool,
+}
+
+fn default_desktop_lyrics_font_size() -> f32 {
+    48.0
+}
+
+fn default_desktop_lyrics_color() -> [u8; 4] {
+    [0, 255, 255, 255]
 }
 
 impl Default for UiSettings {
@@ -88,6 +114,9 @@ impl Default for UiSettings {
             default_window_height: crate::app::constants::DEFAULT_WINDOW_HEIGHT as f64,
             show_lyrics_panel: false,
             desktop_lyrics_enabled: false,
+            desktop_lyrics_font_size: default_desktop_lyrics_font_size(),
+            desktop_lyrics_color: default_desktop_lyrics_color(),
+            desktop_lyrics_locked: false,
         }
     }
 }
@@ -100,6 +129,9 @@ impl UiState {
             default_window_height: self.default_window_height,
             show_lyrics_panel: self.show_lyrics_panel,
             desktop_lyrics_enabled: self.desktop_lyrics_enabled,
+            desktop_lyrics_font_size: self.desktop_lyrics_font_size,
+            desktop_lyrics_color: self.desktop_lyrics_color,
+            desktop_lyrics_locked: self.desktop_lyrics_locked,
         }
     }
 
@@ -109,5 +141,8 @@ impl UiState {
         self.default_window_height = settings.default_window_height;
         self.show_lyrics_panel = settings.show_lyrics_panel;
         self.desktop_lyrics_enabled = settings.desktop_lyrics_enabled;
+        self.desktop_lyrics_font_size = settings.desktop_lyrics_font_size;
+        self.desktop_lyrics_color = settings.desktop_lyrics_color;
+        self.desktop_lyrics_locked = settings.desktop_lyrics_locked;
     }
 }

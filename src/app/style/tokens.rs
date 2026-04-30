@@ -91,10 +91,4 @@ pub mod color {
     pub const ALBUM_BG_LIGHT: Color32 = Color32::from_rgb(220, 220, 225);
     pub const ALBUM_STROKE_DARK: Color32 = Color32::from_rgb(60, 60, 65);
     pub const ALBUM_STROKE_LIGHT: Color32 = Color32::from_rgb(160, 160, 165);
-
-    // ─── Desktop lyrics overlay ───────────────────────────────────────────
-    pub const DESKTOP_LYRICS_FG: Color32 = Color32::from_rgb(0, 255, 255);
-    // Equivalent to `from_rgba_unmultiplied(0, 0, 0, 100)` — black is 0 so the
-    // premultiplied and unmultiplied forms collapse to the same byte values.
-    pub const DESKTOP_LYRICS_BG: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 100);
 }

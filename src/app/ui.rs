@@ -70,6 +70,11 @@ impl App {
             .with_always_on_top()
             .with_inner_size(egui::vec2(800.0, 100.0));
 
+        let font_size = self.ui_state.desktop_lyrics_font_size;
+        let [r, g, b, a] = self.ui_state.desktop_lyrics_color;
+        let fg = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+        let locked = self.ui_state.desktop_lyrics_locked;
+
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("desktop_lyrics_window"),
             viewport_builder,
@@ -77,20 +82,63 @@ impl App {
                 let frame = egui::Frame::NONE.fill(egui::Color32::TRANSPARENT);
 
                 egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-                    // Allow dragging by clicking anywhere in the lyrics window
-                    if ui.input(|i| i.pointer.primary_pressed()) {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    let full_rect = ui.max_rect();
+
+                    // A 16×16 drag handle in the top-left corner. Only this
+                    // region starts a window drag, so the rest of the surface
+                    // stays free for future interactions (e.g. text select).
+                    // Drag is suppressed entirely when the overlay is locked.
+                    if !locked {
+                        let handle_rect =
+                            egui::Rect::from_min_size(full_rect.min, egui::vec2(16.0, 16.0));
+                        let handle_resp = ui.interact(
+                            handle_rect,
+                            egui::Id::new("desktop_lyrics_drag_handle"),
+                            egui::Sense::drag(),
+                        );
+                        if handle_resp.drag_started() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                        }
+                        // Visual hint — small dim square so the user can find it.
+                        ui.painter().rect_filled(
+                            handle_rect.shrink(4.0),
+                            2.0,
+                            egui::Color32::from_white_alpha(if handle_resp.hovered() {
+                                160
+                            } else {
+                                80
+                            }),
+                        );
                     }
 
-                    let text = egui::RichText::new(current_lyric_text.clone())
-                        .size(48.0)
-                        .color(crate::app::style::tokens::color::DESKTOP_LYRICS_FG)
-                        .strong()
-                        .background_color(crate::app::style::tokens::color::DESKTOP_LYRICS_BG); // slight background for readability
-
-                    ui.centered_and_justified(|ui| {
-                        ui.label(text);
-                    });
+                    // Render text twice for a cheap stroke/outline effect:
+                    // a black drop-shadow underneath, and the coloured glyphs
+                    // on top. Greatly improves readability over busy desktops.
+                    let painter = ui.painter();
+                    let center = full_rect.center();
+                    let font_id = egui::FontId::proportional(font_size);
+                    let shadow = egui::Color32::from_black_alpha(180);
+                    for offset in [
+                        egui::vec2(-1.5, 0.0),
+                        egui::vec2(1.5, 0.0),
+                        egui::vec2(0.0, -1.5),
+                        egui::vec2(0.0, 1.5),
+                    ] {
+                        painter.text(
+                            center + offset,
+                            egui::Align2::CENTER_CENTER,
+                            &current_lyric_text,
+                            font_id.clone(),
+                            shadow,
+                        );
+                    }
+                    painter.text(
+                        center,
+                        egui::Align2::CENTER_CENTER,
+                        &current_lyric_text,
+                        font_id,
+                        fg,
+                    );
                 });
             },
         );
