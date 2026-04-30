@@ -35,8 +35,6 @@ pub mod size {
     pub const ALBUM: f32 = 180.0;
     /// Volume slider width.
     pub const SLIDER_VOLUME: f32 = 160.0;
-    /// Player middle column width (track info + controls).
-    pub const PLAYER_PANEL: f32 = 320.0;
     /// Stroke width used by the player buttons and album-art card.
     pub const STROKE_WIDTH: f32 = 1.0;
 }

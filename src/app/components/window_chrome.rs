@@ -184,37 +184,52 @@ impl AppComponent for WindowChrome {
 
                 // Helper: a borderless chrome button with a subtle hover fill.
                 // `danger_hover` makes the hover state read red (used on close).
-                let chrome_button =
-                    |ui: &mut egui::Ui, glyph: &str, danger_hover: bool| -> egui::Response {
-                        let size = egui::vec2(32.0, 22.0);
-                        let hover_fill = if danger_hover {
-                            Color32::from_rgb(232, 17, 35)
-                        } else {
-                            ui.visuals().widgets.hovered.weak_bg_fill
-                        };
-                        let hover_text = if danger_hover {
-                            Color32::WHITE
-                        } else {
-                            ui.visuals().widgets.hovered.fg_stroke.color
-                        };
-                        let mut visuals = ui.visuals().widgets.clone();
-                        visuals.hovered.weak_bg_fill = hover_fill;
-                        visuals.hovered.bg_fill = hover_fill;
-                        visuals.hovered.fg_stroke.color = hover_text;
-                        visuals.hovered.bg_stroke = egui::Stroke::NONE;
-                        visuals.inactive.bg_stroke = egui::Stroke::NONE;
-                        visuals.active.bg_stroke = egui::Stroke::NONE;
-                        ui.scope(|ui| {
-                            ui.visuals_mut().widgets = visuals;
-                            ui.add(
-                                egui::Button::new(RichText::new(glyph).size(14.0))
-                                    .min_size(size)
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(egui::Stroke::NONE),
-                            )
-                        })
-                        .inner
+                //
+                // We deliberately avoid `Button::fill()` / `Button::stroke()` —
+                // those overrides apply to every state (egui resolves them via
+                // `style.interact(&response)`), which is what made the close
+                // glyph vanish before: a hard-coded transparent fill stomped
+                // the red hover background, while `hovered.fg_stroke = WHITE`
+                // turned the X into white-on-white. Driving the colours through
+                // `WidgetVisuals` instead lets the inactive state stay clean
+                // and the hovered state pick up the danger / theme fill.
+                let chrome_button = |ui: &mut egui::Ui,
+                                     glyph: &str,
+                                     danger_hover: bool|
+                 -> egui::Response {
+                    let size = egui::vec2(32.0, 22.0);
+                    let base_text = ui.visuals().widgets.inactive.fg_stroke.color;
+                    let hover_fill = if danger_hover {
+                        Color32::from_rgb(232, 17, 35)
+                    } else {
+                        ui.visuals().widgets.hovered.weak_bg_fill
                     };
+                    let hover_text = if danger_hover {
+                        Color32::WHITE
+                    } else {
+                        ui.visuals().widgets.hovered.fg_stroke.color
+                    };
+                    ui.scope(|ui| {
+                        let widgets = &mut ui.visuals_mut().widgets;
+                        // Inactive: fully transparent so the title bar shines through.
+                        widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+                        widgets.inactive.bg_fill = Color32::TRANSPARENT;
+                        widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                        widgets.inactive.fg_stroke.color = base_text;
+                        // Hovered: tinted background, white glyph for danger.
+                        widgets.hovered.weak_bg_fill = hover_fill;
+                        widgets.hovered.bg_fill = hover_fill;
+                        widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                        widgets.hovered.fg_stroke.color = hover_text;
+                        // Active (mouse-down): keep same colour as hovered for stability.
+                        widgets.active.weak_bg_fill = hover_fill;
+                        widgets.active.bg_fill = hover_fill;
+                        widgets.active.bg_stroke = egui::Stroke::NONE;
+                        widgets.active.fg_stroke.color = hover_text;
+                        ui.add(egui::Button::new(RichText::new(glyph).size(14.0)).min_size(size))
+                    })
+                    .inner
+                };
 
                 // Close — red on hover.
                 if chrome_button(ui, icons::WINDOW_CLOSE, true).clicked() {
