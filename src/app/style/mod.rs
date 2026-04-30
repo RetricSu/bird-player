@@ -41,6 +41,22 @@ pub fn apply_brand_visuals(visuals: &mut eframe::egui::Visuals) {
     visuals.selection.stroke.color = tokens::color::BRAND_ACTIVE;
 }
 
+/// Tighten egui's default whitespace so the UI reads as compact rather than
+/// roomy. The defaults (item_spacing 8×3, button_padding 4×1, indent 18) are
+/// tuned for desktop apps with low information density; for a music player
+/// with lists, tabs, and a control band stacked vertically those defaults
+/// translate to a lot of empty pixels. We pull them in by ~25 % so rows in
+/// the library / playlist table sit closer together and the player band
+/// stops dominating the viewport.
+pub fn apply_compact_spacing(spacing: &mut eframe::egui::style::Spacing) {
+    spacing.item_spacing = eframe::egui::vec2(tokens::spacing::SM + 2.0, tokens::spacing::XS + 1.0);
+    spacing.button_padding = eframe::egui::vec2(tokens::spacing::SM + 2.0, tokens::spacing::XS);
+    spacing.menu_margin =
+        eframe::egui::Margin::symmetric(tokens::spacing::SM as i8, tokens::spacing::XS as i8);
+    spacing.indent = 14.0;
+    spacing.interact_size.y = 22.0;
+}
+
 pub trait SliderExt {
     fn volume_style(self) -> Self;
 }

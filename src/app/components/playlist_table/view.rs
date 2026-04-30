@@ -82,7 +82,10 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
 
             egui::Grid::new("playlist_full")
                 .striped(true)
-                .spacing([5.0, 5.0])
+                .spacing([
+                    crate::app::style::tokens::spacing::MD,
+                    crate::app::style::tokens::spacing::XS,
+                ])
                 .num_columns(num_columns)
                 .show(ui, |ui| {
                     ui.scope(|ui| {

@@ -84,6 +84,7 @@ pub fn start_app() -> Result<()> {
             // Apply brand-aware visual tweaks (selection colour etc.)
             cc.egui_ctx.style_mut(|style| {
                 crate::app::style::apply_brand_visuals(&mut style.visuals);
+                crate::app::style::apply_compact_spacing(&mut style.spacing);
             });
 
             Ok(Box::new(app))
