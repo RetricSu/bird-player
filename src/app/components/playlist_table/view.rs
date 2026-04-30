@@ -88,34 +88,41 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
                 ])
                 .num_columns(num_columns)
                 .show(ui, |ui| {
+                    let header_color = ui.visuals().weak_text_color();
+                    let header_text = move |s: &str| {
+                        egui::RichText::new(s)
+                            .size(crate::app::style::tokens::text::SM)
+                            .strong()
+                            .color(header_color)
+                    };
                     ui.scope(|ui| {
                         ui.set_min_width(column_widths[0]);
-                        ui.strong(localization.column_number());
+                        ui.label(header_text(localization.column_number()));
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(column_widths[1]);
-                        ui.strong(localization.column_title());
+                        ui.label(header_text(localization.column_title()));
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(column_widths[2]);
-                        ui.strong(localization.column_artist());
+                        ui.label(header_text(localization.column_artist()));
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(column_widths[3]);
-                        ui.strong(localization.column_album());
+                        ui.label(header_text(localization.column_album()));
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(column_widths[4]);
-                        ui.strong(localization.column_lyrics());
+                        ui.label(header_text(localization.column_lyrics()));
                     });
 
                     ui.scope(|ui| {
                         ui.set_min_width(column_widths[5]);
-                        ui.strong(localization.column_genre());
+                        ui.label(header_text(localization.column_genre()));
                     });
 
                     ui.end_row();

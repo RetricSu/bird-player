@@ -18,7 +18,12 @@ impl AppComponent for LibraryComponent {
                 ui.set_min_height(crate::app::style::tokens::size::HEADER_HEIGHT);
                 // Create a clickable label for "Music Files" with context menu
                 let music_label = ui.add(
-                    Label::new(RichText::new(t("music_files")).strong()).sense(Sense::click()),
+                    Label::new(
+                        RichText::new(t("music_files"))
+                            .size(crate::app::style::tokens::text::MD)
+                            .strong(),
+                    )
+                    .sense(Sense::click()),
                 );
 
                 // Add context menu with expand/collapse options

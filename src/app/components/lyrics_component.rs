@@ -43,7 +43,11 @@ impl LyricsComponent {
     fn show_lyrics_header(ui: &mut egui::Ui, ctx: &mut App) {
         // Show track info
         if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
-            ui.label(format!("{} - {}", &lyrics.track_name, &lyrics.artist_name));
+            ui.label(
+                egui::RichText::new(format!("{} — {}", &lyrics.track_name, &lyrics.artist_name))
+                    .size(tokens::text::MD)
+                    .strong(),
+            );
         }
 
         let upload_clicked = ui
