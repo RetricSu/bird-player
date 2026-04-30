@@ -4,7 +4,7 @@ use crate::app::services::PlayerService;
 use crate::app::style::{icons, player_button, tokens, ButtonExt, SliderExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{self, vec2};
+use eframe::egui::{self, vec2, RichText};
 
 pub struct PlayerComponent;
 
@@ -115,30 +115,56 @@ impl AppComponent for PlayerComponent {
                             format!("{:02}:{:02}", minutes, seconds)
                         };
 
-                        ui.label(
-                            eframe::egui::RichText::new(format!("{}{}", t("song"), title)).strong(),
-                        );
-                        ui.label(format!("{}{}", t("artist"), artist));
-                        ui.label(format!(
-                            "{} / {}",
-                            format_time(seek_to_timestamp),
-                            format_time(duration)
+                        // Title — large + bold so it reads as the page heading.
+                        ui.add(egui::Label::new(
+                            RichText::new(title).size(tokens::text::LG).strong(),
                         ));
-                        ui.label(format!("{}{}", t("playlist"), current_playlist_name));
+                        // Artist — regular weight, slightly muted.
+                        ui.add(egui::Label::new(RichText::new(artist).weak()));
+                        // Combined small dim row: elapsed/total · playlist
+                        ui.add(egui::Label::new(
+                            RichText::new(format!(
+                                "{} / {}  ·  {}",
+                                format_time(seek_to_timestamp),
+                                format_time(duration),
+                                current_playlist_name,
+                            ))
+                            .size(tokens::text::SM)
+                            .weak(),
+                        ));
                     } else {
-                        ui.label(eframe::egui::RichText::new(t("no_track")).strong());
-                        if has_tracks_in_playlist {
-                            ui.label(t("select_track"));
+                        ui.add(egui::Label::new(
+                            RichText::new(t("no_track")).size(tokens::text::LG).strong(),
+                        ));
+                        let hint = if has_tracks_in_playlist {
+                            t("select_track")
                         } else if current_playlist_idx.is_some() {
-                            ui.label(t("add_tracks"));
+                            t("add_tracks")
                         } else {
-                            ui.label(t("create_playlist"));
-                        }
+                            t("create_playlist")
+                        };
+                        ui.add(egui::Label::new(RichText::new(hint).weak()));
                     }
 
                     // Tightly packed controls
                     ui.add_space(tokens::spacing::XS);
-                    ui.separator();
+
+                    // Timeline scrubber — thin rail by default, click+drag seeks.
+                    ui.scope(|ui| {
+                        ui.style_mut().spacing.slider_rail_height = 2.0;
+                        let mut current_ms = seek_to_timestamp as f64;
+                        let total_ms = (duration.max(1)) as f64;
+                        let resp = ui.add_enabled(
+                            has_selected_track && duration > 0,
+                            egui::Slider::new(&mut current_ms, 0.0..=total_ms)
+                                .show_value(false)
+                                .handle_shape(egui::style::HandleShape::Circle),
+                        );
+                        if resp.dragged() && (current_ms as u64) != seek_to_timestamp {
+                            PlayerService::seek_to(ctx.player_mut_ref(), current_ms as u64);
+                        }
+                    });
+
                     ui.add_space(tokens::spacing::XS);
 
                     // Row 1: Playback Controls & Volume
