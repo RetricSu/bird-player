@@ -249,11 +249,11 @@ impl AppComponent for Footer {
                         {
                             ui.label(
                                 eframe::egui::RichText::new("No matches found")
-                                    .color(eframe::egui::Color32::RED),
+                                    .color(crate::app::style::tokens::color::LYRICS_FAILED),
                             );
                         }
                     });
-                } else if ui.button("🔍 Search").clicked() {
+                } else if ui.button(format!("{}  Search", icons::SEARCH)).clicked() {
                     search_active = true;
                     // Reset the first frame flag when search is activated
                     ui.memory_mut(|mem| {

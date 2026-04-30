@@ -278,9 +278,9 @@ pub(crate) fn render_lyrics_column(
 
         if has_lyrics {
             ui.horizontal(|ui| {
-                ui.label("🎵");
+                ui.label(crate::app::style::icons::LYRICS_PRESENT);
                 if ui
-                    .small_button("❌")
+                    .small_button(crate::app::style::icons::CLOSE)
                     .on_hover_text(localization.remove_lyrics())
                     .clicked()
                 {
@@ -295,7 +295,7 @@ pub(crate) fn render_lyrics_column(
                 }
             });
         } else {
-            ui.label("―");
+            ui.label(crate::app::style::icons::LYRICS_NONE);
         }
     });
 }

@@ -90,10 +90,18 @@ impl AppComponent for WindowChrome {
                         ui.separator();
                         // Show current play mode in the menu
                         let mode_icon = match player.playback_mode {
-                            crate::app::player::PlaybackMode::Normal => "➡",
-                            crate::app::player::PlaybackMode::Repeat => "🔁",
-                            crate::app::player::PlaybackMode::RepeatOne => "🔂",
-                            crate::app::player::PlaybackMode::Shuffle => "🔀",
+                            crate::app::player::PlaybackMode::Normal => {
+                                crate::app::style::icons::MODE_NORMAL
+                            }
+                            crate::app::player::PlaybackMode::Repeat => {
+                                crate::app::style::icons::MODE_REPEAT
+                            }
+                            crate::app::player::PlaybackMode::RepeatOne => {
+                                crate::app::style::icons::MODE_REPEAT_ONE
+                            }
+                            crate::app::player::PlaybackMode::Shuffle => {
+                                crate::app::style::icons::MODE_SHUFFLE
+                            }
                         };
                         if ui
                             .button(crate::app::tf("play_mode", &[mode_icon]))
@@ -115,7 +123,10 @@ impl AppComponent for WindowChrome {
                             let _ = ui.button(t("previous"));
                             let _ = ui.button(t("next"));
                             ui.separator();
-                            let _ = ui.button(crate::app::tf("play_mode", &["➡"]));
+                            let _ = ui.button(crate::app::tf(
+                                "play_mode",
+                                &[crate::app::style::icons::MODE_NORMAL],
+                            ));
                         });
                     }
                 }

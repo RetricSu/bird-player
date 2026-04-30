@@ -26,6 +26,10 @@ pub const VOLUME_MUTE: &str = p::SPEAKER_X;
 pub const LYRICS_TOGGLE: &str = p::MICROPHONE_STAGE;
 pub const SEARCH: &str = p::MAGNIFYING_GLASS;
 pub const CLOSE: &str = p::X;
+/// Generic "add / new" affordance — used by library/playlist "+" buttons.
+pub const PLUS: &str = p::PLUS;
+/// Indicator shown in the playlist's lyrics column when a track has lyrics.
+pub const LYRICS_PRESENT: &str = p::MUSIC_NOTES;
 
 // ─── Lyrics type indicators ──────────────────────────────────────────────
 pub const LYRICS_SYNCED: &str = p::MICROPHONE;

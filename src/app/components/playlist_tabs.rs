@@ -1,5 +1,6 @@
 use super::AppComponent;
 use crate::app::services::PlaylistService;
+use crate::app::style::{icons, tokens};
 use crate::app::t;
 use crate::app::App;
 use eframe::egui;
@@ -38,18 +39,27 @@ impl AppComponent for PlaylistTabs {
                         );
                     }
                 } else {
-                    // Show normal tab button
-                    let mut tab_text =
-                        egui::RichText::new(playlist.get_name().unwrap_or_default()).size(12.0);
+                    // Show normal tab button. Selected tab paints with the
+                    // brand fill (consumed via Visuals::selection) so it
+                    // matches the rest of the highlighted-state language used
+                    // by the player; unselected tabs render flat to keep the
+                    // tab strip from looking like a row of buttons.
+                    let mut tab_text = egui::RichText::new(playlist.get_name().unwrap_or_default())
+                        .size(tokens::text::MD);
                     if is_selected {
-                        tab_text = tab_text.strong();
+                        tab_text = tab_text.strong().color(egui::Color32::WHITE);
                     }
 
-                    let tab_response = ui.add(egui::Button::new(tab_text).fill(if is_selected {
-                        ui.style().visuals.selection.bg_fill
+                    let mut button = egui::Button::new(tab_text).corner_radius(tokens::radius::SM);
+                    if is_selected {
+                        button = button.fill(tokens::color::BRAND).stroke(egui::Stroke::new(
+                            tokens::size::STROKE_WIDTH,
+                            tokens::color::BRAND_ACTIVE,
+                        ));
                     } else {
-                        ui.style().visuals.widgets.inactive.bg_fill
-                    }));
+                        button = button.fill(egui::Color32::TRANSPARENT);
+                    }
+                    let tab_response = ui.add(button);
 
                     if tab_response.clicked() {
                         PlaylistService::select_playlist(
@@ -75,8 +85,9 @@ impl AppComponent for PlaylistTabs {
                 }
             }
 
-            // Add the "+" button for creating new playlists
-            let create_btn = ui.add(egui::Button::new(egui::RichText::new("+").size(12.0)));
+            // Add the "+" button for creating new playlists — borderless to
+            // match the library's add-folder affordance.
+            let create_btn = ui.add(egui::Button::new(icons::PLUS).frame(false));
 
             if create_btn.clicked() {
                 PlaylistService::create_playlist(
