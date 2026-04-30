@@ -1,11 +1,10 @@
 use crate::app::libstate::lyrics_state::LyricsFetchState;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
+
 /// UI-specific state that doesn't need to be persisted
 #[derive(Debug, Clone)]
 pub struct UiState {
-    /// Whether to show the library and playlist panel
-    pub show_library_and_playlist: bool,
-
     /// Whether the library folders section is expanded
     pub library_folders_expanded: bool,
 
@@ -41,12 +40,15 @@ pub struct UiState {
 
     /// Whether library import is currently running
     pub is_importing: bool,
+
+    /// Last time player persistence was flushed (used to throttle disk writes
+    /// while a track is playing). Not serialized.
+    pub last_persistence_save: Instant,
 }
 
 impl Default for UiState {
     fn default() -> Self {
         Self {
-            show_library_and_playlist: true,
             library_folders_expanded: false,
             show_about_dialog: false,
             playlist_idx_to_remove: None,
@@ -59,6 +61,7 @@ impl Default for UiState {
             lyrics_fetch_state: LyricsFetchState::Idle,
             last_window_title: None,
             is_importing: false,
+            last_persistence_save: Instant::now(),
         }
     }
 }

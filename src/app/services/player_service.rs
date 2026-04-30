@@ -58,19 +58,6 @@ impl PlayerService {
         player.set_duration(duration);
     }
 
-    /// Remove the currently selected track from the playlist and handle playback continuation
-    /// Returns the track key that was removed, or None if no track was removed
-    pub fn remove_current_track(player: &mut Player) -> Option<String> {
-        if let Some(track) = &player.selected_track {
-            let track_key = track.key();
-            // Clear the selected track - the playlist removal will be handled by the caller
-            player.select_track(None);
-            Some(track_key)
-        } else {
-            None
-        }
-    }
-
     /// Get the current playback state
     pub fn is_playing(player: &Player) -> bool {
         matches!(player.track_state, crate::app::player::TrackState::Playing)

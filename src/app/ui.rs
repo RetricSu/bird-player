@@ -36,7 +36,7 @@ impl App {
         }
 
         let mut current_lyric_text = "BIRD PLAYER".to_string();
-        
+
         let current_time_ms = if self.runtime.is_some() {
             self.player_ref().seek_to_timestamp
         } else {
@@ -45,13 +45,14 @@ impl App {
 
         if let Some(lyrics) = self.lyrics_service.manager().current_lyrics() {
             for line in &lyrics.lines {
-                let is_current = if let (Some(start), Some(end)) = (line.start_time_ms, line.end_time_ms) {
-                    current_time_ms >= start && current_time_ms < end
-                } else if let Some(start) = line.start_time_ms {
-                    current_time_ms >= start
-                } else {
-                    false
-                };
+                let is_current =
+                    if let (Some(start), Some(end)) = (line.start_time_ms, line.end_time_ms) {
+                        current_time_ms >= start && current_time_ms < end
+                    } else if let Some(start) = line.start_time_ms {
+                        current_time_ms >= start
+                    } else {
+                        false
+                    };
 
                 if is_current {
                     if !line.text.trim().is_empty() {
@@ -74,26 +75,24 @@ impl App {
             viewport_builder,
             move |ctx, _class| {
                 let frame = egui::Frame::NONE.fill(egui::Color32::TRANSPARENT);
-                
+
                 egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
                     // Allow dragging by clicking anywhere in the lyrics window
                     if ui.input(|i| i.pointer.primary_pressed()) {
                         ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
-                    
+
                     let text = egui::RichText::new(current_lyric_text.clone())
                         .size(48.0)
                         .color(egui::Color32::from_rgb(0, 255, 255))
                         .strong()
                         .background_color(egui::Color32::from_rgba_unmultiplied(0, 0, 0, 100)); // slight background for readability
-                    
-                    ui.allocate_ui_at_rect(ui.max_rect(), |ui| {
-                        ui.centered_and_justified(|ui| {
-                            ui.label(text);
-                        });
+
+                    ui.centered_and_justified(|ui| {
+                        ui.label(text);
                     });
                 });
-            }
+            },
         );
     }
 
@@ -129,6 +128,7 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.refresh_library_command_processor();
+        self.pump_audio_events();
 
         if self.ui_state.is_importing {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -146,7 +146,5 @@ impl eframe::App for App {
                 ctx.request_repaint_after(Duration::from_millis(100));
             }
         }
-
-        eprintln!("fps = {:.0}", 1.0 / ctx.input(|i| i.unstable_dt));
     }
 }

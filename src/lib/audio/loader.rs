@@ -119,17 +119,18 @@ pub fn load_file(
 
             // Convert duration to milliseconds
             let mut exact_duration_ms = None;
-            
+
             // Primary method: extract precise duration using codec params
             if let Some(n_frames) = track.codec_params.n_frames {
                 if let Some(tb) = tb {
                     // Calc duration via frames * (time_base_num / time_base_den)
-                    
-                    // Frac is scaled by tb.denom. Or rather, frac is directly 
+
+                    // Frac is scaled by tb.denom. Or rather, frac is directly
                     // proportional to the time_base denominator. But calc_time yields fractional
                     // part in terms of a rational but it has a specific fraction value.
                     // Instead of using 'frac', using raw arithmetic is absolutely precise:
-                    let raw_duration_ms = (n_frames as f64 * tb.numer as f64 / tb.denom as f64 * 1000.0) as u64;
+                    let raw_duration_ms =
+                        (n_frames as f64 * tb.numer as f64 / tb.denom as f64 * 1000.0) as u64;
                     exact_duration_ms = Some(raw_duration_ms);
                 } else if let Some(sample_rate) = track.codec_params.sample_rate {
                     // Fallback using sample rate

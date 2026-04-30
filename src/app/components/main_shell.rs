@@ -1,6 +1,5 @@
 use super::footer::Footer;
 use super::library_component::LibraryComponent;
-use super::lyrics_component::LyricsComponent;
 use super::player_component::PlayerComponent;
 use super::playlist_content::PlaylistContent;
 use super::window_chrome::WindowChrome;
@@ -26,8 +25,6 @@ impl MainShell {
         egui::TopBottomPanel::bottom("Footer").show(ctx, |ui| {
             Footer::add(app, ui);
         });
-
-
 
         egui::SidePanel::left("Library Window")
             .default_width(200.0)

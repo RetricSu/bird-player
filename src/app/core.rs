@@ -369,6 +369,73 @@ impl App {
         }
     }
 
+    /// Drain pending audio events from the player thread and apply them to
+    /// player / UI state. Called once per frame from `App::update`, so UI
+    /// components can render without owning event-loop logic.
+    pub fn pump_audio_events(&mut self) {
+        if self.runtime.is_none() {
+            return;
+        }
+
+        // Drain in one pass to keep the borrow short
+        let cmds: Vec<crate::app::AudioEvent> = {
+            let player = self.player_mut_ref();
+            let mut buf = Vec::new();
+            while let Ok(cmd) = player.ui_rx.try_recv() {
+                buf.push(cmd);
+            }
+            buf
+        };
+
+        if cmds.is_empty() {
+            return;
+        }
+
+        use crate::app::services::PlayerService;
+        use crate::app::AudioEvent;
+
+        for cmd in cmds {
+            match cmd {
+                AudioEvent::CurrentTimestamp(seek_timestamp) => {
+                    // Throttle player-state persistence to once every 30s while playing
+                    let elapsed = self.ui_state.last_persistence_save.elapsed().as_secs();
+                    if elapsed > 30 {
+                        self.ui_state.last_persistence_save = std::time::Instant::now();
+                        self.update_player_persistence();
+                        self.save_state();
+                    }
+                    PlayerService::set_seek_to_timestamp(self.player_mut_ref(), seek_timestamp);
+                }
+                AudioEvent::TotalTrackDuration(dur) => {
+                    tracing::info!("Received Duration: {}", dur);
+                    PlayerService::set_duration(self.player_mut_ref(), dur);
+                }
+                AudioEvent::AudioFinished => {
+                    tracing::info!("Track finished, getting next...");
+                    let playlist_clone = self
+                        .app_settings
+                        .current_playlist_idx
+                        .and_then(|idx| self.playlists.get(idx).cloned());
+                    if let Some(playlist) = playlist_clone {
+                        PlayerService::next_track(self.player_mut_ref(), &playlist);
+                    }
+                    self.fetch_lyrics_for_current_track();
+                }
+                AudioEvent::PlaybackStateChanged(is_playing) => {
+                    tracing::info!(
+                        "Playback state changed to: {}",
+                        if is_playing { "Playing" } else { "Paused" }
+                    );
+                    if is_playing {
+                        PlayerService::play(self.player_mut_ref());
+                    } else {
+                        PlayerService::pause(self.player_mut_ref());
+                    }
+                }
+            }
+        }
+    }
+
     /// Process a freshly received lyrics response.
     pub fn handle_lyrics_response(&mut self, should_show_panel: bool) {
         let track_key = self

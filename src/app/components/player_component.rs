@@ -3,22 +3,25 @@ use super::AppComponent;
 use crate::app::services::PlayerService;
 use crate::app::style::{ButtonExt, SliderExt};
 use crate::app::t;
-use crate::{app::App, app::AudioEvent};
+use crate::app::App;
 use eframe::egui::{self, vec2};
-use std::time::Instant;
 
 pub struct PlayerComponent;
-
-const CASSETTE_WIDTH: f32 = 200.0;
 
 struct SelectedTrackSummary {
     title: Option<String>,
     artist: Option<String>,
 }
 
-// For periodic state saving
-thread_local! {
-    static LAST_SAVE: std::cell::RefCell<Instant> = std::cell::RefCell::new(Instant::now());
+/// User-driven actions that can be triggered from the player control row.
+/// Using an enum (rather than string keys) keeps the UI dispatch type-checked
+/// and makes adding new controls a compile-time concern.
+enum PlayerAction {
+    TogglePlayPause,
+    Previous,
+    Next,
+    ToggleMode,
+    ToggleDesktopLyrics,
 }
 
 impl AppComponent for PlayerComponent {
@@ -33,71 +36,8 @@ impl AppComponent for PlayerComponent {
             return;
         }
 
-        // Process ALL pending UI commands first
-        let ui_cmds: Vec<_> = {
-            let player = ctx.player_mut_ref();
-            let mut cmds = Vec::new();
-            while let Ok(cmd) = player.ui_rx.try_recv() {
-                cmds.push(cmd);
-            }
-            cmds
-        };
-
-        for new_seek_cmd in ui_cmds {
-            match new_seek_cmd {
-                AudioEvent::CurrentTimestamp(seek_timestamp) => {
-                    // Check if we need to save
-                    let should_save = LAST_SAVE.with(|last_save| {
-                        let elapsed = last_save.borrow().elapsed().as_secs();
-                        if elapsed > 30 {
-                            *last_save.borrow_mut() = Instant::now();
-                            true
-                        } else {
-                            false
-                        }
-                    });
-
-                    if should_save {
-                        ctx.update_player_persistence();
-                        ctx.save_state();
-                    }
-
-                    let player = ctx.player_mut_ref();
-                    PlayerService::set_seek_to_timestamp(player, seek_timestamp);
-                }
-                AudioEvent::TotalTrackDuration(dur) => {
-                    tracing::info!("Received Duration: {}", dur);
-                    let player = ctx.player_mut_ref();
-                    PlayerService::set_duration(player, dur);
-                }
-                AudioEvent::AudioFinished => {
-                    tracing::info!("Track finished, getting next...");
-                    // Clone playlist before mutable borrow
-                    let playlist_clone = ctx
-                        .app_settings
-                        .current_playlist_idx
-                        .and_then(|idx| ctx.playlists.get(idx).cloned());
-
-                    if let Some(playlist) = playlist_clone {
-                        let player = ctx.player_mut_ref();
-                        PlayerService::next_track(player, &playlist);
-                    }
-                    ctx.fetch_lyrics_for_current_track();
-                }
-                AudioEvent::PlaybackStateChanged(is_playing) => {
-                    tracing::info!(
-                        "Playback state changed to: {}",
-                        if is_playing { "Playing" } else { "Paused" }
-                    );
-                    let player = ctx.player_mut_ref();
-                    if is_playing {
-                        PlayerService::play(player);
-                    } else {
-                        PlayerService::pause(player);
-                    }
-                }
-            }
-        }
+        // NOTE: Audio events are pumped centrally in `App::update` via
+        // `pump_audio_events`, so this component is now purely a renderer.
 
         // Then collect all necessary data (不可变借用)
         let (
@@ -154,9 +94,6 @@ impl AppComponent for PlayerComponent {
             // Call cassette component with separate ctx reference
             CassetteComponent::add(ctx, ui);
 
-            // Add minimum width constraint for the vertical layout
-            let min_width = 200.0; // Minimum width in pixels
-            let available_width = ui.available_width();
             // Constrain middle pane width to make it a dense column
             let panel_width = 320.0;
 
@@ -168,7 +105,7 @@ impl AppComponent for PlayerComponent {
                     if let Some(track) = &selected_track {
                         let title = track.title.as_deref().unwrap_or("unknown title");
                         let artist = track.artist.as_deref().unwrap_or("unknown artist");
-                        
+
                         let format_time = |timestamp: u64| -> String {
                             let total_seconds = timestamp / 1000;
                             let minutes = total_seconds / 60;
@@ -176,9 +113,15 @@ impl AppComponent for PlayerComponent {
                             format!("{:02}:{:02}", minutes, seconds)
                         };
 
-                        ui.label(eframe::egui::RichText::new(format!("{}{}", t("song"), title)).strong());
+                        ui.label(
+                            eframe::egui::RichText::new(format!("{}{}", t("song"), title)).strong(),
+                        );
                         ui.label(format!("{}{}", t("artist"), artist));
-                        ui.label(format!("{} / {}", format_time(seek_to_timestamp), format_time(duration)));
+                        ui.label(format!(
+                            "{} / {}",
+                            format_time(seek_to_timestamp),
+                            format_time(duration)
+                        ));
                         ui.label(format!("{}{}", t("playlist"), current_playlist_name));
                     } else {
                         ui.label(eframe::egui::RichText::new(t("no_track")).strong());
@@ -198,10 +141,19 @@ impl AppComponent for PlayerComponent {
 
                     // Row 1: Playback Controls & Volume
                     ui.horizontal(|ui| {
-                        let prev_btn = ui.add_enabled(has_selected_track, egui::Button::new("|◀").player_style());
+                        let prev_btn = ui.add_enabled(
+                            has_selected_track,
+                            egui::Button::new("|◀").player_style(),
+                        );
                         let play_pause_icon = if is_playing { "⏸" } else { "▶" };
-                        let play_pause_btn = ui.add_enabled(has_selected_track, egui::Button::new(play_pause_icon).player_style());
-                        let next_btn = ui.add_enabled(has_selected_track, egui::Button::new("▶|").player_style());
+                        let play_pause_btn = ui.add_enabled(
+                            has_selected_track,
+                            egui::Button::new(play_pause_icon).player_style(),
+                        );
+                        let next_btn = ui.add_enabled(
+                            has_selected_track,
+                            egui::Button::new("▶|").player_style(),
+                        );
 
                         let mode_icon = match playback_mode {
                             crate::app::player::PlaybackMode::Normal => "➡",
@@ -209,45 +161,66 @@ impl AppComponent for PlayerComponent {
                             crate::app::player::PlaybackMode::RepeatOne => "🔂",
                             crate::app::player::PlaybackMode::Shuffle => "🔀",
                         };
-                        let mode_btn = ui.add_enabled(has_selected_track, egui::Button::new(mode_icon).player_style());
+                        let mode_btn = ui.add_enabled(
+                            has_selected_track,
+                            egui::Button::new(mode_icon).player_style(),
+                        );
 
                         ui.add_space(8.0);
-                        let lyrics_icon = if ctx.ui_state.desktop_lyrics_enabled { "词" } else { "词" };
-                        let lyrics_btn = ui.add(egui::Button::new(lyrics_icon).player_style());
+                        // TODO(ui-phase): differentiate icon / colour by `desktop_lyrics_enabled`
+                        let lyrics_btn = ui.add(egui::Button::new("词").player_style());
 
-                        // Playback Action Logic
-                        let mut fetch_lyrics = false;
-                        if has_selected_track {
-                            let mut action = None;
-                            if mode_btn.clicked() {
-                                action = Some("toggle_mode");
-                            } else if play_pause_btn.clicked() {
-                                action = Some(if is_playing { "pause" } else { "play" });
-                            } else if prev_btn.clicked() && ctx.app_settings.playing_playlist_idx.is_some() {
-                                action = Some("previous");
-                                fetch_lyrics = true;
-                            } else if next_btn.clicked() && ctx.app_settings.playing_playlist_idx.is_some() {
-                                action = Some("next");
-                                fetch_lyrics = true;
-                            }
-                            else if lyrics_btn.clicked() {
-                                action = Some("toggle_desktop_lyrics");
-                            }
+                        // Translate UI clicks into a single, type-checked action
+                        let action: Option<PlayerAction> =
+                            if mode_btn.clicked() && has_selected_track {
+                                Some(PlayerAction::ToggleMode)
+                            } else if play_pause_btn.clicked() && has_selected_track {
+                                Some(PlayerAction::TogglePlayPause)
+                            } else if prev_btn.clicked()
+                                && has_selected_track
+                                && ctx.app_settings.playing_playlist_idx.is_some()
+                            {
+                                Some(PlayerAction::Previous)
+                            } else if next_btn.clicked()
+                                && has_selected_track
+                                && ctx.app_settings.playing_playlist_idx.is_some()
+                            {
+                                Some(PlayerAction::Next)
+                            } else if lyrics_btn.clicked() {
+                                Some(PlayerAction::ToggleDesktopLyrics)
+                            } else {
+                                None
+                            };
 
-                            if let Some(action) = action {
-                                match action {
-                                    "toggle_mode" => PlayerService::toggle_playback_mode(ctx.player_mut_ref()),
-                                    "toggle_desktop_lyrics" => ctx.ui_state.desktop_lyrics_enabled = !ctx.ui_state.desktop_lyrics_enabled,
-                                    "pause" => PlayerService::pause(ctx.player_mut_ref()),
-                                    "play"  => PlayerService::play(ctx.player_mut_ref()),
-                                    "previous" => ctx.play_previous_track(),
-                                    "next" => ctx.play_next_track(),
-                                    _ => {}
+                        if let Some(action) = action {
+                            let mut fetch_lyrics = false;
+                            match action {
+                                PlayerAction::ToggleMode => {
+                                    PlayerService::toggle_playback_mode(ctx.player_mut_ref());
+                                }
+                                PlayerAction::TogglePlayPause => {
+                                    if is_playing {
+                                        PlayerService::pause(ctx.player_mut_ref());
+                                    } else {
+                                        PlayerService::play(ctx.player_mut_ref());
+                                    }
+                                }
+                                PlayerAction::Previous => {
+                                    ctx.play_previous_track();
+                                    fetch_lyrics = true;
+                                }
+                                PlayerAction::Next => {
+                                    ctx.play_next_track();
+                                    fetch_lyrics = true;
+                                }
+                                PlayerAction::ToggleDesktopLyrics => {
+                                    ctx.ui_state.desktop_lyrics_enabled =
+                                        !ctx.ui_state.desktop_lyrics_enabled;
                                 }
                             }
-                        }
-                        if fetch_lyrics {
-                            ctx.fetch_lyrics_for_current_track();
+                            if fetch_lyrics {
+                                ctx.fetch_lyrics_for_current_track();
+                            }
                         }
                     });
 
@@ -256,17 +229,20 @@ impl AppComponent for PlayerComponent {
                         let mut current_volume = volume;
                         let previous_vol = current_volume;
                         ui.style_mut().spacing.slider_width = 160.0; // make it longer now that it has its own row
-                        let volume_slider = ui.add(eframe::egui::Slider::new(&mut current_volume, 0.0_f32..=1.0_f32).volume_style());
+                        let volume_slider = ui.add(
+                            eframe::egui::Slider::new(&mut current_volume, 0.0_f32..=1.0_f32)
+                                .volume_style(),
+                        );
 
-                        if volume_slider.dragged() {
-                            if current_volume != previous_vol {
-                                let is_processing_ui_change = ctx.is_processing_ui_change();
-                                PlayerService::set_volume(ctx.player_mut_ref(), current_volume, &is_processing_ui_change);
-                            }
+                        if volume_slider.dragged() && current_volume != previous_vol {
+                            let is_processing_ui_change = ctx.is_processing_ui_change();
+                            PlayerService::set_volume(
+                                ctx.player_mut_ref(),
+                                current_volume,
+                                &is_processing_ui_change,
+                            );
                         }
                     });
-
-
                 },
             );
 
@@ -278,7 +254,7 @@ impl AppComponent for PlayerComponent {
                 eframe::egui::Layout::top_down(eframe::egui::Align::LEFT),
                 |ui| {
                     crate::app::components::lyrics_component::LyricsComponent::add(ctx, ui);
-                }
+                },
             );
         });
     }
