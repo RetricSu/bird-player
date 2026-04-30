@@ -52,8 +52,15 @@ impl MainShell {
                 });
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            PlaylistContent::add(app, ui);
-        });
+        egui::CentralPanel::default()
+            // Match SidePanel's default frame so the middle column's
+            // top inner_margin equals the library / lyrics panels —
+            // otherwise the central panel adds extra top padding and
+            // the playlist tab strip's bottom separator lands a few
+            // pixels below the other two panel separators.
+            .frame(egui::Frame::side_top_panel(&ctx.style()))
+            .show(ctx, |ui| {
+                PlaylistContent::add(app, ui);
+            });
     }
 }
