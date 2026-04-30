@@ -14,6 +14,11 @@ impl AppComponent for WindowChrome {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.horizontal(|ui| {
+            // Render the menu triggers (文件 / 播放 / ...) as borderless,
+            // hover-tinted buttons so they share a visual language with the
+            // window control buttons on the right edge of the same row.
+            crate::app::style::borderless_button_visuals(ui.visuals_mut());
+
             // Menu list
             ui.menu_button(t("file"), |ui| {
                 if ui.button(t("open")).clicked() {

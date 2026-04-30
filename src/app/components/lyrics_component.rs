@@ -40,7 +40,14 @@ impl LyricsComponent {
             ui.label(format!("{} - {}", &lyrics.track_name, &lyrics.artist_name));
         }
 
-        if ui.button(t("upload_lyrics")).clicked() {
+        let upload_clicked = ui
+            .scope(|ui| {
+                crate::app::style::borderless_button_visuals(ui.visuals_mut());
+                ui.button(t("upload_lyrics"))
+            })
+            .inner
+            .clicked();
+        if upload_clicked {
             match Self::handle_manual_upload(ctx) {
                 ManualUploadResult::Updated => {
                     ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Loaded;

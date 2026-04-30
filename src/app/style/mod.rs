@@ -70,3 +70,20 @@ impl SliderExt for Slider<'_> {
             .handle_shape(HandleShape::Rect { aspect_ratio: 0.3 })
     }
 }
+
+/// Mutate the current `Visuals` so any button rendered inside the calling
+/// scope reads as borderless: transparent inactive, soft hover fill, no
+/// outline. Used for chrome menus and accent buttons (e.g. lyrics upload)
+/// so they match the borderless treatment we already apply to the window
+/// chrome buttons.
+pub fn borderless_button_visuals(visuals: &mut eframe::egui::Visuals) {
+    let widgets = &mut visuals.widgets;
+    let hover_fill = widgets.hovered.weak_bg_fill;
+    widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+    widgets.inactive.bg_fill = Color32::TRANSPARENT;
+    widgets.inactive.bg_stroke = Stroke::NONE;
+    widgets.hovered.weak_bg_fill = hover_fill;
+    widgets.hovered.bg_fill = hover_fill;
+    widgets.hovered.bg_stroke = Stroke::NONE;
+    widgets.active.bg_stroke = Stroke::NONE;
+}

@@ -148,8 +148,6 @@ impl AppComponent for PlayerComponent {
                 );
             });
 
-            ui.add_space(tokens::spacing::XS);
-
             // ── Middle row: full-width timeline scrubber ────────────────────
             ui.scope(|ui| {
                 ui.style_mut().spacing.slider_rail_height = 2.0;
@@ -168,8 +166,6 @@ impl AppComponent for PlayerComponent {
                     PlayerService::seek_to(ctx.player_mut_ref(), current_ms as u64);
                 }
             });
-
-            ui.add_space(tokens::spacing::XS);
 
             // ── Bottom row: transport (left) + volume (right) ───────────────
             ui.horizontal(|ui| {

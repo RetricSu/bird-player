@@ -29,7 +29,7 @@ impl MainShell {
 
         egui::TopBottomPanel::top("Player").show(ctx, |ui| {
             PlayerComponent::add(app, ui);
-            ui.add_space(tokens::spacing::SM + 1.0);
+            ui.add_space(tokens::spacing::XS);
         });
 
         egui::TopBottomPanel::bottom("Footer").show(ctx, |ui| {
