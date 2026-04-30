@@ -87,8 +87,6 @@ impl LyricsComponent {
                     .color(tokens::color::LYRICS_TYPE_ICON)
                     .italics(),
             );
-
-            ui.separator();
         }
     }
 

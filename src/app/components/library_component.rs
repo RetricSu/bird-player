@@ -13,111 +13,112 @@ impl AppComponent for LibraryComponent {
         // Keep track of paths to remove (if any)
         let mut path_to_remove: Option<LibraryPathId> = None;
 
-        eframe::egui::ScrollArea::both().show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.set_min_height(crate::app::style::tokens::size::HEADER_HEIGHT);
-                // Create a clickable label for "Music Files" with context menu
-                let music_label = ui.add(
-                    Label::new(
-                        RichText::new(t("music_files"))
-                            .size(crate::app::style::tokens::text::MD)
-                            .strong(),
-                    )
-                    .sense(Sense::click()),
-                );
+        // Header is rendered OUTSIDE the ScrollArea so it stays pinned and
+        // its bottom separator lines up with the playlist tabs / lyrics
+        // panel separators on the same horizontal seam.
+        ui.horizontal(|ui| {
+            ui.set_min_height(crate::app::style::tokens::size::HEADER_HEIGHT);
+            // Create a clickable label for "Music Files" with context menu
+            let music_label = ui.add(
+                Label::new(
+                    RichText::new(t("music_files"))
+                        .size(crate::app::style::tokens::text::MD)
+                        .strong(),
+                )
+                .sense(Sense::click()),
+            );
 
-                // Add context menu with expand/collapse options
-                music_label.context_menu(|ui| {
-                    if ui.button(t("expand_all")).clicked() {
-                        // Set all folders to expanded
-                        ctx.ui_state.library_folders_expanded = true;
+            // Add context menu with expand/collapse options
+            music_label.context_menu(|ui| {
+                if ui.button(t("expand_all")).clicked() {
+                    // Set all folders to expanded
+                    ctx.ui_state.library_folders_expanded = true;
 
-                        // Force clear the memory to make all folders expand
-                        ui.ctx().memory_mut(|mem| {
-                            mem.data.clear();
-                        });
+                    // Force clear the memory to make all folders expand
+                    ui.ctx().memory_mut(|mem| {
+                        mem.data.clear();
+                    });
 
-                        ui.close_menu();
-                    }
+                    ui.close_menu();
+                }
 
-                    if ui.button(t("collapse_all")).clicked() {
-                        // Set all folders to collapsed
-                        ctx.ui_state.library_folders_expanded = false;
+                if ui.button(t("collapse_all")).clicked() {
+                    // Set all folders to collapsed
+                    ctx.ui_state.library_folders_expanded = false;
 
-                        // Force clear the memory to make all folders collapse
-                        ui.ctx().memory_mut(|mem| {
-                            mem.data.clear();
-                        });
+                    // Force clear the memory to make all folders collapse
+                    ui.ctx().memory_mut(|mem| {
+                        mem.data.clear();
+                    });
 
-                        ui.close_menu();
-                    }
+                    ui.close_menu();
+                }
 
-                    if ui.button(t("resync_all")).clicked() {
-                        // Get all paths that need to be reimported
-                        let paths_to_resync: Vec<_> = ctx
+                if ui.button(t("resync_all")).clicked() {
+                    // Get all paths that need to be reimported
+                    let paths_to_resync: Vec<_> = ctx
+                        .library
+                        .paths()
+                        .iter()
+                        .filter(|p| p.status() == crate::app::library::LibraryPathStatus::Imported)
+                        .map(|p| (p.id(), p.path().clone()))
+                        .collect();
+
+                    // For each path, trigger a resync
+                    for (path_id, _path) in paths_to_resync {
+                        // Temporarily set path to NotImported to trigger reimport
+                        ctx.library.set_path_to_not_imported(path_id);
+
+                        // Re-import the path, which will update existing items
+                        let path_to_import = ctx
                             .library
                             .paths()
                             .iter()
-                            .filter(|p| {
-                                p.status() == crate::app::library::LibraryPathStatus::Imported
-                            })
-                            .map(|p| (p.id(), p.path().clone()))
-                            .collect();
-
-                        // For each path, trigger a resync
-                        for (path_id, _path) in paths_to_resync {
-                            // Temporarily set path to NotImported to trigger reimport
-                            ctx.library.set_path_to_not_imported(path_id);
-
-                            // Re-import the path, which will update existing items
-                            let path_to_import = ctx
-                                .library
-                                .paths()
-                                .iter()
-                                .find(|p| p.id() == path_id)
-                                .cloned()
-                                .unwrap();
-                            ctx.import_library_paths(&path_to_import);
-                        }
-
-                        ui.close_menu();
+                            .find(|p| p.id() == path_id)
+                            .cloned()
+                            .unwrap();
+                        ctx.import_library_paths(&path_to_import);
                     }
-                });
 
-                ui.add_space(crate::app::style::tokens::spacing::XS); // Add a small space between label and buttons
-
-                // Add a button to select and import a folder
-                if ui
-                    .add(eframe::egui::Button::new(crate::app::style::icons::PLUS).frame(false))
-                    .on_hover_text(t("add_music_folder"))
-                    .clicked()
-                {
-                    if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
-                        // Add the path to the library
-                        let path_exists = !ctx.library.add_path(new_path.clone());
-
-                        // If it existed, find it and rescan. If new, import the bottom-most path.
-                        let path_to_import = if path_exists {
-                            ctx.library
-                                .paths()
-                                .iter()
-                                .find(|p| *p.path() == new_path)
-                                .cloned()
-                        } else {
-                            ctx.library.paths().last().cloned()
-                        };
-
-                        if let Some(p) = path_to_import {
-                            ctx.import_library_paths(&p);
-                        }
-                    }
+                    ui.close_menu();
                 }
             });
 
-            // Add some vertical spacing
-            ui.add_space(crate::app::style::tokens::spacing::XS);
-            ui.separator();
+            ui.add_space(crate::app::style::tokens::spacing::XS); // Add a small space between label and buttons
 
+            // Add a button to select and import a folder
+            if ui
+                .add(eframe::egui::Button::new(crate::app::style::icons::PLUS).frame(false))
+                .on_hover_text(t("add_music_folder"))
+                .clicked()
+            {
+                if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
+                    // Add the path to the library
+                    let path_exists = !ctx.library.add_path(new_path.clone());
+
+                    // If it existed, find it and rescan. If new, import the bottom-most path.
+                    let path_to_import = if path_exists {
+                        ctx.library
+                            .paths()
+                            .iter()
+                            .find(|p| *p.path() == new_path)
+                            .cloned()
+                    } else {
+                        ctx.library.paths().last().cloned()
+                    };
+
+                    if let Some(p) = path_to_import {
+                        ctx.import_library_paths(&p);
+                    }
+                }
+            }
+        });
+
+        // Add some vertical spacing
+        ui.add_space(crate::app::style::tokens::spacing::XS);
+        ui.separator();
+
+        eframe::egui::ScrollArea::both().show(ui, |ui| {
             // Group library items by their library_id (which corresponds to folder paths)
             let mut folder_items: HashMap<LibraryPathId, Vec<&LibraryItem>> = HashMap::new();
 
