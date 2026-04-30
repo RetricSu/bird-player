@@ -111,7 +111,9 @@ impl LyricsComponent {
             // Show lyrics
             if lyrics.instrumental {
                 ui.add(egui::Label::new(
-                    egui::RichText::new("♪ Instrumental ♪").italics(),
+                    egui::RichText::new("♪ Instrumental ♪")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
             } else if !lyrics.lines.is_empty() {
                 // Show synced lyrics with current line highlighting
@@ -120,16 +122,22 @@ impl LyricsComponent {
                 Self::show_plain_lyrics(ui, plain_lyrics);
             } else {
                 ui.add(egui::Label::new(
-                    egui::RichText::new("No lyrics available").italics(),
+                    egui::RichText::new("No lyrics available")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
             }
         } else {
             ui.vertical_centered(|ui| {
                 ui.add(egui::Label::new(
-                    egui::RichText::new("No lyrics loaded").italics(),
+                    egui::RichText::new("No lyrics loaded")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
                 ui.add(egui::Label::new(
-                    egui::RichText::new("Select a track to view lyrics").italics(),
+                    egui::RichText::new("Select a track to view lyrics")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
             });
         }
@@ -163,11 +171,13 @@ impl LyricsComponent {
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
                         .color(tokens::color::LYRICS_CURRENT_LINE)
-                        .size(tokens::text::MD)
+                        .size(tokens::text::SM)
                         .strong(),
                 ))
             } else {
-                ui.add(egui::Label::new(egui::RichText::new(label)))
+                ui.add(egui::Label::new(
+                    egui::RichText::new(label).size(tokens::text::SM),
+                ))
             };
 
             // Scroll to current line to keep it visible
@@ -185,7 +195,9 @@ impl LyricsComponent {
             if line.trim().is_empty() {
                 ui.add_space(tokens::spacing::MD);
             } else {
-                ui.add(egui::Label::new(egui::RichText::new(line)));
+                ui.add(egui::Label::new(
+                    egui::RichText::new(line).size(tokens::text::SM),
+                ));
             }
         }
     }

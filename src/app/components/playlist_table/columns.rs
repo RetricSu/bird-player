@@ -23,7 +23,7 @@ pub(crate) fn render_number_column(
         ui.set_min_width(column_width);
 
         let number_str = format!("{}", idx + 1);
-        let mut text = egui::RichText::new(number_str).strong();
+        let mut text = egui::RichText::new(number_str).size(crate::app::style::tokens::text::SM);
         if let Some(color) = highlight_color {
             text = text.color(color);
         }
@@ -81,7 +81,8 @@ pub(crate) fn render_title_column(
                 state.clear_edit(ui);
             }
         } else {
-            let mut text = egui::RichText::new(track_title);
+            let mut text =
+                egui::RichText::new(track_title).size(crate::app::style::tokens::text::SM);
             if let Some(color) = highlight_color {
                 text = text.color(color);
             }
@@ -155,7 +156,8 @@ pub(crate) fn render_artist_column(
                 state.clear_edit(ui);
             }
         } else {
-            let mut text = egui::RichText::new(track_artist);
+            let mut text =
+                egui::RichText::new(track_artist).size(crate::app::style::tokens::text::SM);
             if let Some(color) = highlight_color {
                 text = text.color(color);
             }
@@ -225,7 +227,8 @@ pub(crate) fn render_album_column(
                 state.clear_edit(ui);
             }
         } else {
-            let mut text = egui::RichText::new(track_album);
+            let mut text =
+                egui::RichText::new(track_album).size(crate::app::style::tokens::text::SM);
             if let Some(color) = highlight_color {
                 text = text.color(color);
             }
@@ -333,7 +336,8 @@ pub(crate) fn render_genre_column(
                 state.clear_edit(ui);
             }
         } else {
-            let mut text = egui::RichText::new(track_genre);
+            let mut text =
+                egui::RichText::new(track_genre).size(crate::app::style::tokens::text::SM);
             if let Some(color) = highlight_color {
                 text = text.color(color);
             }

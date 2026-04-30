@@ -138,8 +138,10 @@ impl AppComponent for LibraryComponent {
 
                     // Create a header with default behavior that allows individual control
                     // but is also affected by the global expand/collapse actions
-                    let header = CollapsingHeader::new(RichText::new(folder_name).strong())
-                        .default_open(ctx.ui_state.library_folders_expanded); // Use the global setting after memory clear
+                    let header = CollapsingHeader::new(
+                        RichText::new(folder_name).size(crate::app::style::tokens::text::SM),
+                    )
+                    .default_open(ctx.ui_state.library_folders_expanded); // Use the global setting after memory clear
 
                     // Show the header and get its response
                     let section = header.show(ui, |ui| {
@@ -168,9 +170,12 @@ impl AppComponent for LibraryComponent {
 
                                 // Create a clickable label for each track
                                 let item_label = ui.add(
-                                    Label::new(RichText::new(display_text))
-                                        .sense(Sense::click())
-                                        .wrap_mode(TextWrapMode::Truncate),
+                                    Label::new(
+                                        RichText::new(display_text)
+                                            .size(crate::app::style::tokens::text::SM),
+                                    )
+                                    .sense(Sense::click())
+                                    .wrap_mode(TextWrapMode::Truncate),
                                 );
                                 if item_label.hovered() {
                                     ui.ctx()
