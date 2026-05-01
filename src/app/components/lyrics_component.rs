@@ -18,15 +18,11 @@ impl AppComponent for LyricsComponent {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.set_min_height(tokens::size::HEADER_HEIGHT);
+        crate::app::style::panel_header(ui, |ui| {
             Self::show_lyrics_type(ui, ctx);
             Self::show_lyrics_header(ui, ctx);
             Self::show_status(ui, ctx);
         });
-
-        ui.add_space(tokens::spacing::XS);
-        ui.separator();
 
         // auto_shrink([false, false]) lets the scroll area span the full
         // panel width so the vertical scrollbar sits flush against the

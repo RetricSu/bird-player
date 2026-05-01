@@ -39,7 +39,7 @@ pub mod size {
     pub const STROKE_WIDTH: f32 = 1.0;
     /// Shared header band height for the library / playlist tabs / lyrics
     /// panels so the three side-by-side panels line up across the seam.
-    pub const HEADER_HEIGHT: f32 = 28.0;
+    pub const HEADER_HEIGHT: f32 = 22.0;
 }
 
 /// Typography sizes (in egui logical pixels).

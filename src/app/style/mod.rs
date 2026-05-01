@@ -87,3 +87,24 @@ pub fn borderless_button_visuals(visuals: &mut eframe::egui::Visuals) {
     widgets.hovered.bg_stroke = Stroke::NONE;
     widgets.active.bg_stroke = Stroke::NONE;
 }
+
+/// Render a compact panel header row whose bottom rule extends edge-to-edge
+/// across its parent panel. egui's `Frame::side_top_panel` (used by all
+/// three columns since the central-panel fix) has an 8 px horizontal
+/// `inner_margin`; a vanilla `ui.separator()` therefore stops 8 px short of
+/// each panel border. `Separator::grow(8.0)` cancels exactly that inset so
+/// the rule “seals” the header to the panel edges and the three column
+/// header lines read as one continuous horizontal seam.
+pub fn panel_header<R>(
+    ui: &mut eframe::egui::Ui,
+    add_contents: impl FnOnce(&mut eframe::egui::Ui) -> R,
+) -> R {
+    let inner = ui
+        .horizontal(|ui| {
+            ui.set_min_height(tokens::size::HEADER_HEIGHT);
+            add_contents(ui)
+        })
+        .inner;
+    ui.add(eframe::egui::Separator::default().grow(8.0).spacing(0.0));
+    inner
+}

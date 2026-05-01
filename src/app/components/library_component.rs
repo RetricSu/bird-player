@@ -14,10 +14,9 @@ impl AppComponent for LibraryComponent {
         let mut path_to_remove: Option<LibraryPathId> = None;
 
         // Header is rendered OUTSIDE the ScrollArea so it stays pinned and
-        // its bottom separator lines up with the playlist tabs / lyrics
-        // panel separators on the same horizontal seam.
-        ui.horizontal(|ui| {
-            ui.set_min_height(crate::app::style::tokens::size::HEADER_HEIGHT);
+        // its bottom rule lines up with the playlist tabs / lyrics panel
+        // rules on the same horizontal seam.
+        crate::app::style::panel_header(ui, |ui| {
             // Create a clickable label for "Music Files" with context menu
             let music_label = ui.add(
                 Label::new(
@@ -111,10 +110,6 @@ impl AppComponent for LibraryComponent {
                 }
             }
         });
-
-        // Add some vertical spacing
-        ui.add_space(crate::app::style::tokens::spacing::XS);
-        ui.separator();
 
         eframe::egui::ScrollArea::both().show(ui, |ui| {
             // Group library items by their library_id (which corresponds to folder paths)
