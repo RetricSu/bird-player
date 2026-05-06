@@ -100,14 +100,14 @@ These fields are populated in `src/lib/audio/loader.rs` when a track loads, extr
 
 **Display logic:**
 
-**Case 1: Playlist is playing**
+**Case 1: Playlist is playing** (when `ctx.app_settings.playing_playlist_idx.is_some()`)
 ```
 Playlist Name
 Track 03/12
 Description preview... (first 30 chars if present)
 ```
 
-**Case 2: Single track (no playlist)**
+**Case 2: Single track (no playlist)** (when `ctx.app_settings.playing_playlist_idx.is_none()`)
 ```
 Album · 2024
 Rock
