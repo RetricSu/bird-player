@@ -4,6 +4,7 @@ pub mod language_selector;
 pub mod library_component;
 pub mod lyrics_component;
 pub mod main_shell;
+pub mod playback_info_panel;
 pub mod player_component;
 pub mod playlist_content;
 pub mod playlist_table;
