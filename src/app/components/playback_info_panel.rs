@@ -3,6 +3,8 @@ use crate::app::style::tokens;
 use crate::app::App;
 use eframe::egui::{self, Align, Layout, RichText};
 
+const DESCRIPTION_PREVIEW_LENGTH: usize = 30;
+
 pub struct PlaybackInfoPanel;
 
 impl AppComponent for PlaybackInfoPanel {
@@ -51,8 +53,8 @@ impl PlaybackInfoPanel {
 
                 // Description preview (first 30 chars)
                 if let Some(desc) = playlist.description() {
-                    let preview = if desc.len() > 30 {
-                        format!("{}...", &desc[..30])
+                    let preview = if desc.chars().count() > DESCRIPTION_PREVIEW_LENGTH {
+                        format!("{}...", desc.chars().take(DESCRIPTION_PREVIEW_LENGTH).collect::<String>())
                     } else {
                         desc.to_string()
                     };
