@@ -78,23 +78,35 @@ impl Database {
                 .unwrap()
                 .as_millis() as i64;
 
-            // Add new columns to playlists table
-            connection.execute(
-                "ALTER TABLE playlists ADD COLUMN description TEXT",
-                [],
-            )?;
+            // Check which columns already exist
+            let mut stmt = connection.prepare("PRAGMA table_info(playlists)")?;
+            let existing_columns: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(1))?
+                .collect::<Result<Vec<_>, _>>()?;
 
-            connection.execute(
-                "ALTER TABLE playlists ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
+            // Add new columns only if they don't exist
+            if !existing_columns.contains(&"description".to_string()) {
+                connection.execute(
+                    "ALTER TABLE playlists ADD COLUMN description TEXT",
+                    [],
+                )?;
+            }
 
-            connection.execute(
-                "ALTER TABLE playlists ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
+            if !existing_columns.contains(&"created_at".to_string()) {
+                connection.execute(
+                    "ALTER TABLE playlists ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )?;
+            }
 
-            // Set timestamps for existing playlists
+            if !existing_columns.contains(&"updated_at".to_string()) {
+                connection.execute(
+                    "ALTER TABLE playlists ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )?;
+            }
+
+            // Set timestamps for existing playlists (only if they're still at default 0)
             connection.execute(
                 "UPDATE playlists SET created_at = ?1, updated_at = ?1 WHERE created_at = 0",
                 [current_time],
