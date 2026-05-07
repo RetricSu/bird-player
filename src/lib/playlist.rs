@@ -199,16 +199,16 @@ impl Playlist {
             Some(id) => {
                 // Update existing playlist
                 tx.execute(
-                    "UPDATE playlists SET name = ?1 WHERE id = ?2",
-                    rusqlite::params![self.name, id],
+                    "UPDATE playlists SET name = ?1, description = ?2, updated_at = ?3 WHERE id = ?4",
+                    rusqlite::params![self.name, self.description, self.updated_at, id],
                 )?;
                 id
             }
             None => {
                 // Insert new playlist
                 tx.execute(
-                    "INSERT INTO playlists (name) VALUES (?1)",
-                    rusqlite::params![self.name],
+                    "INSERT INTO playlists (name, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![self.name, self.description, self.created_at, self.updated_at],
                 )?;
                 tx.last_insert_rowid()
             }
@@ -251,16 +251,16 @@ impl Playlist {
             Some(id) => {
                 // Update existing playlist
                 tx.execute(
-                    "UPDATE playlists SET name = ?1 WHERE id = ?2",
-                    rusqlite::params![self.name, id],
+                    "UPDATE playlists SET name = ?1, description = ?2, updated_at = ?3 WHERE id = ?4",
+                    rusqlite::params![self.name, self.description, self.updated_at, id],
                 )?;
                 id
             }
             None => {
                 // Insert new playlist
                 tx.execute(
-                    "INSERT INTO playlists (name) VALUES (?1)",
-                    rusqlite::params![self.name],
+                    "INSERT INTO playlists (name, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![self.name, self.description, self.created_at, self.updated_at],
                 )?;
                 tx.last_insert_rowid()
             }
@@ -297,23 +297,25 @@ impl Playlist {
         let conn_guard = conn.lock().unwrap();
 
         // Get the playlist info
-        let mut stmt = conn_guard.prepare("SELECT id, name FROM playlists WHERE id = ?1")?;
+        let mut stmt = conn_guard.prepare(
+            "SELECT id, name, description, created_at, updated_at FROM playlists WHERE id = ?1"
+        )?;
 
         let mut playlist_rows = stmt.query(rusqlite::params![playlist_id])?;
 
         if let Some(row) = playlist_rows.next()? {
             let id: i64 = row.get(0)?;
             let name: Option<String> = row.get(1)?;
-
-            // Create the playlist with default timestamps (will be loaded from DB in Task 2)
-            let now = Self::current_timestamp_ms();
+            let description: Option<String> = row.get(2)?;
+            let created_at: i64 = row.get(3)?;
+            let updated_at: i64 = row.get(4)?;
 
             let mut playlist = Playlist {
                 id: Some(id),
                 name,
-                description: None,
-                created_at: now,
-                updated_at: now,
+                description,
+                created_at,
+                updated_at,
                 tracks: vec![],
                 selected: None,
                 selected_indices: HashSet::new(),
