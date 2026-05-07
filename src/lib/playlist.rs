@@ -10,6 +10,9 @@ use std::sync::{Arc, Mutex};
 pub struct Playlist {
     pub id: Option<i64>,
     name: Option<String>,
+    description: Option<String>,
+    created_at: i64,
+    updated_at: i64,
     pub tracks: Vec<LibraryItem>,
     pub selected: Option<LibraryItem>,
     #[serde(skip_serializing, skip_deserializing)]
@@ -26,9 +29,17 @@ impl Default for Playlist {
 
 impl Playlist {
     pub fn new() -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
         Self {
             id: None,
             name: None,
+            description: None,
+            created_at: now,
+            updated_at: now,
             tracks: vec![],
             selected: None,
             selected_indices: HashSet::new(),
@@ -38,6 +49,10 @@ impl Playlist {
 
     pub fn set_name(&mut self, name: String) {
         self.name = Some(name);
+        self.updated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
         self.is_dirty = true;
     }
 
@@ -45,8 +60,33 @@ impl Playlist {
         self.name.clone()
     }
 
+    pub fn description(&self) -> Option<String> {
+        self.description.clone()
+    }
+
+    pub fn set_description(&mut self, description: Option<String>) {
+        self.description = description;
+        self.updated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        self.is_dirty = true;
+    }
+
+    pub fn created_at(&self) -> i64 {
+        self.created_at
+    }
+
+    pub fn updated_at(&self) -> i64 {
+        self.updated_at
+    }
+
     pub fn add(&mut self, track: LibraryItem) {
         self.tracks.push(track);
+        self.updated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
         self.is_dirty = true;
     }
 
@@ -54,6 +94,10 @@ impl Playlist {
     pub fn remove(&mut self, idx: usize) {
         self.tracks.remove(idx);
         self.selected_indices.remove(&idx);
+        self.updated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
         self.is_dirty = true;
 
         // Update indices greater than the removed index
@@ -80,6 +124,10 @@ impl Playlist {
     pub fn reorder(&mut self, current_pos: usize, destination_pos: usize) {
         let track = self.tracks.remove(current_pos);
         self.tracks.insert(destination_pos, track);
+        self.updated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
         self.is_dirty = true;
 
         // Update selected indices after reordering
@@ -268,10 +316,18 @@ impl Playlist {
             let id: i64 = row.get(0)?;
             let name: Option<String> = row.get(1)?;
 
-            // Create the playlist
+            // Create the playlist with default timestamps (will be loaded from DB in Task 2)
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+
             let mut playlist = Playlist {
                 id: Some(id),
                 name,
+                description: None,
+                created_at: now,
+                updated_at: now,
                 tracks: vec![],
                 selected: None,
                 selected_indices: HashSet::new(),
@@ -438,9 +494,17 @@ mod tests {
         let path2 = PathBuf::from(r"C:\music\song2.mp3");
         let path3 = PathBuf::from(r"C:\music\song3.mp3");
 
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
         let mut playlist = Playlist {
             id: None,
             name: Some("test".to_string()),
+            description: None,
+            created_at: now,
+            updated_at: now,
             tracks: vec![
                 LibraryItem::new(path1.clone(), LibraryPathId::new(0)),
                 LibraryItem::new(path2.clone(), LibraryPathId::new(1)),
@@ -466,9 +530,17 @@ mod tests {
         let path2 = PathBuf::from(r"C:\music\song2.mp3");
         let path3 = PathBuf::from(r"C:\music\song3.mp3");
 
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
         let mut playlist = Playlist {
             id: None,
             name: Some("test".to_string()),
+            description: None,
+            created_at: now,
+            updated_at: now,
             tracks: vec![
                 LibraryItem::new(path1.clone(), LibraryPathId::new(0)),
                 LibraryItem::new(path2.clone(), LibraryPathId::new(1)),
@@ -508,4 +580,83 @@ mod tests {
 
     //     assert_eq!(playlist.selected, Some(track3));
     // }
+
+    #[test]
+    fn test_playlist_metadata_fields() {
+        let playlist = Playlist::new();
+
+        // Check that timestamps are initialized
+        assert!(playlist.created_at() > 0);
+        assert!(playlist.updated_at() > 0);
+        assert_eq!(playlist.created_at(), playlist.updated_at());
+
+        // Check that description is None by default
+        assert_eq!(playlist.description(), None);
+    }
+
+    #[test]
+    fn test_set_description() {
+        let mut playlist = Playlist::new();
+        let initial_updated_at = playlist.updated_at();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        playlist.set_description(Some("My favorite songs".to_string()));
+
+        assert_eq!(playlist.description(), Some("My favorite songs".to_string()));
+        assert!(playlist.updated_at() > initial_updated_at);
+    }
+
+    #[test]
+    fn test_set_name_updates_timestamp() {
+        let mut playlist = Playlist::new();
+        let initial_updated_at = playlist.updated_at();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        playlist.set_name("Test Playlist".to_string());
+
+        assert!(playlist.updated_at() > initial_updated_at);
+    }
+
+    #[test]
+    fn test_add_updates_timestamp() {
+        let mut playlist = Playlist::new();
+        let initial_updated_at = playlist.updated_at();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let track = LibraryItem::new(PathBuf::from(r"C:\music\song.mp3"), LibraryPathId::new(0));
+        playlist.add(track);
+
+        assert!(playlist.updated_at() > initial_updated_at);
+    }
+
+    #[test]
+    fn test_remove_updates_timestamp() {
+        let mut playlist = Playlist::new();
+        let track = LibraryItem::new(PathBuf::from(r"C:\music\song.mp3"), LibraryPathId::new(0));
+        playlist.add(track);
+
+        let initial_updated_at = playlist.updated_at();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        playlist.remove(0);
+
+        assert!(playlist.updated_at() > initial_updated_at);
+    }
+
+    #[test]
+    fn test_reorder_updates_timestamp() {
+        let mut playlist = Playlist::new();
+        playlist.add(LibraryItem::new(PathBuf::from(r"C:\music\song1.mp3"), LibraryPathId::new(0)));
+        playlist.add(LibraryItem::new(PathBuf::from(r"C:\music\song2.mp3"), LibraryPathId::new(1)));
+
+        let initial_updated_at = playlist.updated_at();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        playlist.reorder(0, 1);
+
+        assert!(playlist.updated_at() > initial_updated_at);
+    }
 }
