@@ -28,11 +28,20 @@ impl Default for Playlist {
 }
 
 impl Playlist {
-    pub fn new() -> Self {
-        let now = std::time::SystemTime::now()
+    fn current_timestamp_ms() -> i64 {
+        std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_millis() as i64;
+            .as_millis() as i64
+    }
+
+    fn touch(&mut self) {
+        self.updated_at = Self::current_timestamp_ms();
+        self.is_dirty = true;
+    }
+
+    pub fn new() -> Self {
+        let now = Self::current_timestamp_ms();
 
         Self {
             id: None,
@@ -49,11 +58,7 @@ impl Playlist {
 
     pub fn set_name(&mut self, name: String) {
         self.name = Some(name);
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
-        self.is_dirty = true;
+        self.touch();
     }
 
     pub fn get_name(&self) -> Option<String> {
@@ -66,11 +71,7 @@ impl Playlist {
 
     pub fn set_description(&mut self, description: Option<String>) {
         self.description = description;
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
-        self.is_dirty = true;
+        self.touch();
     }
 
     pub fn created_at(&self) -> i64 {
@@ -83,22 +84,14 @@ impl Playlist {
 
     pub fn add(&mut self, track: LibraryItem) {
         self.tracks.push(track);
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
-        self.is_dirty = true;
+        self.touch();
     }
 
     // TODO - should probably return a Result
     pub fn remove(&mut self, idx: usize) {
         self.tracks.remove(idx);
         self.selected_indices.remove(&idx);
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
-        self.is_dirty = true;
+        self.touch();
 
         // Update indices greater than the removed index
         let mut to_remove = Vec::new();
@@ -124,11 +117,7 @@ impl Playlist {
     pub fn reorder(&mut self, current_pos: usize, destination_pos: usize) {
         let track = self.tracks.remove(current_pos);
         self.tracks.insert(destination_pos, track);
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
-        self.is_dirty = true;
+        self.touch();
 
         // Update selected indices after reordering
         let mut new_selected = HashSet::new();
@@ -317,10 +306,7 @@ impl Playlist {
             let name: Option<String> = row.get(1)?;
 
             // Create the playlist with default timestamps (will be loaded from DB in Task 2)
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64;
+            let now = Self::current_timestamp_ms();
 
             let mut playlist = Playlist {
                 id: Some(id),
