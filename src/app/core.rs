@@ -432,6 +432,16 @@ impl App {
                         PlayerService::pause(self.player_mut_ref());
                     }
                 }
+                AudioEvent::TechnicalInfo {
+                    sample_rate,
+                    channels,
+                    codec,
+                } => {
+                    let player = self.player_mut_ref();
+                    player.sample_rate = sample_rate;
+                    player.channels = channels;
+                    player.codec = codec;
+                }
             }
         }
     }

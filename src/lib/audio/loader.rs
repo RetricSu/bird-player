@@ -13,6 +13,7 @@ pub fn load_file(
     audio_engine_state: &mut AudioEngineState,
     decoder: &mut Option<Box<dyn symphonia::core::codecs::Decoder>>,
     seek_timestamp: u64,
+    ui_tx: &std::sync::mpsc::Sender<crate::AudioEvent>,
 ) {
     let hint = Hint::new();
     let source = Box::new(std::fs::File::open(path).expect("couldn't open file"));
@@ -97,6 +98,19 @@ pub fn load_file(
                 tb,
                 sample_rate
             );
+
+            // Extract technical info for UI display
+            let channels = track.codec_params.channels.map(|ch| ch.count() as u8);
+            let codec = Some(format!("{:?}", track.codec_params.codec));
+
+            // Send technical info to UI
+            ui_tx
+                .send(crate::AudioEvent::TechnicalInfo {
+                    sample_rate,
+                    channels,
+                    codec,
+                })
+                .ok();
 
             // Store the timebase - use sample rate as the most reliable source
             if let Some(sample_rate) = track.codec_params.sample_rate {

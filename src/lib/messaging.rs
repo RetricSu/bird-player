@@ -19,4 +19,9 @@ pub enum AudioEvent {
     TotalTrackDuration(u64),
     CurrentTimestamp(u64),
     PlaybackStateChanged(bool),
+    TechnicalInfo {
+        sample_rate: Option<u32>,
+        channels: Option<u8>,
+        codec: Option<String>,
+    },
 }

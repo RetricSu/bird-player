@@ -110,7 +110,7 @@ impl State for StoppedState {
 
             ctx.engine.audio_output = None;
 
-            loader::load_file(current_track_path, &mut ctx.engine, &mut ctx.decoder, 0);
+            loader::load_file(current_track_path, &mut ctx.engine, &mut ctx.decoder, 0, &ctx.ui_tx);
 
             ctx.ui_tx
                 .send(AudioEvent::CurrentTimestamp(0))
@@ -284,7 +284,7 @@ impl State for LoadFileState {
 
     fn update(&mut self, ctx: &mut AudioContext) -> Transition {
         ctx.current_track_path = Some(self.path.clone());
-        loader::load_file(&self.path, &mut ctx.engine, &mut ctx.decoder, 0);
+        loader::load_file(&self.path, &mut ctx.engine, &mut ctx.decoder, 0, &ctx.ui_tx);
 
         // 检查加载是否成功
         if ctx.engine.reader.is_some() && ctx.engine.track_info.is_some() {
@@ -338,6 +338,7 @@ impl State for SeekToState {
                 &mut ctx.engine,
                 &mut ctx.decoder,
                 self.timestamp,
+                &ctx.ui_tx,
             );
 
             // 检查加载是否成功

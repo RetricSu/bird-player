@@ -25,6 +25,9 @@ pub struct Player {
     pub duration: u64,
     pub cursor: Arc<AtomicU32>, // This can "overflow"
     pub playback_mode: PlaybackMode,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub codec: Option<String>,
 }
 
 impl Player {
@@ -43,6 +46,9 @@ impl Player {
             duration: 0,
             cursor,
             playback_mode: PlaybackMode::Normal,
+            sample_rate: None,
+            channels: None,
+            codec: None,
         }
     }
 
