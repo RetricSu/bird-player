@@ -117,18 +117,19 @@ pub fn load_file(
                 audio_engine_state.timebase = sample_rate as u64;
                 tracing::debug!("Using sample rate {} as timebase", sample_rate);
             } else if let Some(time_base) = tb {
-                // Fallback to timebase calculation if sample_rate is not available
-                let tb_hz = time_base.numer as f64 / time_base.denom as f64;
+                // TimeBase { numer, denom } means 1 tick = numer/denom seconds
+                // So ticks per second = denom / numer
+                let tb_hz = time_base.denom as f64 / time_base.numer as f64;
                 audio_engine_state.timebase = tb_hz as u64;
                 tracing::debug!(
                     "Using timebase calculation: {} Hz ({} / {})",
                     tb_hz,
-                    time_base.numer,
-                    time_base.denom
+                    time_base.denom,
+                    time_base.numer
                 );
             } else {
                 tracing::warn!("No timebase or sample rate available, using default 44100");
-                audio_engine_state.timebase = 44100; // Common default for audio
+                audio_engine_state.timebase = 44100;
             }
 
             // Convert duration to milliseconds

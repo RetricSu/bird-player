@@ -48,11 +48,6 @@ impl PlayerService {
         player.seek_to(timestamp);
     }
 
-    /// Set the seek timestamp (for UI updates without immediate seeking)
-    pub fn set_seek_to_timestamp(player: &mut Player, timestamp: u64) {
-        player.set_seek_to_timestamp(timestamp);
-    }
-
     /// Set the total duration of the current track
     pub fn set_duration(player: &mut Player, duration: u64) {
         player.set_duration(duration);

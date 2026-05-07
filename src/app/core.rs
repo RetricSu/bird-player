@@ -397,6 +397,16 @@ impl App {
         for cmd in cmds {
             match cmd {
                 AudioEvent::CurrentTimestamp(seek_timestamp) => {
+                    let player = self.player_mut_ref();
+                    if let Some(since) = player.seeking_since {
+                        if since.elapsed().as_millis() > 300 {
+                            player.seeking_since = None;
+                            player.seek_to_timestamp = seek_timestamp;
+                        }
+                    } else {
+                        player.seek_to_timestamp = seek_timestamp;
+                    }
+
                     // Throttle player-state persistence to once every 30s while playing
                     let elapsed = self.ui_state.last_persistence_save.elapsed().as_secs();
                     if elapsed > 30 {
@@ -404,7 +414,6 @@ impl App {
                         self.update_player_persistence();
                         self.save_state();
                     }
-                    PlayerService::set_seek_to_timestamp(self.player_mut_ref(), seek_timestamp);
                 }
                 AudioEvent::TotalTrackDuration(dur) => {
                     tracing::info!("Received Duration: {}", dur);

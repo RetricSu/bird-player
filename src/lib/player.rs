@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use std::time::Instant;
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum PlaybackMode {
@@ -28,6 +29,7 @@ pub struct Player {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub codec: Option<String>,
+    pub seeking_since: Option<Instant>,
 }
 
 impl Player {
@@ -49,16 +51,17 @@ impl Player {
             sample_rate: None,
             channels: None,
             codec: None,
+            seeking_since: None,
         }
     }
 
     pub fn select_track(&mut self, track: Option<LibraryItem>) {
         self.selected_track = track;
+        self.seeking_since = None;
 
         if let Some(track) = &self.selected_track {
             if let Err(e) = self.audio_tx.send(AudioCommand::LoadFile(track.path())) {
                 tracing::error!("Failed to send select to audio thread: {}", e);
-                // Audio thread is likely dead, mark as stopped
                 self.track_state = TrackState::Stopped;
             }
         }
@@ -70,10 +73,11 @@ impl Player {
 
     pub fn seek_to(&mut self, seek_to_timestamp: u64) {
         self.seek_to_timestamp = seek_to_timestamp;
+        self.seeking_since = Some(Instant::now());
         if let Err(e) = self.audio_tx.send(AudioCommand::Seek(seek_to_timestamp)) {
             tracing::error!("Failed to send seek to audio thread: {}", e);
-            // Audio thread is likely dead, mark as stopped
             self.track_state = TrackState::Stopped;
+            self.seeking_since = None;
         }
     }
 
@@ -197,10 +201,6 @@ impl Player {
                 self.track_state = TrackState::Stopped;
             }
         }
-    }
-
-    pub fn set_seek_to_timestamp(&mut self, seek_to_timestamp: u64) {
-        self.seek_to_timestamp = seek_to_timestamp;
     }
 
     pub fn set_duration(&mut self, duration: u64) {

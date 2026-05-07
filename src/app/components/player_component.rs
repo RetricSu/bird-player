@@ -193,8 +193,13 @@ impl AppComponent for PlayerComponent {
                         .show_value(false)
                         .handle_shape(egui::style::HandleShape::Circle),
                 );
-                // Use `.changed()` so click-on-rail (not just drag) seeks too.
-                if resp.changed() && (current_ms as u64) != seek_to_timestamp {
+                if resp.dragged() {
+                    ctx.player_mut_ref().seeking_since = Some(std::time::Instant::now());
+                    ctx.player_mut_ref().seek_to_timestamp = current_ms as u64;
+                } else if resp.drag_stopped() {
+                    PlayerService::seek_to(ctx.player_mut_ref(), current_ms as u64);
+                } else if resp.changed() {
+                    // Click on rail (no drag)
                     PlayerService::seek_to(ctx.player_mut_ref(), current_ms as u64);
                 }
             });
