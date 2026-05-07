@@ -1,4 +1,5 @@
 use super::cassette_component::CassetteComponent;
+use super::playback_info_panel::PlaybackInfoPanel;
 use super::AppComponent;
 use crate::app::services::PlayerService;
 use crate::app::style::{icons, player_button, tokens, ButtonExt, SliderExt};
@@ -93,12 +94,16 @@ impl AppComponent for PlayerComponent {
 
         // Now render UI without borrowing ctx in closures that also borrow ctx
         ui.vertical(|ui| {
-            // ── Top row: cover + track info ─────────────────────────────────
+            // ── Top row: cover + track info + playback info ────────────────
             ui.horizontal(|ui| {
                 CassetteComponent::add(ctx, ui);
 
+                // Calculate available width for middle section (60% of remaining space)
+                let remaining_width = ui.available_width();
+                let middle_width = remaining_width * 0.6;
+
                 ui.allocate_ui_with_layout(
-                    vec2(ui.available_width(), ui.available_height()),
+                    vec2(middle_width, ui.available_height()),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         if let Some(track) = &selected_track {
@@ -162,6 +167,15 @@ impl AppComponent for PlayerComponent {
                             };
                             ui.add(egui::Label::new(RichText::new(hint).weak()));
                         }
+                    },
+                );
+
+                // Add playback info panel on the right
+                ui.allocate_ui_with_layout(
+                    vec2(ui.available_width(), ui.available_height()),
+                    egui::Layout::top_down(egui::Align::RIGHT),
+                    |ui| {
+                        PlaybackInfoPanel::add(ctx, ui);
                     },
                 );
             });
