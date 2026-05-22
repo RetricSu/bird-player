@@ -110,7 +110,13 @@ impl State for StoppedState {
 
             ctx.engine.audio_output = None;
 
-            loader::load_file(current_track_path, &mut ctx.engine, &mut ctx.decoder, 0, &ctx.ui_tx);
+            loader::load_file(
+                current_track_path,
+                &mut ctx.engine,
+                &mut ctx.decoder,
+                0,
+                &ctx.ui_tx,
+            );
 
             ctx.ui_tx
                 .send(AudioEvent::CurrentTimestamp(0))

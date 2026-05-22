@@ -298,7 +298,7 @@ impl Playlist {
 
         // Get the playlist info
         let mut stmt = conn_guard.prepare(
-            "SELECT id, name, description, created_at, updated_at FROM playlists WHERE id = ?1"
+            "SELECT id, name, description, created_at, updated_at FROM playlists WHERE id = ?1",
         )?;
 
         let mut playlist_rows = stmt.query(rusqlite::params![playlist_id])?;
@@ -591,7 +591,10 @@ mod tests {
 
         playlist.set_description(Some("My favorite songs".to_string()));
 
-        assert_eq!(playlist.description(), Some("My favorite songs".to_string()));
+        assert_eq!(
+            playlist.description(),
+            Some("My favorite songs".to_string())
+        );
         assert!(playlist.updated_at() > initial_updated_at);
     }
 
@@ -637,8 +640,14 @@ mod tests {
     #[test]
     fn test_reorder_updates_timestamp() {
         let mut playlist = Playlist::new();
-        playlist.add(LibraryItem::new(PathBuf::from(r"C:\music\song1.mp3"), LibraryPathId::new(0)));
-        playlist.add(LibraryItem::new(PathBuf::from(r"C:\music\song2.mp3"), LibraryPathId::new(1)));
+        playlist.add(LibraryItem::new(
+            PathBuf::from(r"C:\music\song1.mp3"),
+            LibraryPathId::new(0),
+        ));
+        playlist.add(LibraryItem::new(
+            PathBuf::from(r"C:\music\song2.mp3"),
+            LibraryPathId::new(1),
+        ));
 
         let initial_updated_at = playlist.updated_at();
         std::thread::sleep(std::time::Duration::from_millis(10));

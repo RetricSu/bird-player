@@ -54,7 +54,12 @@ impl PlaybackInfoPanel {
                 // Description preview (first 30 chars)
                 if let Some(desc) = playlist.description() {
                     let preview = if desc.chars().count() > DESCRIPTION_PREVIEW_LENGTH {
-                        format!("{}...", desc.chars().take(DESCRIPTION_PREVIEW_LENGTH).collect::<String>())
+                        format!(
+                            "{}...",
+                            desc.chars()
+                                .take(DESCRIPTION_PREVIEW_LENGTH)
+                                .collect::<String>()
+                        )
                     } else {
                         desc.to_string()
                     };

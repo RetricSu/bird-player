@@ -86,10 +86,7 @@ impl Database {
 
             // Add new columns only if they don't exist
             if !existing_columns.contains(&"description".to_string()) {
-                connection.execute(
-                    "ALTER TABLE playlists ADD COLUMN description TEXT",
-                    [],
-                )?;
+                connection.execute("ALTER TABLE playlists ADD COLUMN description TEXT", [])?;
             }
 
             if !existing_columns.contains(&"created_at".to_string()) {
