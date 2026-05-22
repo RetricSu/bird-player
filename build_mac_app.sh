@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-APP_NAME="BirdPlayer"
+APP_NAME="Bird Player"
 APP_DIR="target/release/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -39,7 +39,7 @@ cat << PLIST > "$CONTENTS_DIR/Info.plist"
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>BirdPlayer</string>
+    <string>Bird Player</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

@@ -81,6 +81,12 @@ pub fn start_app() -> Result<()> {
             let fonts = font::setup_fonts();
             cc.egui_ctx.set_fonts(fonts);
 
+            // Apply brand-aware visual tweaks (selection colour etc.)
+            cc.egui_ctx.style_mut(|style| {
+                crate::app::style::apply_brand_visuals(&mut style.visuals);
+                crate::app::style::apply_compact_spacing(&mut style.spacing);
+            });
+
             Ok(Box::new(app))
         }),
     )?;

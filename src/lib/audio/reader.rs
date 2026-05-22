@@ -27,15 +27,23 @@ pub fn setup_audio_reader(audio_engine_state: &mut AudioEngineState) -> Result<i
         _ => return Ok(0),
     };
 
+    // Get sample rate for ms-to-timebase conversion
+    let sample_rate = reader
+        .tracks()
+        .iter()
+        .find(|t| t.id == track_id)
+        .and_then(|t| t.codec_params.sample_rate)
+        .unwrap_or(44100) as u64;
+
     // If seeking, seek the reader to the time or timestamp specified and get the timestamp of the
     // seeked position. All packets with a timestamp < the seeked position will not be played.
-    //
-    // Note: This is a half-baked approach to seeking! After seeking the reader, packets should be
-    // decoded and *samples* discarded up-to the exact *sample* indicated by required_ts. The
-    // current approach will discard excess samples if seeking to a sample within a packet.
     let seek_ts = if let Some(seek) = seek {
         let seek_to = match seek {
-            SeekPosition::Timestamp(ts) => SeekTo::TimeStamp { ts: *ts, track_id },
+            SeekPosition::Timestamp(ms) => {
+                // Convert milliseconds to timebase units (samples)
+                let ts = *ms * sample_rate / 1000;
+                SeekTo::TimeStamp { ts, track_id }
+            }
         };
 
         // Attempt the seek. If the seek fails, ignore the error and return a seek timestamp of 0 so
@@ -53,13 +61,11 @@ pub fn setup_audio_reader(audio_engine_state: &mut AudioEngineState) -> Result<i
                 0
             }
             Err(err) => {
-                // Don't give-up on a seek error.
                 tracing::warn!("seek error: {}", err);
                 0
             }
         }
     } else {
-        // If not seeking, the seek timestamp is 0.
         0
     };
 

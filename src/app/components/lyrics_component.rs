@@ -3,6 +3,7 @@ use eframe::egui;
 use super::AppComponent;
 use crate::app::libstate::lyrics_state::LyricsFetchState;
 use crate::app::lyrics::{Lyrics, LyricsService};
+use crate::app::style::{icons, tokens};
 use crate::app::{t, App};
 
 enum ManualUploadResult {
@@ -17,18 +18,20 @@ impl AppComponent for LyricsComponent {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        ui.horizontal(|ui| {
+        crate::app::style::panel_header(ui, |ui| {
             Self::show_lyrics_type(ui, ctx);
             Self::show_lyrics_header(ui, ctx);
             Self::show_status(ui, ctx);
         });
 
-        ui.add_space(6.0);
-        ui.separator();
-
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            Self::show_body(ctx, ui);
-        });
+        // auto_shrink([false, false]) lets the scroll area span the full
+        // panel width so the vertical scrollbar sits flush against the
+        // panel's right edge instead of floating in the middle.
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                Self::show_body(ctx, ui);
+            });
     }
 }
 
@@ -36,10 +39,20 @@ impl LyricsComponent {
     fn show_lyrics_header(ui: &mut egui::Ui, ctx: &mut App) {
         // Show track info
         if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
-            ui.label(format!("{} - {}", &lyrics.track_name, &lyrics.artist_name));
+            ui.label(
+                egui::RichText::new(format!("{} — {}", &lyrics.track_name, &lyrics.artist_name))
+                    .size(tokens::text::SM),
+            );
         }
 
-        if ui.button(t("upload_lyrics")).clicked() {
+        let upload_clicked = ui
+            .scope(|ui| {
+                crate::app::style::borderless_button_visuals(ui.visuals_mut());
+                ui.button(t("upload_lyrics"))
+            })
+            .inner
+            .clicked();
+        if upload_clicked {
             match Self::handle_manual_upload(ctx) {
                 ManualUploadResult::Updated => {
                     ctx.ui_state.lyrics_fetch_state = LyricsFetchState::Loaded;
@@ -56,21 +69,19 @@ impl LyricsComponent {
         if let Some(lyrics) = ctx.lyrics_manager().current_lyrics() {
             // Show lyrics type indicator
             let lyrics_type = if !lyrics.lines.is_empty() {
-                "🎤"
+                icons::LYRICS_SYNCED
             } else if lyrics.plain_lyrics.is_some() {
-                "📝"
+                icons::LYRICS_PLAIN
             } else if lyrics.instrumental {
-                "🎸"
+                icons::LYRICS_INSTRUMENTAL
             } else {
-                "-"
+                icons::LYRICS_NONE
             };
             ui.label(
                 egui::RichText::new(lyrics_type)
-                    .color(egui::Color32::from_rgb(100, 150, 255))
+                    .color(tokens::color::LYRICS_TYPE_ICON)
                     .italics(),
             );
-
-            ui.separator();
         }
     }
 
@@ -82,7 +93,7 @@ impl LyricsComponent {
             }
             LyricsFetchState::Failed(message) => {
                 ui.colored_label(
-                    egui::Color32::from_rgb(230, 80, 80),
+                    tokens::color::LYRICS_FAILED,
                     format!("Lyrics unavailable: {}", message),
                 );
             }
@@ -95,7 +106,9 @@ impl LyricsComponent {
             // Show lyrics
             if lyrics.instrumental {
                 ui.add(egui::Label::new(
-                    egui::RichText::new("♪ Instrumental ♪").italics(),
+                    egui::RichText::new("♪ Instrumental ♪")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
             } else if !lyrics.lines.is_empty() {
                 // Show synced lyrics with current line highlighting
@@ -104,16 +117,22 @@ impl LyricsComponent {
                 Self::show_plain_lyrics(ui, plain_lyrics);
             } else {
                 ui.add(egui::Label::new(
-                    egui::RichText::new("No lyrics available").italics(),
+                    egui::RichText::new("No lyrics available")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
             }
         } else {
             ui.vertical_centered(|ui| {
                 ui.add(egui::Label::new(
-                    egui::RichText::new("No lyrics loaded").italics(),
+                    egui::RichText::new("No lyrics loaded")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
                 ui.add(egui::Label::new(
-                    egui::RichText::new("Select a track to view lyrics").italics(),
+                    egui::RichText::new("Select a track to view lyrics")
+                        .italics()
+                        .size(tokens::text::SM),
                 ));
             });
         }
@@ -146,12 +165,14 @@ impl LyricsComponent {
                 // Highlight current line and scroll to it
                 ui.add(egui::Label::new(
                     egui::RichText::new(label)
-                        .color(egui::Color32::BLUE)
-                        .size(14.0)
+                        .color(tokens::color::LYRICS_CURRENT_LINE)
+                        .size(tokens::text::SM)
                         .strong(),
                 ))
             } else {
-                ui.add(egui::Label::new(egui::RichText::new(label)))
+                ui.add(egui::Label::new(
+                    egui::RichText::new(label).size(tokens::text::SM),
+                ))
             };
 
             // Scroll to current line to keep it visible
@@ -160,16 +181,18 @@ impl LyricsComponent {
             }
 
             // Add some spacing between lines
-            ui.add_space(4.0);
+            ui.add_space(tokens::spacing::SM);
         }
     }
 
     fn show_plain_lyrics(ui: &mut eframe::egui::Ui, plain_lyrics: &str) {
         for line in plain_lyrics.lines() {
             if line.trim().is_empty() {
-                ui.add_space(8.0);
+                ui.add_space(tokens::spacing::MD);
             } else {
-                ui.add(egui::Label::new(egui::RichText::new(line)));
+                ui.add(egui::Label::new(
+                    egui::RichText::new(line).size(tokens::text::SM),
+                ));
             }
         }
     }

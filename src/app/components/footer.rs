@@ -1,4 +1,5 @@
 use super::AppComponent;
+use crate::app::style::icons;
 use crate::app::App;
 
 pub struct Footer;
@@ -63,7 +64,7 @@ impl AppComponent for Footer {
                             });
 
                             // Add a search button that only triggers when clicked
-                            if ui.button("🔍").clicked()
+                            if ui.button(icons::SEARCH).clicked()
                                 || (response.lost_focus()
                                     && ui.input(|i| i.key_pressed(eframe::egui::Key::Enter)))
                             {
@@ -140,7 +141,7 @@ impl AppComponent for Footer {
                             }
 
                             // Close button to exit search mode
-                            if ui.button("x").clicked() {
+                            if ui.button(icons::CLOSE).clicked() {
                                 search_active = false;
                                 search_text.clear();
                                 ui.memory_mut(|mem| {
@@ -248,11 +249,11 @@ impl AppComponent for Footer {
                         {
                             ui.label(
                                 eframe::egui::RichText::new("No matches found")
-                                    .color(eframe::egui::Color32::RED),
+                                    .color(crate::app::style::tokens::color::LYRICS_FAILED),
                             );
                         }
                     });
-                } else if ui.button("🔍 Search").clicked() {
+                } else if ui.button(format!("{}  Search", icons::SEARCH)).clicked() {
                     search_active = true;
                     // Reset the first frame flag when search is activated
                     ui.memory_mut(|mem| {

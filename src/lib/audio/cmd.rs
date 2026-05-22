@@ -23,9 +23,9 @@ pub fn process_audio_command(
     is_processing_ui_change: &Arc<AtomicBool>,
 ) -> Option<Box<dyn State>> {
     match cmd {
-        AudioCommand::Seek(seconds) => {
-            tracing::info!("Processing SEEK command for {} seconds", seconds);
-            Some(Box::new(SeekToState::new(seconds)))
+        AudioCommand::Seek(timestamp_ms) => {
+            tracing::info!("Processing SEEK command for {} ms", timestamp_ms);
+            Some(Box::new(SeekToState::new(timestamp_ms)))
         }
         AudioCommand::Stop => {
             tracing::info!("Processing STOP command");

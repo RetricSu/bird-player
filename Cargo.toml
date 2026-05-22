@@ -51,6 +51,7 @@ urlencoding = "2.1"
 ureq = "2.9"
 uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
 lofty = "0.21.0"
+egui-phosphor = "0.9"
 
 [features]
 default = []

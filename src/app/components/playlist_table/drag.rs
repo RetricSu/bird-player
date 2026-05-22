@@ -70,8 +70,11 @@ pub(crate) fn render_drag_feedback(
             egui::pos2(target_rect.min.x, line_y - 1.0),
             egui::pos2(target_rect.max.x, line_y + 1.0),
         );
-        ui.painter()
-            .rect_filled(line_rect, 0.0, egui::Color32::from_rgb(50, 150, 250));
+        ui.painter().rect_filled(
+            line_rect,
+            0.0,
+            crate::app::style::tokens::color::PLAYLIST_DRAG_INSERT_LINE,
+        );
     } else {
         state.set_drop_target(ui, None);
     }
@@ -90,7 +93,7 @@ pub(crate) fn render_drag_feedback(
         ui.painter().rect_filled(
             drag_rect,
             4.0,
-            egui::Color32::from_rgba_premultiplied(100, 100, 180, 200),
+            crate::app::style::tokens::color::PLAYLIST_DRAG_GHOST_FILL,
         );
 
         let drag_text = track.title_ref().unwrap_or(fallbacks.title());

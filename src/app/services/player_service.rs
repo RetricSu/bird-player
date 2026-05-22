@@ -43,31 +43,14 @@ impl PlayerService {
     }
 
     /// Seek to a specific timestamp in the current track
+    #[allow(dead_code)]
     pub fn seek_to(player: &mut Player, timestamp: u64) {
         player.seek_to(timestamp);
-    }
-
-    /// Set the seek timestamp (for UI updates without immediate seeking)
-    pub fn set_seek_to_timestamp(player: &mut Player, timestamp: u64) {
-        player.set_seek_to_timestamp(timestamp);
     }
 
     /// Set the total duration of the current track
     pub fn set_duration(player: &mut Player, duration: u64) {
         player.set_duration(duration);
-    }
-
-    /// Remove the currently selected track from the playlist and handle playback continuation
-    /// Returns the track key that was removed, or None if no track was removed
-    pub fn remove_current_track(player: &mut Player) -> Option<String> {
-        if let Some(track) = &player.selected_track {
-            let track_key = track.key();
-            // Clear the selected track - the playlist removal will be handled by the caller
-            player.select_track(None);
-            Some(track_key)
-        } else {
-            None
-        }
     }
 
     /// Get the current playback state

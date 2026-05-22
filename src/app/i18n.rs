@@ -116,6 +116,7 @@ pub fn init() {
     en.insert("delete".to_string(), "Delete".to_string());
     en.insert("new_playlist".to_string(), "New Playlist".to_string());
     en.insert("enter_name".to_string(), "Enter name...".to_string());
+    en.insert("playlist_label".to_string(), "Playlist".to_string());
 
     // Playlist table component
     en.insert("column_number".to_string(), "#".to_string());
@@ -208,6 +209,7 @@ pub fn init() {
     zh.insert("delete".to_string(), "删除".to_string());
     zh.insert("new_playlist".to_string(), "新播放列表".to_string());
     zh.insert("enter_name".to_string(), "输入名称...".to_string());
+    zh.insert("playlist_label".to_string(), "播放列表".to_string());
 
     // Playlist table component
     zh.insert("column_number".to_string(), "#".to_string());

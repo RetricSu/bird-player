@@ -263,7 +263,8 @@ impl App {
     }
 
     // Spawns a background thread and imports files from a library path
-    pub fn import_library_paths(&self, lib_path: &LibraryPath) {
+    pub fn import_library_paths(&mut self, lib_path: &LibraryPath) {
+        self.ui_state.is_importing = true;
         let lib_cmd_tx = self.lib_cmd_tx().clone();
         let album_art_dir = App::get_album_art_dir();
 
@@ -368,6 +369,92 @@ impl App {
         }
     }
 
+    /// Drain pending audio events from the player thread and apply them to
+    /// player / UI state. Called once per frame from `App::update`, so UI
+    /// components can render without owning event-loop logic.
+    pub fn pump_audio_events(&mut self) {
+        if self.runtime.is_none() {
+            return;
+        }
+
+        // Drain in one pass to keep the borrow short
+        let cmds: Vec<crate::app::AudioEvent> = {
+            let player = self.player_mut_ref();
+            let mut buf = Vec::new();
+            while let Ok(cmd) = player.ui_rx.try_recv() {
+                buf.push(cmd);
+            }
+            buf
+        };
+
+        if cmds.is_empty() {
+            return;
+        }
+
+        use crate::app::services::PlayerService;
+        use crate::app::AudioEvent;
+
+        for cmd in cmds {
+            match cmd {
+                AudioEvent::CurrentTimestamp(seek_timestamp) => {
+                    let player = self.player_mut_ref();
+                    if let Some(since) = player.seeking_since {
+                        if since.elapsed().as_millis() > 300 {
+                            player.seeking_since = None;
+                            player.seek_to_timestamp = seek_timestamp;
+                        }
+                    } else {
+                        player.seek_to_timestamp = seek_timestamp;
+                    }
+
+                    // Throttle player-state persistence to once every 30s while playing
+                    let elapsed = self.ui_state.last_persistence_save.elapsed().as_secs();
+                    if elapsed > 30 {
+                        self.ui_state.last_persistence_save = std::time::Instant::now();
+                        self.update_player_persistence();
+                        self.save_state();
+                    }
+                }
+                AudioEvent::TotalTrackDuration(dur) => {
+                    tracing::info!("Received Duration: {}", dur);
+                    PlayerService::set_duration(self.player_mut_ref(), dur);
+                }
+                AudioEvent::AudioFinished => {
+                    tracing::info!("Track finished, getting next...");
+                    let playlist_clone = self
+                        .app_settings
+                        .current_playlist_idx
+                        .and_then(|idx| self.playlists.get(idx).cloned());
+                    if let Some(playlist) = playlist_clone {
+                        PlayerService::next_track(self.player_mut_ref(), &playlist);
+                    }
+                    self.fetch_lyrics_for_current_track();
+                }
+                AudioEvent::PlaybackStateChanged(is_playing) => {
+                    tracing::info!(
+                        "Playback state changed to: {}",
+                        if is_playing { "Playing" } else { "Paused" }
+                    );
+                    if is_playing {
+                        PlayerService::play(self.player_mut_ref());
+                    } else {
+                        PlayerService::pause(self.player_mut_ref());
+                    }
+                }
+                AudioEvent::TechnicalInfo {
+                    sample_rate,
+                    channels,
+                    codec,
+                } => {
+                    let player = self.player_mut_ref();
+                    player.sample_rate = sample_rate;
+                    player.channels = channels;
+                    player.codec = codec;
+                }
+            }
+        }
+    }
+
     /// Process a freshly received lyrics response.
     pub fn handle_lyrics_response(&mut self, should_show_panel: bool) {
         let track_key = self
@@ -404,6 +491,11 @@ impl App {
     }
 
     pub fn process_library_command(&mut self, lib_cmd: LibraryCommand) {
+        if matches!(lib_cmd, LibraryCommand::AddPathId(_)) {
+            self.ui_state.is_importing = false;
+            // Also explicitly save state after completing an import!
+            self.save_state();
+        }
         LibraryService::process_library_command(&mut self.library, lib_cmd);
     }
 
