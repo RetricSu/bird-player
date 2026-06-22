@@ -18,6 +18,7 @@ pub struct YoutubeDownloadService;
 impl YoutubeDownloadService {
     pub fn default_download_dir() -> PathBuf {
         std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."))
             .join("Music")
@@ -68,6 +69,7 @@ impl YoutubeDownloadService {
             .arg("after_move:filepath")
             .arg("--output")
             .arg(output_template)
+            .arg("--")
             .arg(url)
             .output()
             .map_err(|err| format!("Failed to start yt-dlp: {}", err))?;

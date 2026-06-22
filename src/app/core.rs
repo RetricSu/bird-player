@@ -297,12 +297,12 @@ impl App {
 
         let url = self.ui_state.youtube_download_url.trim().to_string();
         if url.is_empty() {
-            self.ui_state.youtube_download_status = Some("URL is required".to_string());
+            self.ui_state.youtube_download_status = Some(i18n::t("url_required"));
             return;
         }
 
         self.ui_state.youtube_download_in_progress = true;
-        self.ui_state.youtube_download_status = Some("Downloading...".to_string());
+        self.ui_state.youtube_download_status = Some(i18n::t("downloading"));
 
         YoutubeDownloadService::download_authorized_audio(
             url,
@@ -318,21 +318,18 @@ impl App {
             YoutubeDownloadEvent::Finished(Ok(result)) => {
                 let file_count = result.downloaded_files.len();
                 self.ui_state.youtube_download_status = Some(if file_count == 0 {
-                    "Download finished. Re-syncing folder...".to_string()
+                    i18n::t("download_finished_resync")
                 } else {
-                    format!("Downloaded {} file(s). Re-syncing folder...", file_count)
+                    i18n::tf("downloaded_files_resync", &[&file_count.to_string()])
                 });
 
-                let path_exists = !self.library.add_path(result.output_dir.clone());
-                let path_to_import = if path_exists {
-                    self.library
-                        .paths()
-                        .iter()
-                        .find(|p| *p.path() == result.output_dir)
-                        .cloned()
-                } else {
-                    self.library.paths().last().cloned()
-                };
+                self.library.add_path(result.output_dir.clone());
+                let path_to_import = self
+                    .library
+                    .paths()
+                    .iter()
+                    .find(|p| *p.path() == result.output_dir)
+                    .cloned();
 
                 if let Some(path) = path_to_import {
                     self.library.set_path_to_not_imported(path.id());

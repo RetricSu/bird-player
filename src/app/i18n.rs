@@ -126,6 +126,16 @@ pub fn init() {
     );
     en.insert("download".to_string(), "Download".to_string());
     en.insert("clear".to_string(), "Clear".to_string());
+    en.insert("url_required".to_string(), "URL is required".to_string());
+    en.insert("downloading".to_string(), "Downloading...".to_string());
+    en.insert(
+        "download_finished_resync".to_string(),
+        "Download finished. Re-syncing folder...".to_string(),
+    );
+    en.insert(
+        "downloaded_files_resync".to_string(),
+        "Downloaded {} file(s). Re-syncing folder...".to_string(),
+    );
 
     // Playlist tabs component
     en.insert("rename".to_string(), "Rename".to_string());
@@ -235,6 +245,16 @@ pub fn init() {
     );
     zh.insert("download".to_string(), "下载".to_string());
     zh.insert("clear".to_string(), "清空".to_string());
+    zh.insert("url_required".to_string(), "请输入 URL".to_string());
+    zh.insert("downloading".to_string(), "正在下载...".to_string());
+    zh.insert(
+        "download_finished_resync".to_string(),
+        "下载完成，正在重新同步文件夹...".to_string(),
+    );
+    zh.insert(
+        "downloaded_files_resync".to_string(),
+        "已下载 {} 个文件，正在重新同步文件夹...".to_string(),
+    );
 
     // Playlist tabs component
     zh.insert("rename".to_string(), "重命名".to_string());
