@@ -8,6 +8,7 @@ use crate::app::runtime;
 use crate::app::viewport;
 use crate::app::App;
 use crate::app::LibraryCommand;
+use bird_player::services::YoutubeDownloadEvent;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
@@ -16,6 +17,8 @@ pub struct BirdBootCfg {
     pub db: Arc<db::Database>,
     pub lib_cmd_tx: std::sync::mpsc::Sender<LibraryCommand>,
     pub lib_cmd_rx: std::sync::mpsc::Receiver<LibraryCommand>,
+    pub youtube_download_tx: std::sync::mpsc::Sender<YoutubeDownloadEvent>,
+    pub youtube_download_rx: std::sync::mpsc::Receiver<YoutubeDownloadEvent>,
     pub is_processing_ui_change: Arc<AtomicBool>,
 }
 
@@ -30,6 +33,7 @@ pub fn start_app() -> Result<()> {
     tracing::info!("Database initialized successfully");
 
     let (lib_cmd_tx, lib_cmd_rx) = channel();
+    let (youtube_download_tx, youtube_download_rx) = channel();
     let is_processing_ui_change = Arc::new(AtomicBool::new(false));
     let is_processing_ui_change_thread = is_processing_ui_change.clone();
 
@@ -37,6 +41,8 @@ pub fn start_app() -> Result<()> {
         db: database,
         lib_cmd_tx,
         lib_cmd_rx,
+        youtube_download_tx,
+        youtube_download_rx,
         is_processing_ui_change,
     };
 

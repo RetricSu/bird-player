@@ -1,5 +1,7 @@
+use crate::app::lib_services::YoutubeDownloadService;
 use crate::app::libstate::lyrics_state::LyricsFetchState;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::time::Instant;
 
 /// UI-specific state that doesn't need to be persisted
@@ -41,6 +43,21 @@ pub struct UiState {
     /// Whether library import is currently running
     pub is_importing: bool,
 
+    /// Whether the authorized audio download window is open.
+    pub show_youtube_download_dialog: bool,
+
+    /// URL entered in the authorized audio download form.
+    pub youtube_download_url: String,
+
+    /// Destination folder for authorized audio downloads.
+    pub youtube_download_dir: PathBuf,
+
+    /// Whether a yt-dlp download task is currently running.
+    pub youtube_download_in_progress: bool,
+
+    /// Last user-facing download status or error message.
+    pub youtube_download_status: Option<String>,
+
     /// Volume value to restore when the user un-mutes via the speaker icon.
     /// `None` while not muted. Not serialized: a fresh launch always starts
     /// with whatever volume the player itself remembers.
@@ -75,6 +92,11 @@ impl Default for UiState {
             lyrics_fetch_state: LyricsFetchState::Idle,
             last_window_title: None,
             is_importing: false,
+            show_youtube_download_dialog: false,
+            youtube_download_url: String::new(),
+            youtube_download_dir: YoutubeDownloadService::default_download_dir(),
+            youtube_download_in_progress: false,
+            youtube_download_status: None,
             volume_before_mute: None,
             last_persistence_save: Instant::now(),
             desktop_lyrics_font_size: 48.0,
