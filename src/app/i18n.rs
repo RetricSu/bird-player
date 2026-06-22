@@ -110,6 +110,22 @@ pub fn init() {
         "remove_from_library".to_string(),
         "Remove from library".to_string(),
     );
+    en.insert(
+        "download_authorized_audio".to_string(),
+        "Download authorized audio".to_string(),
+    );
+    en.insert(
+        "authorized_audio_notice".to_string(),
+        "Only download audio you are authorized to save locally.".to_string(),
+    );
+    en.insert("youtube_url".to_string(), "YouTube URL".to_string());
+    en.insert("save_to".to_string(), "Save to".to_string());
+    en.insert(
+        "choose_download_folder".to_string(),
+        "Choose download folder".to_string(),
+    );
+    en.insert("download".to_string(), "Download".to_string());
+    en.insert("clear".to_string(), "Clear".to_string());
 
     // Playlist tabs component
     en.insert("rename".to_string(), "Rename".to_string());
@@ -203,6 +219,22 @@ pub fn init() {
         "全部添加到播放列表".to_string(),
     );
     zh.insert("remove_from_library".to_string(), "从库中移除".to_string());
+    zh.insert(
+        "download_authorized_audio".to_string(),
+        "下载已授权音频".to_string(),
+    );
+    zh.insert(
+        "authorized_audio_notice".to_string(),
+        "请只下载你有权保存到本地的音频。".to_string(),
+    );
+    zh.insert("youtube_url".to_string(), "YouTube URL".to_string());
+    zh.insert("save_to".to_string(), "保存到".to_string());
+    zh.insert(
+        "choose_download_folder".to_string(),
+        "选择下载文件夹".to_string(),
+    );
+    zh.insert("download".to_string(), "下载".to_string());
+    zh.insert("clear".to_string(), "清空".to_string());
 
     // Playlist tabs component
     zh.insert("rename".to_string(), "重命名".to_string());

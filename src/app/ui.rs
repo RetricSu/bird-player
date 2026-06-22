@@ -158,6 +158,17 @@ impl App {
             self.process_library_command(lib_cmd);
         }
     }
+
+    fn refresh_youtube_download_processor(&mut self) {
+        let mut events = Vec::new();
+        while let Ok(event) = self.youtube_download_rx().try_recv() {
+            events.push(event);
+        }
+
+        for event in events {
+            self.handle_youtube_download_event(event);
+        }
+    }
 }
 
 impl eframe::App for App {
@@ -176,9 +187,10 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.refresh_library_command_processor();
+        self.refresh_youtube_download_processor();
         self.pump_audio_events();
 
-        if self.ui_state.is_importing {
+        if self.ui_state.is_importing || self.ui_state.youtube_download_in_progress {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         self.refresh_lyrics_display();

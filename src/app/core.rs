@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use super::error::AppLoadError;
 use super::i18n;
-use super::lib_services::{LibraryImportService, LyricsManager, PlayerRestoreService};
+use super::lib_services::{
+    LibraryImportService, LyricsManager, PlayerRestoreService, YoutubeDownloadEvent,
+    YoutubeDownloadService,
+};
 use super::library::{Library, LibraryCommand, LibraryPath};
 pub use super::library::{LibraryItem, LibraryPathId};
 use super::libstate::lyrics_state::LyricsFetchState;
@@ -86,6 +89,22 @@ impl App {
             .as_ref()
             .expect("boot_cfg not initialized")
             .lib_cmd_rx
+    }
+
+    pub fn youtube_download_tx(&self) -> &Sender<YoutubeDownloadEvent> {
+        &self
+            .boot_cfg
+            .as_ref()
+            .expect("boot_cfg not initialized")
+            .youtube_download_tx
+    }
+
+    pub fn youtube_download_rx(&self) -> &Receiver<YoutubeDownloadEvent> {
+        &self
+            .boot_cfg
+            .as_ref()
+            .expect("boot_cfg not initialized")
+            .youtube_download_rx
     }
 
     pub fn is_processing_ui_change(&self) -> Arc<AtomicBool> {
@@ -269,6 +288,61 @@ impl App {
         let album_art_dir = App::get_album_art_dir();
 
         LibraryImportService::import_library_path(lib_path, lib_cmd_tx, album_art_dir);
+    }
+
+    pub fn start_youtube_download(&mut self) {
+        if self.ui_state.youtube_download_in_progress {
+            return;
+        }
+
+        let url = self.ui_state.youtube_download_url.trim().to_string();
+        if url.is_empty() {
+            self.ui_state.youtube_download_status = Some("URL is required".to_string());
+            return;
+        }
+
+        self.ui_state.youtube_download_in_progress = true;
+        self.ui_state.youtube_download_status = Some("Downloading...".to_string());
+
+        YoutubeDownloadService::download_authorized_audio(
+            url,
+            self.ui_state.youtube_download_dir.clone(),
+            self.youtube_download_tx().clone(),
+        );
+    }
+
+    pub fn handle_youtube_download_event(&mut self, event: YoutubeDownloadEvent) {
+        self.ui_state.youtube_download_in_progress = false;
+
+        match event {
+            YoutubeDownloadEvent::Finished(Ok(result)) => {
+                let file_count = result.downloaded_files.len();
+                self.ui_state.youtube_download_status = Some(if file_count == 0 {
+                    "Download finished. Re-syncing folder...".to_string()
+                } else {
+                    format!("Downloaded {} file(s). Re-syncing folder...", file_count)
+                });
+
+                let path_exists = !self.library.add_path(result.output_dir.clone());
+                let path_to_import = if path_exists {
+                    self.library
+                        .paths()
+                        .iter()
+                        .find(|p| *p.path() == result.output_dir)
+                        .cloned()
+                } else {
+                    self.library.paths().last().cloned()
+                };
+
+                if let Some(path) = path_to_import {
+                    self.library.set_path_to_not_imported(path.id());
+                    self.import_library_paths(&path);
+                }
+            }
+            YoutubeDownloadEvent::Finished(Err(err)) => {
+                self.ui_state.youtube_download_status = Some(err);
+            }
+        }
     }
 
     pub fn update_track_lyrics(&mut self, track_key: String, lyrics: Option<&str>) {
