@@ -1,6 +1,7 @@
 use super::AppComponent;
-use crate::app::style::icons;
+use crate::app::style::{icons, tokens, ButtonExt};
 use crate::app::App;
+use eframe::egui::{Button, Frame, Margin, RichText, Stroke, TextEdit};
 
 pub struct Footer;
 
@@ -52,7 +53,7 @@ impl AppComponent for Footer {
                         ui.horizontal(|ui| {
                             // Add the search text field
                             let response = ui.add(
-                                eframe::egui::TextEdit::singleline(&mut search_text)
+                                TextEdit::singleline(&mut search_text)
                                     .id(editor_id)
                                     .desired_width(200.0)
                                     .hint_text("Type to search..."),
@@ -64,7 +65,10 @@ impl AppComponent for Footer {
                             });
 
                             // Add a search button that only triggers when clicked
-                            if ui.button(icons::SEARCH).clicked()
+                            if ui
+                                .add(Button::new(icons::SEARCH).player_style())
+                                .on_hover_text("Search")
+                                .clicked()
                                 || (response.lost_focus()
                                     && ui.input(|i| i.key_pressed(eframe::egui::Key::Enter)))
                             {
@@ -141,7 +145,11 @@ impl AppComponent for Footer {
                             }
 
                             // Close button to exit search mode
-                            if ui.button(icons::CLOSE).clicked() {
+                            if ui
+                                .add(Button::new(icons::CLOSE).player_style())
+                                .on_hover_text("Close search")
+                                .clicked()
+                            {
                                 search_active = false;
                                 search_text.clear();
                                 ui.memory_mut(|mem| {
@@ -165,16 +173,23 @@ impl AppComponent for Footer {
                             }) {
                                 if !results.is_empty() {
                                     // Container for results with scrolling
-                                    eframe::egui::Frame::popup(ui.style())
-                                        .stroke(eframe::egui::Stroke::new(
-                                            1.0,
-                                            ui.style().visuals.widgets.active.bg_fill,
+                                    Frame::popup(ui.style())
+                                        .corner_radius(tokens::radius::SM)
+                                        .inner_margin(Margin::symmetric(
+                                            tokens::spacing::SM as i8,
+                                            tokens::spacing::XS as i8,
+                                        ))
+                                        .stroke(Stroke::new(
+                                            tokens::size::STROKE_WIDTH,
+                                            ui.visuals().widgets.noninteractive.bg_stroke.color,
                                         ))
                                         .show(ui, |ui| {
                                             ui.set_max_width(400.0);
                                             ui.set_max_height(200.0);
 
-                                            eframe::egui::ScrollArea::vertical().show(ui, |ui| {
+                                            eframe::egui::ScrollArea::vertical()
+                                                .scroll_bar_visibility(eframe::egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+                                                .show(ui, |ui| {
                                                 let playlist =
                                                     &mut ctx.playlists[current_playlist_idx];
                                                 let mut fetch_lyrics = false;
@@ -192,7 +207,8 @@ impl AppComponent for Footer {
                                                     // Create a selectable label for each result
                                                     let result_response = ui.selectable_label(
                                                         playlist.is_selected(idx),
-                                                        result_text,
+                                                        RichText::new(result_text)
+                                                            .size(tokens::text::SM),
                                                     );
 
                                                     // When clicked, scroll to that track and play it
@@ -234,7 +250,7 @@ impl AppComponent for Footer {
                                                 if fetch_lyrics {
                                                     ctx.auto_fetch_lyrics_for_current_track();
                                                 }
-                                            });
+                                                });
                                         });
                                 }
                             }
@@ -253,7 +269,11 @@ impl AppComponent for Footer {
                             );
                         }
                     });
-                } else if ui.button(format!("{}  Search", icons::SEARCH)).clicked() {
+                } else if ui
+                    .add(Button::new(icons::SEARCH).player_style())
+                    .on_hover_text("Search")
+                    .clicked()
+                {
                     search_active = true;
                     // Reset the first frame flag when search is activated
                     ui.memory_mut(|mem| {

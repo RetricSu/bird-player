@@ -76,6 +76,7 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
     let scroll_area_id = base_id.with("scroll_area");
     egui::ScrollArea::both()
         .id_salt(scroll_area_id)
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.set_min_width(available_width);

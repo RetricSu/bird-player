@@ -86,7 +86,7 @@ impl<'a> PlaylistTableService<'a> {
     pub(crate) fn remove_track(&mut self, idx: usize) {
         if let Some(playlist) = self.playlist_mut() {
             if idx < playlist.tracks.len() {
-                playlist.tracks.remove(idx);
+                playlist.remove(idx);
             }
         }
     }
