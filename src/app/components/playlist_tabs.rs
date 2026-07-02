@@ -12,7 +12,21 @@ impl AppComponent for PlaylistTabs {
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         // Caller (PlaylistContent) wraps us in style::panel_header which
-        // already provides ui.horizontal + min_height — render directly.
+        // already provides ui.horizontal + min_height. The tab strip itself
+        // may be wider than the panel, so keep it horizontally scrollable.
+        egui::ScrollArea::horizontal()
+            .id_salt("playlist_tabs_scroll")
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    Self::show_tabs(ctx, ui);
+                });
+            });
+    }
+}
+
+impl PlaylistTabs {
+    fn show_tabs(ctx: &mut App, ui: &mut eframe::egui::Ui) {
         // Add playlist tabs
         for (idx, playlist) in ctx.playlists.iter_mut().enumerate() {
             let is_selected = ctx.app_settings.current_playlist_idx == Some(idx);

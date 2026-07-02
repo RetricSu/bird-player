@@ -28,6 +28,9 @@ pub struct UiState {
     /// Whether the lyrics panel is shown
     pub show_lyrics_panel: bool,
 
+    /// Whether track changes may fetch missing lyrics from the network and open the panel.
+    pub auto_fetch_missing_lyrics: bool,
+
     /// Whether the desktop lyrics mode is active
     pub desktop_lyrics_enabled: bool,
 
@@ -54,6 +57,18 @@ pub struct UiState {
 
     /// Whether a yt-dlp download task is currently running.
     pub youtube_download_in_progress: bool,
+
+    /// Whether a completed download is being imported into the library.
+    pub youtube_download_resync_in_progress: bool,
+
+    /// Latest yt-dlp download progress, from 0.0 to 1.0.
+    pub youtube_download_progress: Option<f32>,
+
+    /// Last completed authorized-audio download file count.
+    pub youtube_download_last_file_count: Option<usize>,
+
+    /// Whether playlist URLs should download every playlist item.
+    pub youtube_download_include_playlist: bool,
 
     /// Last user-facing download status or error message.
     pub youtube_download_status: Option<String>,
@@ -87,6 +102,7 @@ impl Default for UiState {
             default_window_height: crate::app::constants::DEFAULT_WINDOW_HEIGHT as f64,
             is_maximized: false,
             show_lyrics_panel: false,
+            auto_fetch_missing_lyrics: true,
             desktop_lyrics_enabled: false,
             should_fetch_lyrics_on_init: false,
             lyrics_fetch_state: LyricsFetchState::Idle,
@@ -96,6 +112,10 @@ impl Default for UiState {
             youtube_download_url: String::new(),
             youtube_download_dir: YoutubeDownloadService::default_download_dir(),
             youtube_download_in_progress: false,
+            youtube_download_resync_in_progress: false,
+            youtube_download_progress: None,
+            youtube_download_last_file_count: None,
+            youtube_download_include_playlist: false,
             youtube_download_status: None,
             volume_before_mute: None,
             last_persistence_save: Instant::now(),
@@ -112,6 +132,8 @@ pub struct UiSettings {
     pub library_folders_expanded: bool,
     pub default_window_height: f64,
     pub show_lyrics_panel: bool,
+    #[serde(default = "default_auto_fetch_missing_lyrics")]
+    pub auto_fetch_missing_lyrics: bool,
     pub desktop_lyrics_enabled: bool,
     #[serde(default = "default_desktop_lyrics_font_size")]
     pub desktop_lyrics_font_size: f32,
@@ -125,6 +147,10 @@ fn default_desktop_lyrics_font_size() -> f32 {
     48.0
 }
 
+fn default_auto_fetch_missing_lyrics() -> bool {
+    true
+}
+
 fn default_desktop_lyrics_color() -> [u8; 4] {
     [0, 255, 255, 255]
 }
@@ -135,6 +161,7 @@ impl Default for UiSettings {
             library_folders_expanded: false,
             default_window_height: crate::app::constants::DEFAULT_WINDOW_HEIGHT as f64,
             show_lyrics_panel: false,
+            auto_fetch_missing_lyrics: true,
             desktop_lyrics_enabled: false,
             desktop_lyrics_font_size: default_desktop_lyrics_font_size(),
             desktop_lyrics_color: default_desktop_lyrics_color(),
@@ -150,6 +177,7 @@ impl UiState {
             library_folders_expanded: self.library_folders_expanded,
             default_window_height: self.default_window_height,
             show_lyrics_panel: self.show_lyrics_panel,
+            auto_fetch_missing_lyrics: self.auto_fetch_missing_lyrics,
             desktop_lyrics_enabled: self.desktop_lyrics_enabled,
             desktop_lyrics_font_size: self.desktop_lyrics_font_size,
             desktop_lyrics_color: self.desktop_lyrics_color,
@@ -162,6 +190,7 @@ impl UiState {
         self.library_folders_expanded = settings.library_folders_expanded;
         self.default_window_height = settings.default_window_height;
         self.show_lyrics_panel = settings.show_lyrics_panel;
+        self.auto_fetch_missing_lyrics = settings.auto_fetch_missing_lyrics;
         self.desktop_lyrics_enabled = settings.desktop_lyrics_enabled;
         self.desktop_lyrics_font_size = settings.desktop_lyrics_font_size;
         self.desktop_lyrics_color = settings.desktop_lyrics_color;

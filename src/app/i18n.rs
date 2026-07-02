@@ -57,6 +57,10 @@ pub fn init() {
     en.insert("view".to_string(), "View".to_string());
     en.insert("show_lyrics".to_string(), "Show Lyrics".to_string());
     en.insert("hide_lyrics".to_string(), "Hide Lyrics".to_string());
+    en.insert(
+        "auto_fetch_missing_lyrics".to_string(),
+        "Auto-fetch missing lyrics on track change".to_string(),
+    );
 
     // Help menu
     en.insert("help".to_string(), "Help".to_string());
@@ -119,6 +123,15 @@ pub fn init() {
         "Only download audio you are authorized to save locally.".to_string(),
     );
     en.insert("youtube_url".to_string(), "YouTube URL".to_string());
+    en.insert(
+        "download_entire_playlist".to_string(),
+        "Download entire playlist".to_string(),
+    );
+    en.insert(
+        "download_entire_playlist_hint".to_string(),
+        "When off, playlist parameters are removed and only the current video is downloaded."
+            .to_string(),
+    );
     en.insert("save_to".to_string(), "Save to".to_string());
     en.insert(
         "choose_download_folder".to_string(),
@@ -127,7 +140,15 @@ pub fn init() {
     en.insert("download".to_string(), "Download".to_string());
     en.insert("clear".to_string(), "Clear".to_string());
     en.insert("url_required".to_string(), "URL is required".to_string());
+    en.insert(
+        "download_preparing".to_string(),
+        "Preparing download...".to_string(),
+    );
     en.insert("downloading".to_string(), "Downloading...".to_string());
+    en.insert(
+        "download_progress".to_string(),
+        "Downloading... {}%".to_string(),
+    );
     en.insert(
         "download_finished_resync".to_string(),
         "Download finished. Re-syncing folder...".to_string(),
@@ -135,6 +156,10 @@ pub fn init() {
     en.insert(
         "downloaded_files_resync".to_string(),
         "Downloaded {} file(s). Re-syncing folder...".to_string(),
+    );
+    en.insert(
+        "downloaded_files_done".to_string(),
+        "Downloaded {} file(s). Folder is synced.".to_string(),
     );
 
     // Playlist tabs component
@@ -185,6 +210,10 @@ pub fn init() {
     zh.insert("view".to_string(), "视图".to_string());
     zh.insert("show_lyrics".to_string(), "显示歌词".to_string());
     zh.insert("hide_lyrics".to_string(), "隐藏歌词".to_string());
+    zh.insert(
+        "auto_fetch_missing_lyrics".to_string(),
+        "切歌时自动获取缺失歌词".to_string(),
+    );
 
     // Help menu
     zh.insert("help".to_string(), "帮助".to_string());
@@ -238,6 +267,14 @@ pub fn init() {
         "请只下载你有权保存到本地的音频。".to_string(),
     );
     zh.insert("youtube_url".to_string(), "YouTube URL".to_string());
+    zh.insert(
+        "download_entire_playlist".to_string(),
+        "下载整个播放列表".to_string(),
+    );
+    zh.insert(
+        "download_entire_playlist_hint".to_string(),
+        "关闭时会移除播放列表参数，只下载当前视频。".to_string(),
+    );
     zh.insert("save_to".to_string(), "保存到".to_string());
     zh.insert(
         "choose_download_folder".to_string(),
@@ -246,7 +283,15 @@ pub fn init() {
     zh.insert("download".to_string(), "下载".to_string());
     zh.insert("clear".to_string(), "清空".to_string());
     zh.insert("url_required".to_string(), "请输入 URL".to_string());
+    zh.insert(
+        "download_preparing".to_string(),
+        "正在准备下载...".to_string(),
+    );
     zh.insert("downloading".to_string(), "正在下载...".to_string());
+    zh.insert(
+        "download_progress".to_string(),
+        "正在下载... {}%".to_string(),
+    );
     zh.insert(
         "download_finished_resync".to_string(),
         "下载完成，正在重新同步文件夹...".to_string(),
@@ -254,6 +299,10 @@ pub fn init() {
     zh.insert(
         "downloaded_files_resync".to_string(),
         "已下载 {} 个文件，正在重新同步文件夹...".to_string(),
+    );
+    zh.insert(
+        "downloaded_files_done".to_string(),
+        "已下载 {} 个文件，文件夹已同步。".to_string(),
     );
 
     // Playlist tabs component

@@ -66,6 +66,15 @@ impl PlaybackInfoPanel {
                 );
 
                 ui.add_space(tokens::spacing::XS);
+                ui.add_enabled_ui(!ctx.ui_state.youtube_download_in_progress, |ui| {
+                    ui.checkbox(
+                        &mut ctx.ui_state.youtube_download_include_playlist,
+                        t("download_entire_playlist"),
+                    )
+                    .on_hover_text(t("download_entire_playlist_hint"));
+                });
+
+                ui.add_space(tokens::spacing::XS);
                 ui.label(t("save_to"));
                 ui.horizontal(|ui| {
                     let mut path_text = ctx.ui_state.youtube_download_dir.display().to_string();
@@ -95,6 +104,22 @@ impl PlaybackInfoPanel {
                     ui.label(RichText::new(status).weak());
                 }
 
+                if let Some(progress) = ctx.ui_state.youtube_download_progress {
+                    ui.add_space(tokens::spacing::XS);
+                    ui.add(
+                        egui::ProgressBar::new(progress)
+                            .show_percentage()
+                            .desired_width(ui.available_width()),
+                    );
+                } else if ctx.ui_state.youtube_download_in_progress {
+                    ui.add_space(tokens::spacing::XS);
+                    ui.add(
+                        egui::ProgressBar::new(0.0)
+                            .animate(true)
+                            .desired_width(ui.available_width()),
+                    );
+                }
+
                 ui.add_space(tokens::spacing::SM);
                 ui.horizontal(|ui| {
                     let can_download = !ctx.ui_state.youtube_download_in_progress
@@ -114,6 +139,9 @@ impl PlaybackInfoPanel {
                         .clicked()
                     {
                         ctx.ui_state.youtube_download_url.clear();
+                        ctx.ui_state.youtube_download_progress = None;
+                        ctx.ui_state.youtube_download_last_file_count = None;
+                        ctx.ui_state.youtube_download_resync_in_progress = false;
                         ctx.ui_state.youtube_download_status = None;
                     }
                 });

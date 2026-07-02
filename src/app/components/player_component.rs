@@ -311,7 +311,7 @@ impl AppComponent for PlayerComponent {
                         }
                     }
                     if fetch_lyrics {
-                        ctx.fetch_lyrics_for_current_track();
+                        ctx.auto_fetch_lyrics_for_current_track();
                     }
                 }
 

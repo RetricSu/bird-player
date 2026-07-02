@@ -80,7 +80,7 @@ impl<'a> PlaylistTableService<'a> {
         }
 
         self.ctx.app_settings.playing_playlist_idx = Some(self.playlist_idx);
-        self.ctx.fetch_lyrics_for_current_track();
+        self.ctx.auto_fetch_lyrics_for_current_track();
     }
 
     pub(crate) fn remove_track(&mut self, idx: usize) {

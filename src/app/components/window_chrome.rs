@@ -138,7 +138,7 @@ impl AppComponent for WindowChrome {
             });
 
             if fetch_lyrics {
-                ctx.fetch_lyrics_for_current_track();
+                ctx.auto_fetch_lyrics_for_current_track();
             }
 
             // Add View menu
@@ -149,9 +149,17 @@ impl AppComponent for WindowChrome {
                     t("show_lyrics")
                 };
                 if ui.button(lyrics_text).clicked() {
-                    ctx.ui_state.show_lyrics_panel = !ctx.ui_state.show_lyrics_panel;
+                    let will_show = !ctx.ui_state.show_lyrics_panel;
+                    ctx.ui_state.show_lyrics_panel = will_show;
+                    if will_show {
+                        ctx.fetch_lyrics_for_current_track();
+                    }
                     ui.close_menu();
                 }
+                ui.checkbox(
+                    &mut ctx.ui_state.auto_fetch_missing_lyrics,
+                    t("auto_fetch_missing_lyrics"),
+                );
 
                 ui.separator();
 
