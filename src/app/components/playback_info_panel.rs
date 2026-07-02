@@ -32,7 +32,12 @@ impl PlaybackInfoPanel {
         let active =
             ctx.ui_state.show_youtube_download_dialog || ctx.ui_state.youtube_download_in_progress;
         let button = ui
-            .add(player_button(icons::DOWNLOAD, active))
+            .allocate_ui_with_layout(
+                egui::vec2(tokens::size::ICON_BTN, tokens::size::ICON_BTN),
+                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                |ui| ui.add(player_button(icons::DOWNLOAD, active)),
+            )
+            .inner
             .on_hover_text(t("download_authorized_audio"));
 
         if button.clicked() {

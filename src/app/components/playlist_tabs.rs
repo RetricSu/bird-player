@@ -17,6 +17,7 @@ impl AppComponent for PlaylistTabs {
         egui::ScrollArea::horizontal()
             .id_salt("playlist_tabs_scroll")
             .auto_shrink([false, true])
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     Self::show_tabs(ctx, ui);

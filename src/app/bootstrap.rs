@@ -91,6 +91,7 @@ pub fn start_app() -> Result<()> {
             cc.egui_ctx.style_mut(|style| {
                 crate::app::style::apply_brand_visuals(&mut style.visuals);
                 crate::app::style::apply_compact_spacing(&mut style.spacing);
+                crate::app::style::apply_light_scrollbars(&mut style.spacing);
             });
 
             Ok(Box::new(app))
