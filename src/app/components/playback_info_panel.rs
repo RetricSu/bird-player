@@ -3,7 +3,10 @@ use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{self, Button, Frame, Margin, RichText, Stroke, TextEdit};
+use eframe::egui::{self, Button, Frame, Margin, Order, RichText, Stroke, TextEdit};
+
+const SEARCH_PANEL_WIDTH: f32 = 360.0;
+const SEARCH_PANEL_HEIGHT: f32 = 220.0;
 
 #[derive(Clone)]
 struct LibrarySearchResult {
@@ -20,11 +23,18 @@ impl AppComponent for PlaybackInfoPanel {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                Self::render_download_entry(ctx, ui);
-                Self::render_library_search(ctx, ui);
-            });
+        ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+            let search_anchor = ui
+                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let search_anchor = Self::render_library_search_controls(ctx, ui);
+                    Self::render_download_entry(ctx, ui);
+                    search_anchor
+                })
+                .inner;
+
+            if let Some(anchor) = search_anchor {
+                Self::render_library_search_results(ctx, ui, anchor);
+            }
         });
     }
 }
@@ -157,12 +167,13 @@ impl PlaybackInfoPanel {
         ctx.ui_state.show_youtube_download_dialog = open;
     }
 
-    fn render_library_search(ctx: &mut App, ui: &mut egui::Ui) {
+    fn render_library_search_controls(ctx: &mut App, ui: &mut egui::Ui) -> Option<egui::Rect> {
         let search_active_id = ui.id().with("library_search_active");
         let search_text_id = ui.id().with("library_search_text");
         let search_results_id = ui.id().with("library_search_results");
         let show_results_id = ui.id().with("library_search_show_results");
         let no_results_id = ui.id().with("library_search_no_results");
+        let mut anchor_rect = None;
 
         let mut search_active = ui
             .memory_mut(|mem| mem.data.get_temp::<bool>(search_active_id))
@@ -174,6 +185,11 @@ impl PlaybackInfoPanel {
         let mut should_search = false;
 
         if search_active {
+            let close_response = ui
+                .add(Button::new(icons::CLOSE).player_style())
+                .on_hover_text(t("close_search"));
+            anchor_rect = Some(close_response.rect);
+
             let editor_id = ui.id().with("library_search_editor");
             let first_frame_id = ui.id().with("library_search_first_frame");
             let is_first_frame = ui
@@ -193,19 +209,20 @@ impl PlaybackInfoPanel {
                     .desired_width(180.0)
                     .hint_text(t("type_to_search")),
             );
+            anchor_rect = Some(anchor_rect.map_or(response.rect, |rect| rect.union(response.rect)));
             ui.memory_mut(|mem| mem.data.insert_temp(search_text_id, search_text.clone()));
 
-            should_search = ui
+            let search_response = ui
                 .add(Button::new(icons::SEARCH).player_style())
-                .on_hover_text(t("library_search"))
-                .clicked()
+                .on_hover_text(t("library_search"));
+            anchor_rect = Some(anchor_rect.map_or(search_response.rect, |rect| {
+                rect.union(search_response.rect)
+            }));
+
+            should_search = search_response.clicked()
                 || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
 
-            if ui
-                .add(Button::new(icons::CLOSE).player_style())
-                .on_hover_text(t("close_search"))
-                .clicked()
-            {
+            if close_response.clicked() {
                 search_active = false;
                 search_text.clear();
                 ui.memory_mut(|mem| {
@@ -247,80 +264,65 @@ impl PlaybackInfoPanel {
 
         ui.memory_mut(|mem| mem.data.insert_temp(search_active_id, search_active));
 
+        anchor_rect
+    }
+
+    fn render_library_search_results(ctx: &mut App, ui: &mut egui::Ui, anchor: egui::Rect) {
+        let search_results_id = ui.id().with("library_search_results");
+        let show_results_id = ui.id().with("library_search_show_results");
+        let no_results_id = ui.id().with("library_search_no_results");
+
         let show_results = ui
             .memory_mut(|mem| mem.data.get_temp::<bool>(show_results_id))
             .unwrap_or(false);
         let mut track_to_play: Option<LibraryItem> = None;
-
-        if show_results {
-            if let Some(results) = ui.memory_mut(|mem| {
-                mem.data
-                    .get_temp::<Vec<LibrarySearchResult>>(search_results_id)
-            }) {
-                Frame::popup(ui.style())
-                    .corner_radius(tokens::radius::SM)
-                    .inner_margin(Margin::symmetric(
-                        tokens::spacing::SM as i8,
-                        tokens::spacing::XS as i8,
-                    ))
-                    .stroke(Stroke::new(
-                        tokens::size::STROKE_WIDTH,
-                        ui.visuals().widgets.noninteractive.bg_stroke.color,
-                    ))
-                    .show(ui, |ui| {
-                        ui.set_max_width(380.0);
-                        ui.set_max_height(220.0);
-
-                        egui::ScrollArea::vertical()
-                            .scroll_bar_visibility(
-                                egui::scroll_area::ScrollBarVisibility::AlwaysHidden,
-                            )
-                            .show(ui, |ui| {
-                                for result in results {
-                                    let title = if result.title.is_empty() {
-                                        t("unknown_track")
-                                    } else {
-                                        result.title.clone()
-                                    };
-                                    let detail = [result.artist, result.album, result.source]
-                                        .into_iter()
-                                        .filter(|text| !text.is_empty())
-                                        .collect::<Vec<_>>()
-                                        .join("  ");
-                                    let label = if detail.is_empty() {
-                                        title
-                                    } else {
-                                        format!("{}\n{}", title, detail)
-                                    };
-
-                                    if ui
-                                        .add_sized(
-                                            [360.0, 36.0],
-                                            Button::new(
-                                                RichText::new(label).size(tokens::text::SM),
-                                            )
-                                            .frame(false),
-                                        )
-                                        .clicked()
-                                    {
-                                        track_to_play = Some(result.track);
-                                        ui.memory_mut(|mem| {
-                                            mem.data.insert_temp(show_results_id, false);
-                                        });
-                                    }
-                                }
-                            });
-                    });
-            }
-        } else if ui
+        let no_results = ui
             .memory_mut(|mem| mem.data.get_temp::<bool>(no_results_id))
-            .unwrap_or(false)
-        {
-            ui.label(
-                RichText::new(t("no_matches_found"))
-                    .size(tokens::text::SM)
-                    .color(tokens::color::LYRICS_FAILED),
-            );
+            .unwrap_or(false);
+
+        if show_results || no_results {
+            let screen_rect = ui.ctx().screen_rect();
+            let x = (anchor.right() - SEARCH_PANEL_WIDTH)
+                .max(screen_rect.left() + tokens::spacing::SM)
+                .min(screen_rect.right() - SEARCH_PANEL_WIDTH - tokens::spacing::SM);
+            let y = (anchor.bottom() + tokens::spacing::XS)
+                .min(screen_rect.bottom() - SEARCH_PANEL_HEIGHT - tokens::spacing::SM);
+
+            egui::Area::new(ui.id().with("library_search_panel_area"))
+                .order(Order::Foreground)
+                .fixed_pos(egui::pos2(x, y))
+                .show(ui.ctx(), |ui| {
+                    Frame::popup(ui.style())
+                        .corner_radius(tokens::radius::SM)
+                        .inner_margin(Margin::symmetric(
+                            tokens::spacing::SM as i8,
+                            tokens::spacing::XS as i8,
+                        ))
+                        .stroke(Stroke::new(
+                            tokens::size::STROKE_WIDTH,
+                            ui.visuals().widgets.noninteractive.bg_stroke.color,
+                        ))
+                        .show(ui, |ui| {
+                            ui.set_width(SEARCH_PANEL_WIDTH);
+                            ui.set_max_height(SEARCH_PANEL_HEIGHT);
+
+                            if no_results {
+                                ui.label(
+                                    RichText::new(t("no_matches_found"))
+                                        .size(tokens::text::SM)
+                                        .color(tokens::color::LYRICS_FAILED),
+                                );
+                                return;
+                            }
+
+                            Self::render_library_search_result_list(
+                                ui,
+                                search_results_id,
+                                show_results_id,
+                                &mut track_to_play,
+                            );
+                        });
+                });
         }
 
         if let Some(track) = track_to_play {
@@ -331,6 +333,54 @@ impl PlaybackInfoPanel {
             }
             ctx.app_settings.playing_playlist_idx = None;
             ctx.auto_fetch_lyrics_for_current_track();
+        }
+    }
+
+    fn render_library_search_result_list(
+        ui: &mut egui::Ui,
+        search_results_id: egui::Id,
+        show_results_id: egui::Id,
+        track_to_play: &mut Option<LibraryItem>,
+    ) {
+        if let Some(results) = ui.memory_mut(|mem| {
+            mem.data
+                .get_temp::<Vec<LibrarySearchResult>>(search_results_id)
+        }) {
+            egui::ScrollArea::vertical()
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+                .show(ui, |ui| {
+                    for result in results {
+                        let title = if result.title.is_empty() {
+                            t("unknown_track")
+                        } else {
+                            result.title.clone()
+                        };
+                        let detail = [result.artist, result.album, result.source]
+                            .into_iter()
+                            .filter(|text| !text.is_empty())
+                            .collect::<Vec<_>>()
+                            .join("  ");
+                        let label = if detail.is_empty() {
+                            title
+                        } else {
+                            format!("{}\n{}", title, detail)
+                        };
+
+                        if ui
+                            .add_sized(
+                                [SEARCH_PANEL_WIDTH - tokens::spacing::MD, 36.0],
+                                Button::new(RichText::new(label).size(tokens::text::SM))
+                                    .frame(false),
+                            )
+                            .clicked()
+                        {
+                            *track_to_play = Some(result.track);
+                            ui.memory_mut(|mem| {
+                                mem.data.insert_temp(show_results_id, false);
+                            });
+                        }
+                    }
+                });
         }
     }
 
