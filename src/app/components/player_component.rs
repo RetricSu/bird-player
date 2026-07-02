@@ -98,6 +98,7 @@ impl AppComponent for PlayerComponent {
         ui.vertical(|ui| {
             // ── Top row: cover + track info + playback info ────────────────
             ui.horizontal_top(|ui| {
+                let top_row_height = tokens::size::ALBUM.max(64.0);
                 CassetteComponent::add(ctx, ui);
 
                 // Calculate available width for middle section (60% of remaining space)
@@ -105,7 +106,7 @@ impl AppComponent for PlayerComponent {
                 let middle_width = remaining_width * 0.6;
 
                 ui.allocate_ui_with_layout(
-                    vec2(middle_width, ui.available_height()),
+                    vec2(middle_width, top_row_height),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         if let Some(track) = &selected_track {
@@ -174,7 +175,7 @@ impl AppComponent for PlayerComponent {
 
                 // Add playback info panel on the right
                 ui.allocate_ui_with_layout(
-                    vec2(ui.available_width(), ui.available_height()),
+                    vec2(ui.available_width(), top_row_height),
                     egui::Layout::top_down(egui::Align::RIGHT),
                     |ui| {
                         PlaybackInfoPanel::add(ctx, ui);
