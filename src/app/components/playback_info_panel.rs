@@ -219,8 +219,9 @@ impl PlaybackInfoPanel {
                 rect.union(search_response.rect)
             }));
 
-            should_search = search_response.clicked()
-                || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+            should_search = response.changed()
+                || search_response.clicked()
+                || (response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
 
             if close_response.clicked() {
                 search_active = false;
