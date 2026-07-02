@@ -97,7 +97,7 @@ impl AppComponent for PlayerComponent {
         // Now render UI without borrowing ctx in closures that also borrow ctx
         ui.vertical(|ui| {
             // ── Top row: cover + track info + playback info ────────────────
-            ui.horizontal(|ui| {
+            ui.horizontal_top(|ui| {
                 CassetteComponent::add(ctx, ui);
 
                 // Calculate available width for middle section (60% of remaining space)

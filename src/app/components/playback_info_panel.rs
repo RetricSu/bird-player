@@ -3,7 +3,9 @@ use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Stroke, TextEdit};
+use eframe::egui::{
+    self, Button, Frame, Id, Label, Margin, Order, RichText, Sense, Stroke, TextEdit, TextWrapMode,
+};
 
 const SEARCH_PANEL_WIDTH: f32 = 360.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
@@ -275,6 +277,7 @@ impl PlaybackInfoPanel {
         let search_results_id = Self::search_id("results");
         let show_results_id = Self::search_id("show_results");
         let no_results_id = Self::search_id("no_results");
+        let selected_key_id = Self::search_id("selected_key");
 
         let show_results = ui
             .memory_mut(|mem| mem.data.get_temp::<bool>(show_results_id))
@@ -322,7 +325,7 @@ impl PlaybackInfoPanel {
                             Self::render_library_search_result_list(
                                 ui,
                                 search_results_id,
-                                show_results_id,
+                                selected_key_id,
                                 &mut track_to_play,
                             );
                         });
@@ -343,7 +346,7 @@ impl PlaybackInfoPanel {
     fn render_library_search_result_list(
         ui: &mut egui::Ui,
         search_results_id: egui::Id,
-        show_results_id: egui::Id,
+        selected_key_id: egui::Id,
         track_to_play: &mut Option<LibraryItem>,
     ) {
         if let Some(results) = ui.memory_mut(|mem| {
@@ -363,25 +366,57 @@ impl PlaybackInfoPanel {
                             .into_iter()
                             .filter(|text| !text.is_empty())
                             .collect::<Vec<_>>()
-                            .join("  ");
-                        let label = if detail.is_empty() {
+                            .join(" · ");
+                        let row_text = if detail.is_empty() {
                             title
                         } else {
-                            format!("{}\n{}", title, detail)
+                            format!("{}  {}", title, detail)
                         };
 
-                        if ui
-                            .add_sized(
-                                [SEARCH_PANEL_WIDTH - tokens::spacing::MD, 36.0],
-                                Button::new(RichText::new(label).size(tokens::text::SM))
-                                    .frame(false),
+                        let track_key = result.track.key();
+                        let selected = ui
+                            .memory_mut(|mem| mem.data.get_temp::<String>(selected_key_id))
+                            .is_some_and(|key| key == track_key);
+
+                        let row_size =
+                            egui::vec2(ui.available_width(), tokens::size::ICON_BTN - 4.0);
+                        let (rect, response) = ui.allocate_exact_size(row_size, Sense::click());
+                        let visuals = ui.visuals();
+                        if selected {
+                            ui.painter().rect_filled(
+                                rect,
+                                tokens::radius::SM,
+                                tokens::color::BRAND,
+                            );
+                        } else if response.hovered() {
+                            ui.painter().rect_filled(
+                                rect,
+                                tokens::radius::SM,
+                                visuals.widgets.hovered.weak_bg_fill,
+                            );
+                        }
+
+                        let text_color = if selected {
+                            egui::Color32::from_rgb(245, 248, 252)
+                        } else {
+                            visuals.text_color()
+                        };
+                        ui.put(
+                            rect.shrink2(egui::vec2(tokens::spacing::SM, 0.0)),
+                            Label::new(
+                                RichText::new(row_text)
+                                    .size(tokens::text::SM)
+                                    .color(text_color),
                             )
-                            .clicked()
-                        {
-                            *track_to_play = Some(result.track);
+                            .sense(Sense::hover())
+                            .wrap_mode(TextWrapMode::Truncate),
+                        );
+
+                        if response.clicked() {
                             ui.memory_mut(|mem| {
-                                mem.data.insert_temp(show_results_id, false);
+                                mem.data.insert_temp(selected_key_id, track_key);
                             });
+                            *track_to_play = Some(result.track);
                         }
                     }
                 });
