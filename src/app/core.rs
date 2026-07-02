@@ -512,7 +512,7 @@ impl App {
                     tracing::info!("Track finished, getting next...");
                     let playlist_clone = self
                         .app_settings
-                        .current_playlist_idx
+                        .playing_playlist_idx
                         .and_then(|idx| self.playlists.get(idx).cloned());
                     if let Some(playlist) = playlist_clone {
                         PlayerService::next_track(self.player_mut_ref(), &playlist);

@@ -22,6 +22,7 @@ enum PlayerAction {
     Previous,
     Next,
     ToggleMode,
+    ToggleLyricsPanel,
     ToggleDesktopLyrics,
 }
 
@@ -83,6 +84,7 @@ impl AppComponent for PlayerComponent {
         };
 
         let has_selected_track = selected_track.is_some();
+        let lyrics_panel_visible = ctx.ui_state.show_lyrics_panel;
         let desktop_lyrics_enabled = ctx.ui_state.desktop_lyrics_enabled;
         let is_muted = ctx.ui_state.volume_before_mute.is_some();
 
@@ -236,6 +238,8 @@ impl AppComponent for PlayerComponent {
                     ui.add_enabled(has_selected_track, player_button(mode_icon, mode_active));
 
                 ui.add_space(tokens::spacing::SM);
+                let lyrics_panel_btn =
+                    ui.add(player_button(icons::LYRICS_PANEL, lyrics_panel_visible));
                 let lyrics_btn =
                     ui.add(player_button(icons::LYRICS_TOGGLE, desktop_lyrics_enabled));
 
@@ -278,6 +282,8 @@ impl AppComponent for PlayerComponent {
                     && ctx.app_settings.playing_playlist_idx.is_some()
                 {
                     Some(PlayerAction::Next)
+                } else if lyrics_panel_btn.clicked() {
+                    Some(PlayerAction::ToggleLyricsPanel)
                 } else if lyrics_btn.clicked() {
                     Some(PlayerAction::ToggleDesktopLyrics)
                 } else {
@@ -304,6 +310,13 @@ impl AppComponent for PlayerComponent {
                         PlayerAction::Next => {
                             ctx.play_next_track();
                             fetch_lyrics = true;
+                        }
+                        PlayerAction::ToggleLyricsPanel => {
+                            let will_show = !ctx.ui_state.show_lyrics_panel;
+                            ctx.ui_state.show_lyrics_panel = will_show;
+                            if will_show {
+                                ctx.fetch_lyrics_for_current_track();
+                            }
                         }
                         PlayerAction::ToggleDesktopLyrics => {
                             ctx.ui_state.desktop_lyrics_enabled =

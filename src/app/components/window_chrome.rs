@@ -19,6 +19,9 @@ impl AppComponent for WindowChrome {
             // window control buttons on the right edge of the same row.
             crate::app::style::borderless_button_visuals(ui.visuals_mut());
 
+            ui.label(RichText::new("Bird").strong());
+            ui.separator();
+
             // Menu list
             ui.menu_button(t("file"), |ui| {
                 if ui.button(t("open")).clicked() {
