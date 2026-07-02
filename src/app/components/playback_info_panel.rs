@@ -1,10 +1,18 @@
 use super::AppComponent;
+use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{self, Align, Layout, RichText, TextEdit};
+use eframe::egui::{self, Button, Frame, Margin, RichText, Stroke, TextEdit};
 
-const DESCRIPTION_PREVIEW_LENGTH: usize = 30;
+#[derive(Clone)]
+struct LibrarySearchResult {
+    track: LibraryItem,
+    title: String,
+    artist: String,
+    album: String,
+    source: String,
+}
 
 pub struct PlaybackInfoPanel;
 
@@ -12,18 +20,12 @@ impl AppComponent for PlaybackInfoPanel {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        Self::render_download_entry(ctx, ui);
-
-        // Check if we have a playing playlist
-        let playing_playlist_idx = ctx.app_settings.playing_playlist_idx;
-
-        if let Some(playlist_idx) = playing_playlist_idx {
-            // Case 1: Playlist is playing
-            Self::render_playlist_info(ctx, ui, playlist_idx);
-        } else {
-            // Case 2: Single track (no playlist)
-            Self::render_track_info(ctx, ui);
-        }
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                Self::render_download_entry(ctx, ui);
+                Self::render_library_search(ctx, ui);
+            });
+        });
     }
 }
 
@@ -155,124 +157,218 @@ impl PlaybackInfoPanel {
         ctx.ui_state.show_youtube_download_dialog = open;
     }
 
-    fn render_playlist_info(ctx: &App, ui: &mut egui::Ui, playlist_idx: usize) {
-        if let Some(playlist) = ctx.playlists.get(playlist_idx) {
-            ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
-                let weak_color = ui.visuals().weak_text_color();
+    fn render_library_search(ctx: &mut App, ui: &mut egui::Ui) {
+        let search_active_id = ui.id().with("library_search_active");
+        let search_text_id = ui.id().with("library_search_text");
+        let search_results_id = ui.id().with("library_search_results");
+        let show_results_id = ui.id().with("library_search_show_results");
+        let no_results_id = ui.id().with("library_search_no_results");
 
-                // Playlist name
-                if let Some(name) = playlist.get_name() {
-                    ui.label(
-                        RichText::new(&name)
-                            .size(tokens::text::SM)
-                            .color(weak_color),
-                    );
-                }
+        let mut search_active = ui
+            .memory_mut(|mem| mem.data.get_temp::<bool>(search_active_id))
+            .unwrap_or(false);
+        let mut search_text = ui
+            .memory_mut(|mem| mem.data.get_temp::<String>(search_text_id))
+            .unwrap_or_default();
 
-                // Track position
-                if let Some(selected_track) = &ctx.player_ref().selected_track {
-                    if let Some(pos) = playlist.get_pos(selected_track) {
-                        let total = playlist.tracks.len();
-                        ui.label(
-                            RichText::new(format!("Track {:02}/{:02}", pos + 1, total))
-                                .size(tokens::text::SM)
-                                .color(weak_color),
-                        );
-                    }
-                }
+        let mut should_search = false;
 
-                // Description preview (first 30 chars)
-                if let Some(desc) = playlist.description() {
-                    let preview = if desc.chars().count() > DESCRIPTION_PREVIEW_LENGTH {
-                        format!(
-                            "{}...",
-                            desc.chars()
-                                .take(DESCRIPTION_PREVIEW_LENGTH)
-                                .collect::<String>()
-                        )
-                    } else {
-                        desc.to_string()
-                    };
-                    ui.label(
-                        RichText::new(preview)
-                            .size(tokens::text::SM)
-                            .color(weak_color),
-                    );
-                }
+        if search_active {
+            let editor_id = ui.id().with("library_search_editor");
+            let first_frame_id = ui.id().with("library_search_first_frame");
+            let is_first_frame = ui
+                .memory_mut(|mem| mem.data.get_temp::<bool>(first_frame_id))
+                .unwrap_or(true);
+
+            if is_first_frame {
+                ui.memory_mut(|mem| {
+                    mem.request_focus(editor_id);
+                    mem.data.insert_temp(first_frame_id, false);
+                });
+            }
+
+            let response = ui.add(
+                TextEdit::singleline(&mut search_text)
+                    .id(editor_id)
+                    .desired_width(180.0)
+                    .hint_text(t("type_to_search")),
+            );
+            ui.memory_mut(|mem| mem.data.insert_temp(search_text_id, search_text.clone()));
+
+            should_search = ui
+                .add(Button::new(icons::SEARCH).player_style())
+                .on_hover_text(t("library_search"))
+                .clicked()
+                || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+
+            if ui
+                .add(Button::new(icons::CLOSE).player_style())
+                .on_hover_text(t("close_search"))
+                .clicked()
+            {
+                search_active = false;
+                search_text.clear();
+                ui.memory_mut(|mem| {
+                    mem.data.insert_temp(search_text_id, String::new());
+                    mem.data.insert_temp(show_results_id, false);
+                    mem.data.insert_temp(no_results_id, false);
+                });
+            }
+        } else if ui
+            .add(Button::new(icons::SEARCH).player_style())
+            .on_hover_text(t("library_search"))
+            .clicked()
+        {
+            search_active = true;
+            ui.memory_mut(|mem| {
+                mem.data
+                    .insert_temp(ui.id().with("library_search_first_frame"), true);
+                mem.data.insert_temp(search_text_id, String::new());
+                mem.data.insert_temp(show_results_id, false);
+                mem.data.insert_temp(no_results_id, false);
             });
+        }
+
+        if should_search {
+            let query = search_text.trim();
+            let results = if query.is_empty() {
+                Vec::new()
+            } else {
+                Self::search_library(&ctx.library, query)
+            };
+            let has_results = !results.is_empty();
+            ui.memory_mut(|mem| {
+                mem.data.insert_temp(search_results_id, results);
+                mem.data.insert_temp(show_results_id, has_results);
+                mem.data
+                    .insert_temp(no_results_id, !has_results && !query.is_empty());
+            });
+        }
+
+        ui.memory_mut(|mem| mem.data.insert_temp(search_active_id, search_active));
+
+        let show_results = ui
+            .memory_mut(|mem| mem.data.get_temp::<bool>(show_results_id))
+            .unwrap_or(false);
+        let mut track_to_play: Option<LibraryItem> = None;
+
+        if show_results {
+            if let Some(results) = ui.memory_mut(|mem| {
+                mem.data
+                    .get_temp::<Vec<LibrarySearchResult>>(search_results_id)
+            }) {
+                Frame::popup(ui.style())
+                    .corner_radius(tokens::radius::SM)
+                    .inner_margin(Margin::symmetric(
+                        tokens::spacing::SM as i8,
+                        tokens::spacing::XS as i8,
+                    ))
+                    .stroke(Stroke::new(
+                        tokens::size::STROKE_WIDTH,
+                        ui.visuals().widgets.noninteractive.bg_stroke.color,
+                    ))
+                    .show(ui, |ui| {
+                        ui.set_max_width(380.0);
+                        ui.set_max_height(220.0);
+
+                        egui::ScrollArea::vertical()
+                            .scroll_bar_visibility(
+                                egui::scroll_area::ScrollBarVisibility::AlwaysHidden,
+                            )
+                            .show(ui, |ui| {
+                                for result in results {
+                                    let title = if result.title.is_empty() {
+                                        t("unknown_track")
+                                    } else {
+                                        result.title.clone()
+                                    };
+                                    let detail = [result.artist, result.album, result.source]
+                                        .into_iter()
+                                        .filter(|text| !text.is_empty())
+                                        .collect::<Vec<_>>()
+                                        .join("  ");
+                                    let label = if detail.is_empty() {
+                                        title
+                                    } else {
+                                        format!("{}\n{}", title, detail)
+                                    };
+
+                                    if ui
+                                        .add_sized(
+                                            [360.0, 36.0],
+                                            Button::new(
+                                                RichText::new(label).size(tokens::text::SM),
+                                            )
+                                            .frame(false),
+                                        )
+                                        .clicked()
+                                    {
+                                        track_to_play = Some(result.track);
+                                        ui.memory_mut(|mem| {
+                                            mem.data.insert_temp(show_results_id, false);
+                                        });
+                                    }
+                                }
+                            });
+                    });
+            }
+        } else if ui
+            .memory_mut(|mem| mem.data.get_temp::<bool>(no_results_id))
+            .unwrap_or(false)
+        {
+            ui.label(
+                RichText::new(t("no_matches_found"))
+                    .size(tokens::text::SM)
+                    .color(tokens::color::LYRICS_FAILED),
+            );
+        }
+
+        if let Some(track) = track_to_play {
+            {
+                let player = ctx.player_mut_ref();
+                player.select_track(Some(track));
+                player.play();
+            }
+            ctx.app_settings.playing_playlist_idx = None;
+            ctx.auto_fetch_lyrics_for_current_track();
         }
     }
 
-    fn render_track_info(ctx: &App, ui: &mut egui::Ui) {
-        let player = ctx.player_ref();
+    fn search_library(library: &Library, query: &str) -> Vec<LibrarySearchResult> {
+        let query = query.to_lowercase();
+        library
+            .items()
+            .iter()
+            .filter_map(|item| {
+                let title = item.title().unwrap_or_default();
+                let artist = item.artist().unwrap_or_default();
+                let album = item.album().unwrap_or_default();
+                let genre = item.genre().unwrap_or_default();
+                let path = item.path().to_string_lossy().to_string();
+                let haystack =
+                    format!("{} {} {} {} {}", title, artist, album, genre, path).to_lowercase();
 
-        if let Some(track) = &player.selected_track {
-            ui.with_layout(Layout::top_down(Align::RIGHT), |ui| {
-                let weak_color = ui.visuals().weak_text_color();
-
-                // Album · Year
-                let mut album_line = String::new();
-                if let Some(album) = track.album() {
-                    album_line.push_str(&album);
-                }
-                if let Some(year) = track.year() {
-                    if !album_line.is_empty() {
-                        album_line.push_str(" · ");
-                    }
-                    album_line.push_str(&year.to_string());
-                }
-                if !album_line.is_empty() {
-                    ui.label(
-                        RichText::new(album_line)
-                            .size(tokens::text::SM)
-                            .color(weak_color),
-                    );
+                if !haystack.contains(&query) {
+                    return None;
                 }
 
-                // Genre
-                if let Some(genre) = track.genre() {
-                    ui.label(
-                        RichText::new(genre)
-                            .size(tokens::text::SM)
-                            .color(weak_color),
-                    );
-                }
+                let source = item
+                    .path_ref()
+                    .parent()
+                    .and_then(|path| path.file_name())
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("Library")
+                    .to_string();
 
-                // Format · Sample Rate · Channels
-                let mut tech_line = String::new();
-                if let Some(codec) = &player.codec {
-                    tech_line.push_str(codec);
-                }
-                if let Some(sample_rate) = player.sample_rate {
-                    if !tech_line.is_empty() {
-                        tech_line.push_str(" · ");
-                    }
-                    tech_line.push_str(&format!("{:.1}kHz", sample_rate as f32 / 1000.0));
-                }
-                if let Some(channels) = player.channels {
-                    if !tech_line.is_empty() {
-                        tech_line.push_str(" · ");
-                    }
-                    let channel_str = match channels {
-                        1 => "Mono",
-                        2 => "Stereo",
-                        _ => {
-                            tech_line.push_str(&format!("{}ch", channels));
-                            ""
-                        }
-                    };
-                    if !channel_str.is_empty() {
-                        tech_line.push_str(channel_str);
-                    }
-                }
-                if !tech_line.is_empty() {
-                    ui.label(
-                        RichText::new(tech_line)
-                            .size(tokens::text::SM)
-                            .color(weak_color),
-                    );
-                }
-            });
-        }
+                Some(LibrarySearchResult {
+                    track: item.clone(),
+                    title,
+                    artist,
+                    album,
+                    source,
+                })
+            })
+            .take(50)
+            .collect()
     }
 }

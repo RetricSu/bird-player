@@ -12,6 +12,7 @@ impl AppComponent for LibraryComponent {
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         // Keep track of paths to remove (if any)
         let mut path_to_remove: Option<LibraryPathId> = None;
+        let mut path_to_resync: Option<LibraryPathId> = None;
 
         // Header is rendered OUTSIDE the ScrollArea so it stays pinned and
         // its bottom rule lines up with the playlist tabs / lyrics panel
@@ -232,6 +233,11 @@ impl AppComponent for LibraryComponent {
                                 }
                             }
 
+                            if ui.button(t("resync_folder")).clicked() {
+                                path_to_resync = Some(path_id);
+                                ui.close_menu();
+                            }
+
                             if ui.button(t("remove_from_library")).clicked() {
                                 // Mark this path for removal after the loop
                                 path_to_remove = Some(path_id);
@@ -241,6 +247,20 @@ impl AppComponent for LibraryComponent {
                     }
                 }
             });
+
+        if let Some(path_id) = path_to_resync {
+            ctx.library.set_path_to_not_imported(path_id);
+            let path_to_import = ctx
+                .library
+                .paths()
+                .iter()
+                .find(|path| path.id() == path_id)
+                .cloned();
+
+            if let Some(path) = path_to_import {
+                ctx.import_library_paths(&path);
+            }
+        }
 
         // Process any path removal after rendering the UI
         if let Some(path_id) = path_to_remove {

@@ -87,6 +87,16 @@ pub fn init() {
     en.insert("mini".to_string(), "Mini".to_string());
     en.insert("playlist_btn".to_string(), "Playlist".to_string());
     en.insert("lyrics".to_string(), "Lyrics".to_string());
+    en.insert("library_search".to_string(), "Search library".to_string());
+    en.insert(
+        "type_to_search".to_string(),
+        "Type to search...".to_string(),
+    );
+    en.insert("close_search".to_string(), "Close search".to_string());
+    en.insert(
+        "no_matches_found".to_string(),
+        "No matches found".to_string(),
+    );
 
     // Lyrics component
     en.insert("upload_lyrics".to_string(), "Upload Lyrics".to_string());
@@ -110,6 +120,7 @@ pub fn init() {
         "add_all_to_playlist".to_string(),
         "Add all to playlist".to_string(),
     );
+    en.insert("resync_folder".to_string(), "Re-sync folder".to_string());
     en.insert(
         "remove_from_library".to_string(),
         "Remove from library".to_string(),
@@ -240,6 +251,10 @@ pub fn init() {
     zh.insert("mini".to_string(), "迷你".to_string());
     zh.insert("playlist_btn".to_string(), "列表".to_string());
     zh.insert("lyrics".to_string(), "歌词".to_string());
+    zh.insert("library_search".to_string(), "搜索音乐库".to_string());
+    zh.insert("type_to_search".to_string(), "输入搜索...".to_string());
+    zh.insert("close_search".to_string(), "关闭搜索".to_string());
+    zh.insert("no_matches_found".to_string(), "没有匹配结果".to_string());
 
     // Lyrics component
     zh.insert("upload_lyrics".to_string(), "上传歌词".to_string());
@@ -257,6 +272,7 @@ pub fn init() {
         "add_all_to_playlist".to_string(),
         "全部添加到播放列表".to_string(),
     );
+    zh.insert("resync_folder".to_string(), "重新同步此文件夹".to_string());
     zh.insert("remove_from_library".to_string(), "从库中移除".to_string());
     zh.insert(
         "download_authorized_audio".to_string(),
