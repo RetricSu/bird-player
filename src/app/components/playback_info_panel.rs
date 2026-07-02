@@ -3,7 +3,7 @@ use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{self, Button, Frame, Margin, Order, RichText, Stroke, TextEdit};
+use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Stroke, TextEdit};
 
 const SEARCH_PANEL_WIDTH: f32 = 360.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
@@ -40,6 +40,10 @@ impl AppComponent for PlaybackInfoPanel {
 }
 
 impl PlaybackInfoPanel {
+    fn search_id(key: &'static str) -> Id {
+        Id::new(("playback_info_panel_library_search", key))
+    }
+
     fn render_download_entry(ctx: &mut App, ui: &mut egui::Ui) {
         let active =
             ctx.ui_state.show_youtube_download_dialog || ctx.ui_state.youtube_download_in_progress;
@@ -168,11 +172,11 @@ impl PlaybackInfoPanel {
     }
 
     fn render_library_search_controls(ctx: &mut App, ui: &mut egui::Ui) -> Option<egui::Rect> {
-        let search_active_id = ui.id().with("library_search_active");
-        let search_text_id = ui.id().with("library_search_text");
-        let search_results_id = ui.id().with("library_search_results");
-        let show_results_id = ui.id().with("library_search_show_results");
-        let no_results_id = ui.id().with("library_search_no_results");
+        let search_active_id = Self::search_id("active");
+        let search_text_id = Self::search_id("text");
+        let search_results_id = Self::search_id("results");
+        let show_results_id = Self::search_id("show_results");
+        let no_results_id = Self::search_id("no_results");
         let mut anchor_rect = None;
 
         let mut search_active = ui
@@ -190,8 +194,8 @@ impl PlaybackInfoPanel {
                 .on_hover_text(t("close_search"));
             anchor_rect = Some(close_response.rect);
 
-            let editor_id = ui.id().with("library_search_editor");
-            let first_frame_id = ui.id().with("library_search_first_frame");
+            let editor_id = Self::search_id("editor");
+            let first_frame_id = Self::search_id("first_frame");
             let is_first_frame = ui
                 .memory_mut(|mem| mem.data.get_temp::<bool>(first_frame_id))
                 .unwrap_or(true);
@@ -239,8 +243,7 @@ impl PlaybackInfoPanel {
         {
             search_active = true;
             ui.memory_mut(|mem| {
-                mem.data
-                    .insert_temp(ui.id().with("library_search_first_frame"), true);
+                mem.data.insert_temp(Self::search_id("first_frame"), true);
                 mem.data.insert_temp(search_text_id, String::new());
                 mem.data.insert_temp(show_results_id, false);
                 mem.data.insert_temp(no_results_id, false);
@@ -269,9 +272,9 @@ impl PlaybackInfoPanel {
     }
 
     fn render_library_search_results(ctx: &mut App, ui: &mut egui::Ui, anchor: egui::Rect) {
-        let search_results_id = ui.id().with("library_search_results");
-        let show_results_id = ui.id().with("library_search_show_results");
-        let no_results_id = ui.id().with("library_search_no_results");
+        let search_results_id = Self::search_id("results");
+        let show_results_id = Self::search_id("show_results");
+        let no_results_id = Self::search_id("no_results");
 
         let show_results = ui
             .memory_mut(|mem| mem.data.get_temp::<bool>(show_results_id))
@@ -289,7 +292,7 @@ impl PlaybackInfoPanel {
             let y = (anchor.bottom() + tokens::spacing::XS)
                 .min(screen_rect.bottom() - SEARCH_PANEL_HEIGHT - tokens::spacing::SM);
 
-            egui::Area::new(ui.id().with("library_search_panel_area"))
+            egui::Area::new(Self::search_id("panel_area"))
                 .order(Order::Foreground)
                 .fixed_pos(egui::pos2(x, y))
                 .show(ui.ctx(), |ui| {
