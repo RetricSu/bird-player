@@ -3,9 +3,7 @@ use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{
-    self, Button, Frame, Id, Label, Margin, Order, RichText, Sense, Stroke, TextEdit, TextWrapMode,
-};
+use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Sense, Stroke, TextEdit};
 
 const SEARCH_PANEL_WIDTH: f32 = 360.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
@@ -27,7 +25,7 @@ impl AppComponent for PlaybackInfoPanel {
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
             let search_anchor = ui
-                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                .with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                     let search_anchor = Self::render_library_search_controls(ctx, ui);
                     Self::render_download_entry(ctx, ui);
                     search_anchor
@@ -381,7 +379,7 @@ impl PlaybackInfoPanel {
                         let row_size =
                             egui::vec2(ui.available_width(), tokens::size::ICON_BTN - 4.0);
                         let (rect, response) = ui.allocate_exact_size(row_size, Sense::click());
-                        let visuals = ui.visuals();
+                        let visuals = ui.visuals().clone();
                         if selected {
                             ui.painter().rect_filled(
                                 rect,
@@ -401,15 +399,13 @@ impl PlaybackInfoPanel {
                         } else {
                             visuals.text_color()
                         };
-                        ui.put(
-                            rect.shrink2(egui::vec2(tokens::spacing::SM, 0.0)),
-                            Label::new(
-                                RichText::new(row_text)
-                                    .size(tokens::text::SM)
-                                    .color(text_color),
-                            )
-                            .sense(Sense::hover())
-                            .wrap_mode(TextWrapMode::Truncate),
+                        let text_rect = rect.shrink2(egui::vec2(tokens::spacing::SM, 0.0));
+                        ui.painter().text(
+                            text_rect.left_center(),
+                            egui::Align2::LEFT_CENTER,
+                            Self::elide_to_width(&row_text, text_rect.width()),
+                            egui::FontId::proportional(tokens::text::SM),
+                            text_color,
                         );
 
                         if response.clicked() {
@@ -459,5 +455,16 @@ impl PlaybackInfoPanel {
             })
             .take(50)
             .collect()
+    }
+
+    fn elide_to_width(text: &str, width: f32) -> String {
+        let max_chars = (width / 8.0).floor().max(8.0) as usize;
+        let char_count = text.chars().count();
+        if char_count <= max_chars {
+            return text.to_string();
+        }
+
+        let keep = max_chars.saturating_sub(3);
+        format!("{}...", text.chars().take(keep).collect::<String>())
     }
 }
