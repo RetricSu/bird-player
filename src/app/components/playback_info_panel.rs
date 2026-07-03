@@ -3,7 +3,7 @@ use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Sense, Stroke, TextEdit};
+use eframe::egui::{self, Frame, Id, Margin, Order, RichText, Sense, Stroke, TextEdit};
 
 const SEARCH_PANEL_WIDTH: f32 = 360.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
@@ -44,16 +44,19 @@ impl PlaybackInfoPanel {
         Id::new(("playback_info_panel_library_search", key))
     }
 
+    fn tool_button(ui: &mut egui::Ui, icon: &str, active: bool) -> egui::Response {
+        ui.allocate_ui_with_layout(
+            egui::vec2(tokens::size::ICON_BTN, tokens::size::ICON_BTN),
+            egui::Layout::centered_and_justified(egui::Direction::TopDown),
+            |ui| ui.add(player_button(icon, active)),
+        )
+        .inner
+    }
+
     fn render_download_entry(ctx: &mut App, ui: &mut egui::Ui) {
         let active =
             ctx.ui_state.show_youtube_download_dialog || ctx.ui_state.youtube_download_in_progress;
-        let button = ui
-            .allocate_ui_with_layout(
-                egui::vec2(tokens::size::ICON_BTN, tokens::size::ICON_BTN),
-                egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                |ui| ui.add(player_button(icons::DOWNLOAD, active)),
-            )
-            .inner
+        let button = Self::tool_button(ui, icons::DOWNLOAD, active)
             .on_hover_text(t("download_authorized_audio"));
 
         if button.clicked() {
@@ -189,9 +192,8 @@ impl PlaybackInfoPanel {
         let mut should_search = false;
 
         if search_active {
-            let close_response = ui
-                .add(Button::new(icons::CLOSE).player_style())
-                .on_hover_text(t("close_search"));
+            let close_response =
+                Self::tool_button(ui, icons::CLOSE, false).on_hover_text(t("close_search"));
             anchor_rect = Some(close_response.rect);
 
             let editor_id = Self::search_id("editor");
@@ -216,9 +218,8 @@ impl PlaybackInfoPanel {
             anchor_rect = Some(anchor_rect.map_or(response.rect, |rect| rect.union(response.rect)));
             ui.memory_mut(|mem| mem.data.insert_temp(search_text_id, search_text.clone()));
 
-            let search_response = ui
-                .add(Button::new(icons::SEARCH).player_style())
-                .on_hover_text(t("library_search"));
+            let search_response =
+                Self::tool_button(ui, icons::SEARCH, false).on_hover_text(t("library_search"));
             anchor_rect = Some(anchor_rect.map_or(search_response.rect, |rect| {
                 rect.union(search_response.rect)
             }));
@@ -236,8 +237,7 @@ impl PlaybackInfoPanel {
                     mem.data.insert_temp(no_results_id, false);
                 });
             }
-        } else if ui
-            .add(Button::new(icons::SEARCH).player_style())
+        } else if Self::tool_button(ui, icons::SEARCH, false)
             .on_hover_text(t("library_search"))
             .clicked()
         {
