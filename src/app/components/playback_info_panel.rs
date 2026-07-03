@@ -209,10 +209,10 @@ impl PlaybackInfoPanel {
                 });
             }
 
-            let response = ui.add(
+            let response = ui.add_sized(
+                [180.0, tokens::size::ICON_BTN],
                 TextEdit::singleline(&mut search_text)
                     .id(editor_id)
-                    .desired_width(180.0)
                     .hint_text(t("type_to_search")),
             );
             anchor_rect = Some(anchor_rect.map_or(response.rect, |rect| rect.union(response.rect)));
