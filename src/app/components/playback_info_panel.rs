@@ -5,7 +5,7 @@ use crate::app::t;
 use crate::app::App;
 use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Sense, Stroke, TextEdit};
 
-const SEARCH_PANEL_WIDTH: f32 = 560.0;
+const SEARCH_PANEL_WIDTH: f32 = 280.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
 
 #[derive(Clone)]
