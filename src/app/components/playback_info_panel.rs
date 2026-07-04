@@ -218,7 +218,7 @@ impl PlaybackInfoPanel {
                     ui.set_max_height(tokens::size::ICON_BTN);
                     ui.spacing_mut().item_spacing.x = tokens::spacing::XS;
 
-                    ui.horizontal_centered(|ui| {
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         search_clicked = ui
                             .add(
                                 Button::new(icons::SEARCH)
@@ -230,7 +230,7 @@ impl PlaybackInfoPanel {
 
                         text_response = Some(
                             ui.add_sized(
-                                [196.0, tokens::size::ICON_BTN],
+                                [196.0, tokens::size::ICON_BTN - 6.0],
                                 TextEdit::singleline(&mut search_text)
                                     .id(editor_id)
                                     .frame(false)
