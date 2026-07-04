@@ -220,12 +220,14 @@ impl PlaybackInfoPanel {
                     ui.spacing_mut().item_spacing.x = tokens::spacing::XS;
 
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        let close_button_size = egui::vec2(24.0, 24.0);
+                        let text_width = (ui.available_width()
+                            - close_button_size.x
+                            - ui.spacing().item_spacing.x)
+                            .max(120.0);
                         text_response = Some(
                             ui.add_sized(
-                                [
-                                    (search_width - 54.0).max(120.0),
-                                    tokens::size::ICON_BTN - 6.0,
-                                ],
+                                [text_width, tokens::size::ICON_BTN - 6.0],
                                 TextEdit::singleline(&mut search_text)
                                     .id(editor_id)
                                     .frame(false)
@@ -237,7 +239,7 @@ impl PlaybackInfoPanel {
                             .add(
                                 Button::new(icons::CLOSE)
                                     .frame(false)
-                                    .min_size(egui::vec2(24.0, 24.0)),
+                                    .min_size(close_button_size),
                             )
                             .on_hover_text(t("close_search"))
                             .clicked();
