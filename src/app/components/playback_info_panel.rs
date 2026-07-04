@@ -3,7 +3,7 @@ use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
 use crate::app::App;
-use eframe::egui::{self, Frame, Id, Margin, Order, RichText, Sense, Stroke, TextEdit};
+use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Sense, Stroke, TextEdit};
 
 const SEARCH_PANEL_WIDTH: f32 = 360.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
@@ -192,10 +192,6 @@ impl PlaybackInfoPanel {
         let mut should_search = false;
 
         if search_active {
-            let close_response =
-                Self::tool_button(ui, icons::CLOSE, false).on_hover_text(t("close_search"));
-            anchor_rect = Some(close_response.rect);
-
             let editor_id = Self::search_id("editor");
             let first_frame_id = Self::search_id("first_frame");
             let is_first_frame = ui
@@ -209,26 +205,60 @@ impl PlaybackInfoPanel {
                 });
             }
 
-            let response = ui.add_sized(
-                [180.0, tokens::size::ICON_BTN],
-                TextEdit::singleline(&mut search_text)
-                    .id(editor_id)
-                    .hint_text(t("type_to_search")),
-            );
-            anchor_rect = Some(anchor_rect.map_or(response.rect, |rect| rect.union(response.rect)));
+            let mut text_response: Option<egui::Response> = None;
+            let mut search_clicked = false;
+            let mut close_clicked = false;
+
+            let frame_response = Frame::new()
+                .corner_radius(tokens::radius::SM)
+                .inner_margin(Margin::symmetric(tokens::spacing::SM as i8, 0))
+                .stroke(ui.visuals().widgets.active.bg_stroke)
+                .show(ui, |ui| {
+                    ui.set_min_size(egui::vec2(260.0, tokens::size::ICON_BTN));
+                    ui.set_max_height(tokens::size::ICON_BTN);
+                    ui.spacing_mut().item_spacing.x = tokens::spacing::XS;
+
+                    ui.horizontal_centered(|ui| {
+                        search_clicked = ui
+                            .add(
+                                Button::new(icons::SEARCH)
+                                    .frame(false)
+                                    .min_size(egui::vec2(24.0, 24.0)),
+                            )
+                            .on_hover_text(t("library_search"))
+                            .clicked();
+
+                        text_response = Some(
+                            ui.add_sized(
+                                [196.0, tokens::size::ICON_BTN],
+                                TextEdit::singleline(&mut search_text)
+                                    .id(editor_id)
+                                    .frame(false)
+                                    .hint_text(t("type_to_search")),
+                            ),
+                        );
+
+                        close_clicked = ui
+                            .add(
+                                Button::new(icons::CLOSE)
+                                    .frame(false)
+                                    .min_size(egui::vec2(24.0, 24.0)),
+                            )
+                            .on_hover_text(t("close_search"))
+                            .clicked();
+                    });
+                })
+                .response;
+
+            anchor_rect = Some(frame_response.rect);
+            let response = text_response.expect("search text edit should render");
             ui.memory_mut(|mem| mem.data.insert_temp(search_text_id, search_text.clone()));
 
-            let search_response =
-                Self::tool_button(ui, icons::SEARCH, false).on_hover_text(t("library_search"));
-            anchor_rect = Some(anchor_rect.map_or(search_response.rect, |rect| {
-                rect.union(search_response.rect)
-            }));
-
             should_search = response.changed()
-                || search_response.clicked()
+                || search_clicked
                 || (response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
 
-            if close_response.clicked() {
+            if close_clicked {
                 search_active = false;
                 search_text.clear();
                 ui.memory_mut(|mem| {
