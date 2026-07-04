@@ -29,6 +29,7 @@ pub const LYRICS_PANEL: &str = p::SUBTITLES;
 pub const SEARCH: &str = p::MAGNIFYING_GLASS;
 pub const CLOSE: &str = p::X;
 pub const DOWNLOAD: &str = p::DOWNLOAD_SIMPLE;
+pub const DISCOVER: &str = p::COMPASS;
 pub const FOLDER: &str = p::FOLDER_OPEN;
 /// Generic "add / new" affordance — used by library/playlist "+" buttons.
 pub const PLUS: &str = p::PLUS;

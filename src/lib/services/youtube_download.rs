@@ -8,12 +8,21 @@ use std::time::Duration;
 pub enum YoutubeDownloadEvent {
     Progress(f32),
     Finished(Result<YoutubeDownloadResult, String>),
+    SearchFinished(Result<Vec<YoutubeSearchResult>, String>),
 }
 
 #[derive(Debug, Clone)]
 pub struct YoutubeDownloadResult {
     pub output_dir: PathBuf,
     pub downloaded_files: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct YoutubeSearchResult {
+    pub title: String,
+    pub channel: String,
+    pub url: String,
+    pub duration: Option<u64>,
 }
 
 pub struct YoutubeDownloadService;
@@ -40,6 +49,49 @@ impl YoutubeDownloadService {
             let result = Self::run_download(&url, &output_dir, include_playlist, &event_tx);
             let _ = event_tx.send(YoutubeDownloadEvent::Finished(result));
         });
+    }
+
+    pub fn search_youtube(query: String, limit: usize, event_tx: Sender<YoutubeDownloadEvent>) {
+        std::thread::spawn(move || {
+            let result = Self::run_search(&query, limit);
+            let _ = event_tx.send(YoutubeDownloadEvent::SearchFinished(result));
+        });
+    }
+
+    fn run_search(query: &str, limit: usize) -> Result<Vec<YoutubeSearchResult>, String> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Err("Search query is required".to_string());
+        }
+
+        if Self::yt_dlp_command().arg("--version").output().is_err() {
+            return Err(
+                "yt-dlp was not found. Install yt-dlp and make sure it is available in PATH."
+                    .to_string(),
+            );
+        }
+
+        let search_target = format!("ytsearch{}:{}", limit.max(1), query);
+        let output = Self::yt_dlp_command()
+            .arg("--dump-json")
+            .arg("--flat-playlist")
+            .arg("--no-warnings")
+            .arg("--")
+            .arg(search_target)
+            .output()
+            .map_err(|err| format!("Failed to start yt-dlp: {}", err))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if stderr.is_empty() {
+                format!("yt-dlp failed with status {}", output.status)
+            } else {
+                stderr
+            });
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(Self::parse_search_results(&stdout))
     }
 
     fn run_download(
@@ -314,6 +366,54 @@ impl YoutubeDownloadService {
         }
         rebuilt
     }
+
+    fn parse_search_results(output: &str) -> Vec<YoutubeSearchResult> {
+        output
+            .lines()
+            .filter_map(Self::parse_search_result_line)
+            .collect()
+    }
+
+    fn parse_search_result_line(line: &str) -> Option<YoutubeSearchResult> {
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        let title = value.get("title")?.as_str()?.trim().to_string();
+        if title.is_empty() {
+            return None;
+        }
+
+        let channel = value
+            .get("channel")
+            .or_else(|| value.get("uploader"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("YouTube")
+            .trim()
+            .to_string();
+
+        let url = value
+            .get("webpage_url")
+            .or_else(|| value.get("url"))
+            .and_then(|value| value.as_str())
+            .map(|url| {
+                if url.starts_with("http://") || url.starts_with("https://") {
+                    url.to_string()
+                } else {
+                    format!("https://www.youtube.com/watch?v={}", url)
+                }
+            })
+            .or_else(|| {
+                value
+                    .get("id")
+                    .and_then(|value| value.as_str())
+                    .map(|id| format!("https://www.youtube.com/watch?v={}", id))
+            })?;
+
+        Some(YoutubeSearchResult {
+            title,
+            channel,
+            url,
+            duration: value.get("duration").and_then(|value| value.as_u64()),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -366,5 +466,21 @@ mod tests {
         }
         assert!(paths.contains(&std::path::PathBuf::from("/opt/homebrew/bin")));
         assert!(paths.contains(&std::path::PathBuf::from("/usr/local/bin")));
+    }
+
+    #[test]
+    fn parse_search_results_reads_yt_dlp_json_lines() {
+        let output = r#"{"id":"abc123","title":"Bird Song","channel":"Bird Channel","duration":245}
+{"title":"No URL"}
+{"webpage_url":"https://www.youtube.com/watch?v=def456","title":"Second Song","uploader":"Uploader","duration":60}"#;
+
+        let results = YoutubeDownloadService::parse_search_results(output);
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].title, "Bird Song");
+        assert_eq!(results[0].channel, "Bird Channel");
+        assert_eq!(results[0].url, "https://www.youtube.com/watch?v=abc123");
+        assert_eq!(results[0].duration, Some(245));
+        assert_eq!(results[1].url, "https://www.youtube.com/watch?v=def456");
     }
 }

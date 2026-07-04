@@ -13,4 +13,6 @@ pub use library_import::LibraryImportService;
 pub use lyrics_manager::LyricsManager;
 pub use metadata_editor::MetadataEditor;
 pub use player_restore::PlayerRestoreService;
-pub use youtube_download::{YoutubeDownloadEvent, YoutubeDownloadResult, YoutubeDownloadService};
+pub use youtube_download::{
+    YoutubeDownloadEvent, YoutubeDownloadResult, YoutubeDownloadService, YoutubeSearchResult,
+};

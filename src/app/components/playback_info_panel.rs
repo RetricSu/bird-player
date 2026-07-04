@@ -1,4 +1,5 @@
 use super::AppComponent;
+use crate::app::lib_services::YoutubeSearchResult;
 use crate::app::library::{Library, LibraryItem};
 use crate::app::style::{icons, player_button, tokens, ButtonExt};
 use crate::app::t;
@@ -28,6 +29,7 @@ impl AppComponent for PlaybackInfoPanel {
                 .with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                     let search_anchor = Self::render_library_search_controls(ctx, ui);
                     Self::render_download_entry(ctx, ui);
+                    Self::render_discover_entry(ctx, ui);
                     search_anchor
                 })
                 .inner;
@@ -64,6 +66,144 @@ impl PlaybackInfoPanel {
         }
 
         Self::render_download_dialog(ctx, ui.ctx().clone());
+    }
+
+    fn render_discover_entry(ctx: &mut App, ui: &mut egui::Ui) {
+        let active =
+            ctx.ui_state.show_youtube_discover_dialog || ctx.ui_state.youtube_discover_in_progress;
+        let button =
+            Self::tool_button(ui, icons::DISCOVER, active).on_hover_text(t("youtube_discover"));
+
+        if button.clicked() {
+            ctx.ui_state.show_youtube_discover_dialog = true;
+        }
+
+        Self::render_discover_dialog(ctx, ui.ctx().clone());
+    }
+
+    fn render_discover_dialog(ctx: &mut App, egui_ctx: egui::Context) {
+        if !ctx.ui_state.show_youtube_discover_dialog {
+            return;
+        }
+
+        let mut open = ctx.ui_state.show_youtube_discover_dialog;
+        egui::Window::new(t("youtube_discover"))
+            .id(egui::Id::new("youtube_discover_dialog"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(&egui_ctx, |ui| {
+                ui.set_min_width(440.0);
+                ui.label(RichText::new(t("youtube_discover_notice")).weak());
+                ui.add_space(tokens::spacing::XS);
+
+                ui.label(t("youtube_discover_query"));
+                let query_response = ui.add_enabled(
+                    !ctx.ui_state.youtube_discover_in_progress,
+                    TextEdit::singleline(&mut ctx.ui_state.youtube_discover_query)
+                        .desired_width(420.0)
+                        .hint_text(t("youtube_discover_placeholder")),
+                );
+                let enter_pressed =
+                    query_response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+
+                ui.add_space(tokens::spacing::XS);
+                if let Some(status) = &ctx.ui_state.youtube_discover_status {
+                    ui.label(RichText::new(status).weak());
+                    ui.add_space(tokens::spacing::XS);
+                }
+
+                ui.horizontal(|ui| {
+                    let can_search = !ctx.ui_state.youtube_discover_in_progress
+                        && !ctx.ui_state.youtube_discover_query.trim().is_empty();
+                    if ui
+                        .add_enabled(can_search, egui::Button::new(t("search")))
+                        .clicked()
+                        || (can_search && enter_pressed)
+                    {
+                        ctx.start_youtube_discover_search();
+                    }
+
+                    if ui
+                        .add_enabled(
+                            !ctx.ui_state.youtube_discover_in_progress,
+                            egui::Button::new(t("clear")),
+                        )
+                        .clicked()
+                    {
+                        ctx.ui_state.youtube_discover_query.clear();
+                        ctx.ui_state.youtube_discover_results.clear();
+                        ctx.ui_state.youtube_discover_status = None;
+                    }
+                });
+
+                if ctx.ui_state.youtube_discover_in_progress {
+                    ui.add_space(tokens::spacing::XS);
+                    ui.spinner();
+                }
+
+                Self::render_discover_results(ctx, ui);
+            });
+
+        ctx.ui_state.show_youtube_discover_dialog = open;
+    }
+
+    fn render_discover_results(ctx: &mut App, ui: &mut egui::Ui) {
+        if ctx.ui_state.youtube_discover_results.is_empty() {
+            return;
+        }
+
+        ui.add_space(tokens::spacing::SM);
+        egui::ScrollArea::vertical()
+            .max_height(260.0)
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                let results = ctx.ui_state.youtube_discover_results.clone();
+                for result in results {
+                    Self::render_discover_result_row(ctx, ui, &result);
+                }
+            });
+    }
+
+    fn render_discover_result_row(ctx: &mut App, ui: &mut egui::Ui, result: &YoutubeSearchResult) {
+        Frame::new()
+            .inner_margin(Margin::symmetric(
+                tokens::spacing::SM as i8,
+                tokens::spacing::XS as i8,
+            ))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(340.0);
+                        ui.label(RichText::new(&result.title).strong());
+                        ui.label(
+                            RichText::new(Self::discover_result_meta(result))
+                                .size(tokens::text::SM)
+                                .weak(),
+                        );
+                    });
+
+                    if ui.button(t("use_result")).clicked() {
+                        ctx.ui_state.youtube_download_url = result.url.clone();
+                        ctx.ui_state.show_youtube_download_dialog = true;
+                        ctx.ui_state.show_youtube_discover_dialog = false;
+                        ctx.ui_state.youtube_download_status = None;
+                    }
+                });
+            });
+    }
+
+    fn discover_result_meta(result: &YoutubeSearchResult) -> String {
+        match result.duration {
+            Some(duration) => format!("{} · {}", result.channel, Self::format_duration(duration)),
+            None => result.channel.clone(),
+        }
+    }
+
+    fn format_duration(seconds: u64) -> String {
+        let minutes = seconds / 60;
+        let seconds = seconds % 60;
+        format!("{}:{:02}", minutes, seconds)
     }
 
     fn render_download_dialog(ctx: &mut App, egui_ctx: egui::Context) {

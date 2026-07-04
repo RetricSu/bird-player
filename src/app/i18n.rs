@@ -172,6 +172,36 @@ pub fn init() {
         "downloaded_files_done".to_string(),
         "Downloaded {} file(s). Folder is synced.".to_string(),
     );
+    en.insert(
+        "youtube_discover".to_string(),
+        "Discover YouTube".to_string(),
+    );
+    en.insert(
+        "youtube_discover_notice".to_string(),
+        "Search YouTube, then use a result as the download URL.".to_string(),
+    );
+    en.insert(
+        "youtube_discover_query".to_string(),
+        "Search YouTube".to_string(),
+    );
+    en.insert(
+        "youtube_discover_placeholder".to_string(),
+        "Song, artist, live session...".to_string(),
+    );
+    en.insert("search".to_string(), "Search".to_string());
+    en.insert("use_result".to_string(), "Use".to_string());
+    en.insert(
+        "search_query_required".to_string(),
+        "Enter a search query".to_string(),
+    );
+    en.insert(
+        "youtube_discover_searching".to_string(),
+        "Searching YouTube...".to_string(),
+    );
+    en.insert(
+        "youtube_discover_results".to_string(),
+        "{} result(s) found".to_string(),
+    );
 
     // Playlist tabs component
     en.insert("rename".to_string(), "Rename".to_string());
@@ -319,6 +349,33 @@ pub fn init() {
     zh.insert(
         "downloaded_files_done".to_string(),
         "已下载 {} 个文件，文件夹已同步。".to_string(),
+    );
+    zh.insert("youtube_discover".to_string(), "发现 YouTube".to_string());
+    zh.insert(
+        "youtube_discover_notice".to_string(),
+        "搜索 YouTube，然后把结果作为下载 URL 使用。".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_query".to_string(),
+        "搜索 YouTube".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_placeholder".to_string(),
+        "歌曲、艺人、现场版本...".to_string(),
+    );
+    zh.insert("search".to_string(), "搜索".to_string());
+    zh.insert("use_result".to_string(), "使用".to_string());
+    zh.insert(
+        "search_query_required".to_string(),
+        "请输入搜索关键词".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_searching".to_string(),
+        "正在搜索 YouTube...".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_results".to_string(),
+        "找到 {} 个结果".to_string(),
     );
 
     // Playlist tabs component

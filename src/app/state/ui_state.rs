@@ -1,4 +1,4 @@
-use crate::app::lib_services::YoutubeDownloadService;
+use crate::app::lib_services::{YoutubeDownloadService, YoutubeSearchResult};
 use crate::app::libstate::lyrics_state::LyricsFetchState;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -73,6 +73,21 @@ pub struct UiState {
     /// Last user-facing download status or error message.
     pub youtube_download_status: Option<String>,
 
+    /// Whether the YouTube discovery window is open.
+    pub show_youtube_discover_dialog: bool,
+
+    /// Query entered in the YouTube discovery form.
+    pub youtube_discover_query: String,
+
+    /// Whether a YouTube discovery search is currently running.
+    pub youtube_discover_in_progress: bool,
+
+    /// Latest YouTube discovery search results.
+    pub youtube_discover_results: Vec<YoutubeSearchResult>,
+
+    /// Last user-facing discovery status or error message.
+    pub youtube_discover_status: Option<String>,
+
     /// Volume value to restore when the user un-mutes via the speaker icon.
     /// `None` while not muted. Not serialized: a fresh launch always starts
     /// with whatever volume the player itself remembers.
@@ -117,6 +132,11 @@ impl Default for UiState {
             youtube_download_last_file_count: None,
             youtube_download_include_playlist: false,
             youtube_download_status: None,
+            show_youtube_discover_dialog: false,
+            youtube_discover_query: String::new(),
+            youtube_discover_in_progress: false,
+            youtube_discover_results: Vec::new(),
+            youtube_discover_status: None,
             volume_before_mute: None,
             last_persistence_save: Instant::now(),
             desktop_lyrics_font_size: 48.0,

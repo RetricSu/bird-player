@@ -190,7 +190,10 @@ impl eframe::App for App {
         self.refresh_youtube_download_processor();
         self.pump_audio_events();
 
-        if self.ui_state.is_importing || self.ui_state.youtube_download_in_progress {
+        if self.ui_state.is_importing
+            || self.ui_state.youtube_download_in_progress
+            || self.ui_state.youtube_discover_in_progress
+        {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         self.refresh_lyrics_display();

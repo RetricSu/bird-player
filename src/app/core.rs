@@ -315,6 +315,24 @@ impl App {
         );
     }
 
+    pub fn start_youtube_discover_search(&mut self) {
+        if self.ui_state.youtube_discover_in_progress {
+            return;
+        }
+
+        let query = self.ui_state.youtube_discover_query.trim().to_string();
+        if query.is_empty() {
+            self.ui_state.youtube_discover_status = Some(i18n::t("search_query_required"));
+            return;
+        }
+
+        self.ui_state.youtube_discover_in_progress = true;
+        self.ui_state.youtube_discover_results.clear();
+        self.ui_state.youtube_discover_status = Some(i18n::t("youtube_discover_searching"));
+
+        YoutubeDownloadService::search_youtube(query, 8, self.youtube_download_tx().clone());
+    }
+
     pub fn handle_youtube_download_event(&mut self, event: YoutubeDownloadEvent) {
         match event {
             YoutubeDownloadEvent::Progress(progress) => {
@@ -356,6 +374,20 @@ impl App {
                 self.ui_state.youtube_download_progress = None;
                 self.ui_state.youtube_download_last_file_count = None;
                 self.ui_state.youtube_download_status = Some(err);
+            }
+            YoutubeDownloadEvent::SearchFinished(Ok(results)) => {
+                self.ui_state.youtube_discover_in_progress = false;
+                self.ui_state.youtube_discover_status = Some(if results.is_empty() {
+                    i18n::t("no_matches_found")
+                } else {
+                    i18n::tf("youtube_discover_results", &[&results.len().to_string()])
+                });
+                self.ui_state.youtube_discover_results = results;
+            }
+            YoutubeDownloadEvent::SearchFinished(Err(err)) => {
+                self.ui_state.youtube_discover_in_progress = false;
+                self.ui_state.youtube_discover_results.clear();
+                self.ui_state.youtube_discover_status = Some(err);
             }
         }
     }
