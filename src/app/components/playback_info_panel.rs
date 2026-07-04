@@ -5,7 +5,7 @@ use crate::app::t;
 use crate::app::App;
 use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Sense, Stroke, TextEdit};
 
-const SEARCH_PANEL_WIDTH: f32 = 360.0;
+const SEARCH_PANEL_WIDTH: f32 = 560.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
 
 #[derive(Clone)]
@@ -192,6 +192,7 @@ impl PlaybackInfoPanel {
         let mut should_search = false;
 
         if search_active {
+            let search_width = ui.available_width().min(SEARCH_PANEL_WIDTH);
             let editor_id = Self::search_id("editor");
             let first_frame_id = Self::search_id("first_frame");
             let is_first_frame = ui
@@ -213,14 +214,18 @@ impl PlaybackInfoPanel {
                 .inner_margin(Margin::symmetric(tokens::spacing::SM as i8, 0))
                 .stroke(ui.visuals().widgets.active.bg_stroke)
                 .show(ui, |ui| {
-                    ui.set_min_size(egui::vec2(SEARCH_PANEL_WIDTH, tokens::size::ICON_BTN));
+                    ui.set_min_size(egui::vec2(search_width, tokens::size::ICON_BTN));
+                    ui.set_max_width(search_width);
                     ui.set_max_height(tokens::size::ICON_BTN);
                     ui.spacing_mut().item_spacing.x = tokens::spacing::XS;
 
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         text_response = Some(
                             ui.add_sized(
-                                [SEARCH_PANEL_WIDTH - 54.0, tokens::size::ICON_BTN - 6.0],
+                                [
+                                    (search_width - 54.0).max(120.0),
+                                    tokens::size::ICON_BTN - 6.0,
+                                ],
                                 TextEdit::singleline(&mut search_text)
                                     .id(editor_id)
                                     .frame(false)
@@ -306,9 +311,10 @@ impl PlaybackInfoPanel {
 
         if show_results || no_results {
             let screen_rect = ui.ctx().screen_rect();
-            let x = (anchor.right() - SEARCH_PANEL_WIDTH)
+            let panel_width = anchor.width().min(SEARCH_PANEL_WIDTH);
+            let x = (anchor.right() - panel_width)
                 .max(screen_rect.left() + tokens::spacing::SM)
-                .min(screen_rect.right() - SEARCH_PANEL_WIDTH - tokens::spacing::SM);
+                .min(screen_rect.right() - panel_width - tokens::spacing::SM);
             let y = (anchor.bottom() + tokens::spacing::XS)
                 .min(screen_rect.bottom() - SEARCH_PANEL_HEIGHT - tokens::spacing::SM);
 
@@ -327,7 +333,7 @@ impl PlaybackInfoPanel {
                             ui.visuals().widgets.noninteractive.bg_stroke.color,
                         ))
                         .show(ui, |ui| {
-                            ui.set_width(SEARCH_PANEL_WIDTH);
+                            ui.set_width(panel_width);
                             ui.set_max_height(SEARCH_PANEL_HEIGHT);
 
                             if no_results {
