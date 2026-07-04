@@ -206,7 +206,6 @@ impl PlaybackInfoPanel {
             }
 
             let mut text_response: Option<egui::Response> = None;
-            let mut search_clicked = false;
             let mut close_clicked = false;
 
             let frame_response = Frame::new()
@@ -214,23 +213,14 @@ impl PlaybackInfoPanel {
                 .inner_margin(Margin::symmetric(tokens::spacing::SM as i8, 0))
                 .stroke(ui.visuals().widgets.active.bg_stroke)
                 .show(ui, |ui| {
-                    ui.set_min_size(egui::vec2(260.0, tokens::size::ICON_BTN));
+                    ui.set_min_size(egui::vec2(SEARCH_PANEL_WIDTH, tokens::size::ICON_BTN));
                     ui.set_max_height(tokens::size::ICON_BTN);
                     ui.spacing_mut().item_spacing.x = tokens::spacing::XS;
 
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        search_clicked = ui
-                            .add(
-                                Button::new(icons::SEARCH)
-                                    .frame(false)
-                                    .min_size(egui::vec2(24.0, 24.0)),
-                            )
-                            .on_hover_text(t("library_search"))
-                            .clicked();
-
                         text_response = Some(
                             ui.add_sized(
-                                [196.0, tokens::size::ICON_BTN - 6.0],
+                                [SEARCH_PANEL_WIDTH - 54.0, tokens::size::ICON_BTN - 6.0],
                                 TextEdit::singleline(&mut search_text)
                                     .id(editor_id)
                                     .frame(false)
@@ -255,7 +245,6 @@ impl PlaybackInfoPanel {
             ui.memory_mut(|mem| mem.data.insert_temp(search_text_id, search_text.clone()));
 
             should_search = response.changed()
-                || search_clicked
                 || (response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
 
             if close_clicked {
