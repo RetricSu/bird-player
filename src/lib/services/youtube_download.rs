@@ -23,6 +23,7 @@ pub struct YoutubeSearchResult {
     pub channel: String,
     pub url: String,
     pub duration: Option<u64>,
+    pub thumbnail_url: Option<String>,
 }
 
 pub struct YoutubeDownloadService;
@@ -412,7 +413,32 @@ impl YoutubeDownloadService {
             channel,
             url,
             duration: value.get("duration").and_then(|value| value.as_u64()),
+            thumbnail_url: Self::search_result_thumbnail_url(&value),
         })
+    }
+
+    fn search_result_thumbnail_url(value: &serde_json::Value) -> Option<String> {
+        value
+            .get("thumbnail")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                value
+                    .get("thumbnails")
+                    .and_then(|value| value.as_array())
+                    .and_then(|thumbnails| thumbnails.iter().rev().find_map(Self::thumbnail_url))
+            })
+    }
+
+    fn thumbnail_url(value: &serde_json::Value) -> Option<String> {
+        value
+            .get("url")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .map(ToOwned::to_owned)
     }
 }
 
@@ -470,7 +496,7 @@ mod tests {
 
     #[test]
     fn parse_search_results_reads_yt_dlp_json_lines() {
-        let output = r#"{"id":"abc123","title":"Bird Song","channel":"Bird Channel","duration":245}
+        let output = r#"{"id":"abc123","title":"Bird Song","channel":"Bird Channel","duration":245,"thumbnails":[{"url":"https://img.example/small.jpg"},{"url":"https://img.example/large.jpg"}]}
 {"title":"No URL"}
 {"webpage_url":"https://www.youtube.com/watch?v=def456","title":"Second Song","uploader":"Uploader","duration":60}"#;
 
@@ -481,6 +507,10 @@ mod tests {
         assert_eq!(results[0].channel, "Bird Channel");
         assert_eq!(results[0].url, "https://www.youtube.com/watch?v=abc123");
         assert_eq!(results[0].duration, Some(245));
+        assert_eq!(
+            results[0].thumbnail_url.as_deref(),
+            Some("https://img.example/large.jpg")
+        );
         assert_eq!(results[1].url, "https://www.youtube.com/watch?v=def456");
     }
 }

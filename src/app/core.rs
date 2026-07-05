@@ -330,7 +330,7 @@ impl App {
         self.ui_state.youtube_discover_results.clear();
         self.ui_state.youtube_discover_status = Some(i18n::t("youtube_discover_searching"));
 
-        YoutubeDownloadService::search_youtube(query, 8, self.youtube_download_tx().clone());
+        YoutubeDownloadService::search_youtube(query, 20, self.youtube_download_tx().clone());
     }
 
     pub fn handle_youtube_download_event(&mut self, event: YoutubeDownloadEvent) {

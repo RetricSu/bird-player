@@ -93,7 +93,7 @@ impl PlaybackInfoPanel {
             .collapsible(false)
             .resizable(false)
             .show(&egui_ctx, |ui| {
-                ui.set_min_width(440.0);
+                ui.set_min_width(560.0);
                 ui.label(RichText::new(t("youtube_discover_notice")).weak());
                 ui.add_space(tokens::spacing::XS);
 
@@ -101,7 +101,7 @@ impl PlaybackInfoPanel {
                 let query_response = ui.add_enabled(
                     !ctx.ui_state.youtube_discover_in_progress,
                     TextEdit::singleline(&mut ctx.ui_state.youtube_discover_query)
-                        .desired_width(420.0)
+                        .desired_width(540.0)
                         .hint_text(t("youtube_discover_placeholder")),
                 );
                 let enter_pressed =
@@ -155,7 +155,7 @@ impl PlaybackInfoPanel {
 
         ui.add_space(tokens::spacing::SM);
         egui::ScrollArea::vertical()
-            .max_height(260.0)
+            .max_height(360.0)
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 let results = ctx.ui_state.youtube_discover_results.clone();
@@ -173,8 +173,10 @@ impl PlaybackInfoPanel {
             ))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
+                    Self::render_discover_thumbnail(ui, result);
+
                     ui.vertical(|ui| {
-                        ui.set_width(340.0);
+                        ui.set_width(392.0);
                         ui.label(RichText::new(&result.title).strong());
                         ui.label(
                             RichText::new(Self::discover_result_meta(result))
@@ -191,6 +193,28 @@ impl PlaybackInfoPanel {
                     }
                 });
             });
+    }
+
+    fn render_discover_thumbnail(ui: &mut egui::Ui, result: &YoutubeSearchResult) {
+        let size = egui::vec2(56.0, 56.0);
+        if let Some(url) = &result.thumbnail_url {
+            ui.add(
+                egui::Image::from_uri(url)
+                    .fit_to_exact_size(size)
+                    .corner_radius(tokens::radius::SM),
+            );
+        } else {
+            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+            ui.painter()
+                .rect_filled(rect, tokens::radius::SM, ui.visuals().faint_bg_color);
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                icons::YOUTUBE,
+                egui::FontId::proportional(22.0),
+                ui.visuals().weak_text_color(),
+            );
+        }
     }
 
     fn discover_result_meta(result: &YoutubeSearchResult) -> String {
