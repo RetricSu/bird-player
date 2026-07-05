@@ -21,7 +21,6 @@ impl AppComponent for WindowChrome {
             crate::app::style::borderless_button_visuals(ui.visuals_mut());
 
             Self::render_brand_mark(ui);
-            ui.label(RichText::new("Bird").strong());
             ui.separator();
 
             // Menu list
