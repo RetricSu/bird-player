@@ -1,10 +1,11 @@
 use super::language_selector::LanguageSelector;
 use super::AppComponent;
 use crate::app::constants::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
+use crate::app::style::tokens;
 use crate::app::t;
 use crate::app::version::version_info;
 use crate::app::App;
-use eframe::egui::{self, Color32, RichText, Window};
+use eframe::egui::{self, Color32, RichText, Stroke, Window};
 use rfd;
 
 pub struct WindowChrome;
@@ -19,6 +20,7 @@ impl AppComponent for WindowChrome {
             // window control buttons on the right edge of the same row.
             crate::app::style::borderless_button_visuals(ui.visuals_mut());
 
+            Self::render_brand_mark(ui);
             ui.label(RichText::new("Bird").strong());
             ui.separator();
 
@@ -338,5 +340,56 @@ impl AppComponent for WindowChrome {
                     });
                 });
         }
+    }
+}
+
+impl WindowChrome {
+    fn render_brand_mark(ui: &mut egui::Ui) {
+        let size = egui::vec2(18.0, 18.0);
+        let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+        let to_pos = |x: f32, y: f32| {
+            egui::pos2(
+                egui::lerp(rect.left()..=rect.right(), x),
+                egui::lerp(rect.top()..=rect.bottom(), y),
+            )
+        };
+
+        let stroke = Stroke::new(1.35, tokens::color::BRAND);
+        let painter = ui.painter();
+
+        painter.add(egui::Shape::CubicBezier(
+            egui::epaint::CubicBezierShape::from_points_stroke(
+                [
+                    to_pos(0.30, 0.42),
+                    to_pos(0.50, 0.10),
+                    to_pos(0.78, 0.25),
+                    to_pos(0.98, 0.39),
+                ],
+                false,
+                Color32::TRANSPARENT,
+                stroke,
+            ),
+        ));
+
+        painter.line(
+            vec![to_pos(0.30, 0.42), to_pos(0.06, 0.52), to_pos(0.38, 0.63)],
+            stroke,
+        );
+
+        painter.add(egui::Shape::CubicBezier(
+            egui::epaint::CubicBezierShape::from_points_stroke(
+                [
+                    to_pos(0.38, 0.63),
+                    to_pos(0.52, 0.69),
+                    to_pos(0.56, 0.80),
+                    to_pos(0.56, 0.98),
+                ],
+                false,
+                Color32::TRANSPARENT,
+                stroke,
+            ),
+        ));
+
+        painter.circle_stroke(to_pos(0.48, 0.39), 2.1, stroke);
     }
 }
