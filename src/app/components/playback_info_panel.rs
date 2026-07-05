@@ -27,6 +27,7 @@ impl AppComponent for PlaybackInfoPanel {
         ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
             let search_anchor = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    Self::render_playlist_export_entry(ctx, ui);
                     let search_anchor = Self::render_library_search_controls(ctx, ui);
                     Self::render_download_entry(ctx, ui);
                     Self::render_discover_entry(ctx, ui);
@@ -53,6 +54,124 @@ impl PlaybackInfoPanel {
             |ui| ui.add(player_button(icon, active)),
         )
         .inner
+    }
+
+    fn render_playlist_export_entry(ctx: &mut App, ui: &mut egui::Ui) {
+        let active = ctx.ui_state.show_playlist_export_dialog;
+        let button =
+            Self::tool_button(ui, icons::EXPORT, active).on_hover_text(t("export_playlist"));
+
+        if button.clicked() {
+            ctx.ui_state.show_playlist_export_dialog = true;
+            if ctx.ui_state.playlist_export_selected_idx.is_none() {
+                ctx.ui_state.playlist_export_selected_idx = ctx.app_settings.current_playlist_idx;
+            }
+        }
+
+        Self::render_playlist_export_dialog(ctx, ui.ctx().clone());
+    }
+
+    fn render_playlist_export_dialog(ctx: &mut App, egui_ctx: egui::Context) {
+        if !ctx.ui_state.show_playlist_export_dialog {
+            return;
+        }
+
+        let mut open = ctx.ui_state.show_playlist_export_dialog;
+        egui::Window::new(t("export_playlist"))
+            .id(egui::Id::new("playlist_export_dialog"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(&egui_ctx, |ui| {
+                ui.set_min_width(380.0);
+                ui.label(RichText::new(t("playlist_export_notice")).weak());
+                ui.add_space(tokens::spacing::XS);
+
+                let playlist_options = ctx
+                    .playlists
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, playlist)| {
+                        (
+                            idx,
+                            playlist
+                                .get_name()
+                                .unwrap_or_else(|| t("untitled_playlist")),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                let selected_idx = ctx
+                    .ui_state
+                    .playlist_export_selected_idx
+                    .filter(|idx| *idx < ctx.playlists.len())
+                    .or(ctx.app_settings.current_playlist_idx)
+                    .filter(|idx| *idx < ctx.playlists.len());
+                ctx.ui_state.playlist_export_selected_idx = selected_idx;
+
+                let selected_label = selected_idx
+                    .and_then(|idx| {
+                        playlist_options
+                            .iter()
+                            .find(|(option_idx, _)| *option_idx == idx)
+                    })
+                    .map(|(_, name)| name.clone())
+                    .unwrap_or_else(|| t("playlist_export_select"));
+
+                egui::ComboBox::from_label(t("playlist_label"))
+                    .selected_text(selected_label)
+                    .show_ui(ui, |ui| {
+                        for (idx, name) in &playlist_options {
+                            ui.selectable_value(
+                                &mut ctx.ui_state.playlist_export_selected_idx,
+                                Some(*idx),
+                                name,
+                            );
+                        }
+                    });
+
+                if let Some(idx) = ctx.ui_state.playlist_export_selected_idx {
+                    if let Some(playlist) = ctx.playlists.get(idx) {
+                        ui.label(
+                            RichText::new(format!(
+                                "{} · {}",
+                                playlist.tracks.len(),
+                                t("playlist_export_tracks")
+                            ))
+                            .weak(),
+                        );
+                    }
+                }
+
+                if let Some(status) = &ctx.ui_state.playlist_export_status {
+                    ui.add_space(tokens::spacing::XS);
+                    ui.label(RichText::new(status).weak());
+                }
+
+                ui.add_space(tokens::spacing::SM);
+                ui.horizontal(|ui| {
+                    let can_export = ctx
+                        .ui_state
+                        .playlist_export_selected_idx
+                        .and_then(|idx| ctx.playlists.get(idx))
+                        .is_some_and(|playlist| !playlist.tracks.is_empty());
+
+                    if ui
+                        .add_enabled(can_export, egui::Button::new(t("export")))
+                        .clicked()
+                    {
+                        if let Some(idx) = ctx.ui_state.playlist_export_selected_idx {
+                            ctx.export_playlist_to_archive(idx);
+                        }
+                    }
+
+                    if ui.button(t("clear")).clicked() {
+                        ctx.ui_state.playlist_export_status = None;
+                    }
+                });
+            });
+
+        ctx.ui_state.show_playlist_export_dialog = open;
     }
 
     fn render_download_entry(ctx: &mut App, ui: &mut egui::Ui) {

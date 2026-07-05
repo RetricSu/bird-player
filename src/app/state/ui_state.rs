@@ -88,6 +88,15 @@ pub struct UiState {
     /// Last user-facing discovery status or error message.
     pub youtube_discover_status: Option<String>,
 
+    /// Whether the playlist export window is open.
+    pub show_playlist_export_dialog: bool,
+
+    /// Playlist selected in the export window.
+    pub playlist_export_selected_idx: Option<usize>,
+
+    /// Last user-facing playlist export status or error message.
+    pub playlist_export_status: Option<String>,
+
     /// Volume value to restore when the user un-mutes via the speaker icon.
     /// `None` while not muted. Not serialized: a fresh launch always starts
     /// with whatever volume the player itself remembers.
@@ -137,6 +146,9 @@ impl Default for UiState {
             youtube_discover_in_progress: false,
             youtube_discover_results: Vec::new(),
             youtube_discover_status: None,
+            show_playlist_export_dialog: false,
+            playlist_export_selected_idx: None,
+            playlist_export_status: None,
             volume_before_mute: None,
             last_persistence_save: Instant::now(),
             desktop_lyrics_font_size: 48.0,

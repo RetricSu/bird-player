@@ -202,6 +202,29 @@ pub fn init() {
         "youtube_discover_results".to_string(),
         "{} result(s) found".to_string(),
     );
+    en.insert("export_playlist".to_string(), "Export playlist".to_string());
+    en.insert(
+        "playlist_export_notice".to_string(),
+        "Create a portable archive with this playlist's music files and metadata.".to_string(),
+    );
+    en.insert(
+        "playlist_export_select".to_string(),
+        "Choose a playlist".to_string(),
+    );
+    en.insert(
+        "playlist_export_empty".to_string(),
+        "This playlist has no tracks to export.".to_string(),
+    );
+    en.insert("playlist_export_tracks".to_string(), "tracks".to_string());
+    en.insert(
+        "playlist_export_done".to_string(),
+        "Exported {} track(s) to {}".to_string(),
+    );
+    en.insert("export".to_string(), "Export".to_string());
+    en.insert(
+        "untitled_playlist".to_string(),
+        "Untitled Playlist".to_string(),
+    );
 
     // Playlist tabs component
     en.insert("rename".to_string(), "Rename".to_string());
@@ -376,6 +399,29 @@ pub fn init() {
     zh.insert(
         "youtube_discover_results".to_string(),
         "找到 {} 个结果".to_string(),
+    );
+    zh.insert("export_playlist".to_string(), "导出播放列表".to_string());
+    zh.insert(
+        "playlist_export_notice".to_string(),
+        "把播放列表的音乐文件和元信息打包成可导入的压缩包。".to_string(),
+    );
+    zh.insert(
+        "playlist_export_select".to_string(),
+        "选择播放列表".to_string(),
+    );
+    zh.insert(
+        "playlist_export_empty".to_string(),
+        "这个播放列表没有可导出的歌曲。".to_string(),
+    );
+    zh.insert("playlist_export_tracks".to_string(), "首歌曲".to_string());
+    zh.insert(
+        "playlist_export_done".to_string(),
+        "已导出 {} 首歌曲到 {}".to_string(),
+    );
+    zh.insert("export".to_string(), "导出".to_string());
+    zh.insert(
+        "untitled_playlist".to_string(),
+        "未命名播放列表".to_string(),
     );
 
     // Playlist tabs component

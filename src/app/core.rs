@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use super::error::AppLoadError;
 use super::i18n;
 use super::lib_services::{
-    LibraryImportService, LyricsManager, PlayerRestoreService, YoutubeDownloadEvent,
-    YoutubeDownloadService,
+    LibraryImportService, LyricsManager, PlayerRestoreService, PlaylistExportService,
+    YoutubeDownloadEvent, YoutubeDownloadService,
 };
 use super::library::{Library, LibraryCommand, LibraryPath};
 pub use super::library::{LibraryItem, LibraryPathId};
@@ -331,6 +331,41 @@ impl App {
         self.ui_state.youtube_discover_status = Some(i18n::t("youtube_discover_searching"));
 
         YoutubeDownloadService::search_youtube(query, 20, self.youtube_download_tx().clone());
+    }
+
+    pub fn export_playlist_to_archive(&mut self, playlist_idx: usize) {
+        let Some(playlist) = self.playlists.get(playlist_idx) else {
+            self.ui_state.playlist_export_status = Some(i18n::t("playlist_export_select"));
+            return;
+        };
+
+        if playlist.tracks.is_empty() {
+            self.ui_state.playlist_export_status = Some(i18n::t("playlist_export_empty"));
+            return;
+        }
+
+        let Some(output_path) = rfd::FileDialog::new()
+            .set_file_name(&PlaylistExportService::default_file_name(playlist))
+            .add_filter("Bird Playlist", &["zip"])
+            .save_file()
+        else {
+            return;
+        };
+
+        match PlaylistExportService::export_playlist(playlist, &output_path) {
+            Ok(result) => {
+                self.ui_state.playlist_export_status = Some(i18n::tf(
+                    "playlist_export_done",
+                    &[
+                        &result.track_count.to_string(),
+                        &result.output_path.display().to_string(),
+                    ],
+                ));
+            }
+            Err(err) => {
+                self.ui_state.playlist_export_status = Some(err);
+            }
+        }
     }
 
     pub fn handle_youtube_download_event(&mut self, event: YoutubeDownloadEvent) {

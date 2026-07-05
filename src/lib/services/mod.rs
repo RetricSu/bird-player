@@ -6,6 +6,7 @@ pub mod library_import;
 pub mod lyrics_manager;
 pub mod metadata_editor;
 pub mod player_restore;
+pub mod playlist_export;
 pub mod youtube_download;
 
 // Re-export commonly used types
@@ -13,6 +14,7 @@ pub use library_import::LibraryImportService;
 pub use lyrics_manager::LyricsManager;
 pub use metadata_editor::MetadataEditor;
 pub use player_restore::PlayerRestoreService;
+pub use playlist_export::{PlaylistExportResult, PlaylistExportService};
 pub use youtube_download::{
     YoutubeDownloadEvent, YoutubeDownloadResult, YoutubeDownloadService, YoutubeSearchResult,
 };
