@@ -10,16 +10,16 @@ impl AppComponent for Footer {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        ui.set_min_height(tokens::size::HEADER_HEIGHT);
+        ui.set_min_height(16.0);
         ui.horizontal_centered(|ui| {
             let version_text = format!("v{} ({})", version_info::VERSION, version_info::GIT_HASH);
             let version_response = ui.add(
-                egui::Label::new(RichText::new(version_text).size(tokens::text::SM).weak())
+                egui::Label::new(RichText::new(version_text).size(10.0).weak())
                     .sense(Sense::click_and_drag()),
             );
             Self::start_drag_from_response(ctx, ui, &version_response);
 
-            ui.add_space(tokens::spacing::MD);
+            ui.add_space(tokens::spacing::SM);
 
             if let Some(current_playlist_idx) = ctx.app_settings.current_playlist_idx {
                 let selection_count = ctx.playlists[current_playlist_idx].selected_indices.len();
