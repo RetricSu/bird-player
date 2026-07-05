@@ -152,6 +152,8 @@ pub struct UiSettings {
     pub library_folders_expanded: bool,
     pub default_window_height: f64,
     pub show_lyrics_panel: bool,
+    #[serde(default = "default_youtube_download_dir")]
+    pub youtube_download_dir: PathBuf,
     #[serde(default = "default_auto_fetch_missing_lyrics")]
     pub auto_fetch_missing_lyrics: bool,
     pub desktop_lyrics_enabled: bool,
@@ -165,6 +167,10 @@ pub struct UiSettings {
 
 fn default_desktop_lyrics_font_size() -> f32 {
     48.0
+}
+
+fn default_youtube_download_dir() -> PathBuf {
+    YoutubeDownloadService::default_download_dir()
 }
 
 fn default_auto_fetch_missing_lyrics() -> bool {
@@ -181,6 +187,7 @@ impl Default for UiSettings {
             library_folders_expanded: false,
             default_window_height: crate::app::constants::DEFAULT_WINDOW_HEIGHT as f64,
             show_lyrics_panel: false,
+            youtube_download_dir: default_youtube_download_dir(),
             auto_fetch_missing_lyrics: true,
             desktop_lyrics_enabled: false,
             desktop_lyrics_font_size: default_desktop_lyrics_font_size(),
@@ -197,6 +204,7 @@ impl UiState {
             library_folders_expanded: self.library_folders_expanded,
             default_window_height: self.default_window_height,
             show_lyrics_panel: self.show_lyrics_panel,
+            youtube_download_dir: self.youtube_download_dir.clone(),
             auto_fetch_missing_lyrics: self.auto_fetch_missing_lyrics,
             desktop_lyrics_enabled: self.desktop_lyrics_enabled,
             desktop_lyrics_font_size: self.desktop_lyrics_font_size,
@@ -210,6 +218,7 @@ impl UiState {
         self.library_folders_expanded = settings.library_folders_expanded;
         self.default_window_height = settings.default_window_height;
         self.show_lyrics_panel = settings.show_lyrics_panel;
+        self.youtube_download_dir = settings.youtube_download_dir;
         self.auto_fetch_missing_lyrics = settings.auto_fetch_missing_lyrics;
         self.desktop_lyrics_enabled = settings.desktop_lyrics_enabled;
         self.desktop_lyrics_font_size = settings.desktop_lyrics_font_size;

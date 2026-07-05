@@ -283,6 +283,7 @@ impl PlaybackInfoPanel {
                             .pick_folder()
                         {
                             ctx.ui_state.youtube_download_dir = folder;
+                            ctx.save_state();
                         }
                     }
                 });
