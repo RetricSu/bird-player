@@ -345,7 +345,7 @@ impl AppComponent for WindowChrome {
 
 impl WindowChrome {
     fn render_brand_mark(ui: &mut egui::Ui) {
-        let size = egui::vec2(18.0, 18.0);
+        let size = egui::vec2(20.0, 18.0);
         let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
         let to_pos = |x: f32, y: f32| {
             egui::pos2(
@@ -354,16 +354,16 @@ impl WindowChrome {
             )
         };
 
-        let stroke = Stroke::new(1.35, tokens::color::BRAND);
+        let stroke = Stroke::new(1.55, tokens::color::BRAND);
         let painter = ui.painter();
 
         painter.add(egui::Shape::CubicBezier(
             egui::epaint::CubicBezierShape::from_points_stroke(
                 [
-                    to_pos(0.30, 0.42),
-                    to_pos(0.50, 0.10),
-                    to_pos(0.78, 0.25),
-                    to_pos(0.98, 0.39),
+                    to_pos(0.34, 0.44),
+                    to_pos(0.48, 0.08),
+                    to_pos(0.78, 0.18),
+                    to_pos(0.96, 0.34),
                 ],
                 false,
                 Color32::TRANSPARENT,
@@ -372,17 +372,17 @@ impl WindowChrome {
         ));
 
         painter.line(
-            vec![to_pos(0.30, 0.42), to_pos(0.06, 0.52), to_pos(0.38, 0.63)],
+            vec![to_pos(0.34, 0.44), to_pos(0.05, 0.55), to_pos(0.39, 0.68)],
             stroke,
         );
 
         painter.add(egui::Shape::CubicBezier(
             egui::epaint::CubicBezierShape::from_points_stroke(
                 [
-                    to_pos(0.38, 0.63),
-                    to_pos(0.52, 0.69),
-                    to_pos(0.56, 0.80),
-                    to_pos(0.56, 0.98),
+                    to_pos(0.39, 0.68),
+                    to_pos(0.53, 0.72),
+                    to_pos(0.57, 0.82),
+                    to_pos(0.57, 0.98),
                 ],
                 false,
                 Color32::TRANSPARENT,
@@ -390,6 +390,7 @@ impl WindowChrome {
             ),
         ));
 
-        painter.circle_stroke(to_pos(0.48, 0.39), 2.1, stroke);
+        painter.line(vec![to_pos(0.05, 0.55), to_pos(0.31, 0.45)], stroke);
+        painter.circle_stroke(to_pos(0.50, 0.34), 1.95, stroke);
     }
 }
