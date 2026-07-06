@@ -1,6 +1,6 @@
 use crate::playlist::Playlist;
 use serde::Serialize;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use zip::write::FileOptions;
@@ -57,6 +57,19 @@ impl PlaylistExportService {
     }
 
     pub fn export_playlist(
+        playlist: &Playlist,
+        output_path: &Path,
+    ) -> Result<PlaylistExportResult, String> {
+        match Self::write_playlist_archive(playlist, output_path) {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                let _ = fs::remove_file(output_path);
+                Err(err)
+            }
+        }
+    }
+
+    fn write_playlist_archive(
         playlist: &Playlist,
         output_path: &Path,
     ) -> Result<PlaylistExportResult, String> {
@@ -129,8 +142,12 @@ impl PlaylistExportService {
             .map_err(|err| format!("Failed to serialize playlist metadata: {}", err))?;
         zip.write_all(&manifest_json)
             .map_err(|err| format!("Failed to write playlist metadata: {}", err))?;
-        zip.finish()
+        let mut buffered_writer = zip
+            .finish()
             .map_err(|err| format!("Failed to finish export zip: {}", err))?;
+        buffered_writer
+            .flush()
+            .map_err(|err| format!("Failed to flush export file: {}", err))?;
 
         Ok(PlaylistExportResult {
             output_path: output_path.to_path_buf(),

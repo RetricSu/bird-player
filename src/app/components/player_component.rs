@@ -90,9 +90,9 @@ impl AppComponent for PlayerComponent {
 
         // Get playlist tracks info for the current playlist
         let current_playlist_idx = ctx.app_settings.current_playlist_idx;
-        // Use is_some_and instead of map_or
-        let has_tracks_in_playlist =
-            current_playlist_idx.is_some_and(|idx| !ctx.playlists[idx].tracks.is_empty());
+        let has_tracks_in_playlist = current_playlist_idx
+            .and_then(|idx| ctx.playlists.get(idx))
+            .is_some_and(|playlist| !playlist.tracks.is_empty());
 
         // Now render UI without borrowing ctx in closures that also borrow ctx
         ui.vertical(|ui| {

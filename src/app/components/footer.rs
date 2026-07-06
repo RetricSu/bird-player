@@ -22,15 +22,18 @@ impl AppComponent for Footer {
             ui.add_space(tokens::spacing::SM);
 
             if let Some(current_playlist_idx) = ctx.app_settings.current_playlist_idx {
-                let selection_count = ctx.playlists[current_playlist_idx].selected_indices.len();
-                if selection_count > 0 {
-                    let selection_response =
-                        ui.label(RichText::new(format!("{} selected", selection_count)).weak());
-                    Self::start_drag_from_response(ctx, ui, &selection_response);
+                if let Some(playlist) = ctx.playlists.get(current_playlist_idx) {
+                    let selection_count = playlist.selected_indices.len();
+                    if selection_count > 0 {
+                        let selection_response =
+                            ui.label(RichText::new(format!("{} selected", selection_count)).weak());
+                        Self::start_drag_from_response(ctx, ui, &selection_response);
 
-                    if ui.button("Clear Selection").clicked() {
-                        let playlist = &mut ctx.playlists[current_playlist_idx];
-                        playlist.clear_selection();
+                        if ui.button("Clear Selection").clicked() {
+                            if let Some(playlist) = ctx.playlists.get_mut(current_playlist_idx) {
+                                playlist.clear_selection();
+                            }
+                        }
                     }
                 }
             }

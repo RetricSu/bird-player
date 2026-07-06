@@ -2,7 +2,7 @@ use super::AppComponent;
 use crate::app::t;
 use crate::app::{App, LibraryItem, LibraryPathId};
 use eframe::egui::{CollapsingHeader, Label, RichText, Sense, TextWrapMode};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct LibraryComponent;
 
@@ -181,11 +181,11 @@ impl AppComponent for LibraryComponent {
 
                                     // Handle click to add to current playlist
                                     if item_label.clicked() {
-                                        if let Some(current_playlist_idx) =
-                                            &ctx.app_settings.current_playlist_idx
+                                        if let Some(current_playlist) = ctx
+                                            .app_settings
+                                            .current_playlist_idx
+                                            .and_then(|idx| ctx.playlists.get_mut(idx))
                                         {
-                                            let current_playlist =
-                                                &mut ctx.playlists[*current_playlist_idx];
                                             if !current_playlist.tracks.contains(item) {
                                                 current_playlist.add((*item).clone());
                                             }
@@ -195,16 +195,16 @@ impl AppComponent for LibraryComponent {
                                     // Add context menu for individual tracks
                                     item_label.context_menu(|ui| {
                                         if ui.button(t("add_to_playlist")).clicked() {
-                                            if let Some(current_playlist_idx) =
-                                                &ctx.app_settings.current_playlist_idx
+                                            if let Some(current_playlist) = ctx
+                                                .app_settings
+                                                .current_playlist_idx
+                                                .and_then(|idx| ctx.playlists.get_mut(idx))
                                             {
-                                                let current_playlist =
-                                                    &mut ctx.playlists[*current_playlist_idx];
                                                 if !current_playlist.tracks.contains(item) {
                                                     current_playlist.add((*item).clone());
                                                 }
-                                                ui.close_menu();
                                             }
+                                            ui.close_menu();
                                         }
                                     });
                                 }
@@ -215,22 +215,26 @@ impl AppComponent for LibraryComponent {
                         section.header_response.context_menu(|ui| {
                             // Add context menu for the folder header
                             if ui.button(t("add_all_to_playlist")).clicked() {
-                                if let Some(current_playlist_idx) =
-                                    &ctx.app_settings.current_playlist_idx
+                                if let Some(current_playlist) = ctx
+                                    .app_settings
+                                    .current_playlist_idx
+                                    .and_then(|idx| ctx.playlists.get_mut(idx))
                                 {
-                                    let current_playlist =
-                                        &mut ctx.playlists[*current_playlist_idx];
-
                                     // Add all tracks from this folder to the playlist
                                     if let Some(items) = folder_items.get(&path_id) {
+                                        let mut existing_keys = current_playlist
+                                            .tracks
+                                            .iter()
+                                            .map(|track| track.key())
+                                            .collect::<HashSet<_>>();
                                         for item in items {
-                                            if !current_playlist.tracks.contains(item) {
+                                            if existing_keys.insert(item.key()) {
                                                 current_playlist.add((*item).clone());
                                             }
                                         }
                                     }
-                                    ui.close_menu();
                                 }
+                                ui.close_menu();
                             }
 
                             if ui.button(t("resync_folder")).clicked() {

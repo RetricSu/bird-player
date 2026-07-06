@@ -20,6 +20,10 @@ pub(super) fn render(ctx: &mut App, ui: &mut egui::Ui) {
     let Some(current_playlist_idx) = ctx.app_settings.current_playlist_idx else {
         return;
     };
+    if current_playlist_idx >= ctx.playlists.len() {
+        ctx.app_settings.current_playlist_idx = None;
+        return;
+    }
 
     let base_id = ui.id().with(("playlist", current_playlist_idx));
     let mut state = PlaylistTableState::load(ui, base_id);

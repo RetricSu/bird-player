@@ -364,12 +364,10 @@ impl Library {
         })?;
 
         let mut items = Vec::new();
+        let mut seen_paths = HashSet::new();
         for item_result in item_rows {
             let item = item_result?;
-            if !items
-                .iter()
-                .any(|existing: &LibraryItem| existing.path_ref() == item.path_ref())
-            {
+            if seen_paths.insert(item.path()) {
                 items.push(item);
             }
         }

@@ -736,15 +736,18 @@ impl PlaybackInfoPanel {
             .items()
             .iter()
             .filter_map(|item| {
-                let title = item.title().unwrap_or_default();
-                let artist = item.artist().unwrap_or_default();
-                let album = item.album().unwrap_or_default();
-                let genre = item.genre().unwrap_or_default();
-                let path = item.path().to_string_lossy().to_string();
-                let haystack =
-                    format!("{} {} {} {} {}", title, artist, album, genre, path).to_lowercase();
+                let title = item.title_ref().unwrap_or_default();
+                let artist = item.artist_ref().unwrap_or_default();
+                let album = item.album_ref().unwrap_or_default();
+                let genre = item.genre_ref().unwrap_or_default();
+                let path = item.path_ref().to_string_lossy();
 
-                if !haystack.contains(&query) {
+                let matches = [title, artist, album, genre]
+                    .iter()
+                    .any(|field| field.to_lowercase().contains(&query))
+                    || path.to_lowercase().contains(&query);
+
+                if !matches {
                     return None;
                 }
 
@@ -758,9 +761,9 @@ impl PlaybackInfoPanel {
 
                 Some(LibrarySearchResult {
                     track: item.clone(),
-                    title,
-                    artist,
-                    album,
+                    title: title.to_string(),
+                    artist: artist.to_string(),
+                    album: album.to_string(),
                     source,
                 })
             })

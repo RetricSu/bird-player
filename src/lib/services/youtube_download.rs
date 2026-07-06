@@ -188,46 +188,43 @@ impl YoutubeDownloadService {
                 }
             }
 
-            match child
+            if let Some(status) = child
                 .try_wait()
                 .map_err(|err| format!("Failed to wait for yt-dlp: {}", err))?
             {
-                Some(status) => {
-                    if let Some(handle) = stdout_handle {
-                        let _ = handle.join();
-                    }
-                    if let Some(handle) = stderr_handle {
-                        let _ = handle.join();
-                    }
-                    for line in line_rx.try_iter() {
-                        Self::handle_download_output_line(
-                            &line,
-                            &mut downloaded_files,
-                            &mut output_lines,
-                            event_tx,
-                        );
-                    }
-
-                    if !status.success() {
-                        let details = output_lines
-                            .iter()
-                            .rev()
-                            .take(8)
-                            .cloned()
-                            .collect::<Vec<_>>()
-                            .into_iter()
-                            .rev()
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        return Err(if details.trim().is_empty() {
-                            format!("yt-dlp failed with status {}", status)
-                        } else {
-                            details
-                        });
-                    }
-                    break;
+                if let Some(handle) = stdout_handle {
+                    let _ = handle.join();
                 }
-                None => {}
+                if let Some(handle) = stderr_handle {
+                    let _ = handle.join();
+                }
+                for line in line_rx.try_iter() {
+                    Self::handle_download_output_line(
+                        &line,
+                        &mut downloaded_files,
+                        &mut output_lines,
+                        event_tx,
+                    );
+                }
+
+                if !status.success() {
+                    let details = output_lines
+                        .iter()
+                        .rev()
+                        .take(8)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    return Err(if details.trim().is_empty() {
+                        format!("yt-dlp failed with status {}", status)
+                    } else {
+                        details
+                    });
+                }
+                break;
             }
         }
 
@@ -283,9 +280,21 @@ impl YoutubeDownloadService {
         std::thread::spawn(move || {
             use std::io::BufRead;
 
-            let reader = std::io::BufReader::new(stream);
-            for line in reader.lines().map_while(Result::ok) {
+            let mut reader = std::io::BufReader::new(stream);
+            let mut buf = Vec::new();
+            while let Ok(n) = reader.read_until(b'\n', &mut buf) {
+                if n == 0 {
+                    break;
+                }
+                if buf.ends_with(b"\n") {
+                    buf.pop();
+                    if buf.ends_with(b"\r") {
+                        buf.pop();
+                    }
+                }
+                let line = String::from_utf8_lossy(&buf).into_owned();
                 let _ = line_tx.send(line);
+                buf.clear();
             }
         })
     }
