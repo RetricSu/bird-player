@@ -4,8 +4,13 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
-    // Make cargo track changes to Cargo.toml
+    // Make cargo track changes to Cargo.toml and the current git ref.
     println!("cargo:rerun-if-changed=Cargo.toml");
+    print_rerun_if_exists(".git/HEAD");
+    print_rerun_if_exists(".git/packed-refs");
+    if let Some(ref_path) = current_git_ref_path() {
+        print_rerun_if_exists(&ref_path);
+    }
 
     // Configure Windows to use the windows subsystem (no console window)
     if env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "windows" {
@@ -38,4 +43,16 @@ fn main() {
         ),
     )
     .unwrap();
+}
+
+fn print_rerun_if_exists(path: &str) {
+    if Path::new(path).exists() {
+        println!("cargo:rerun-if-changed={path}");
+    }
+}
+
+fn current_git_ref_path() -> Option<String> {
+    let head = fs::read_to_string(".git/HEAD").ok()?;
+    let ref_name = head.strip_prefix("ref: ")?.trim();
+    Some(format!(".git/{ref_name}"))
 }

@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use super::error::AppLoadError;
 use super::i18n;
 use super::lib_services::{
-    LibraryImportService, LyricsManager, PlayerRestoreService, YoutubeDownloadEvent,
-    YoutubeDownloadService,
+    LibraryImportService, LyricsManager, PlayerRestoreService, PlaylistExportService,
+    YoutubeDownloadEvent, YoutubeDownloadService,
 };
 use super::library::{Library, LibraryCommand, LibraryPath};
 pub use super::library::{LibraryItem, LibraryPathId};
@@ -208,7 +208,7 @@ impl App {
         // Fetch lyrics for restored track if needed
         if should_fetch_lyrics {
             self.ui_state.should_fetch_lyrics_on_init = true;
-            self.fetch_lyrics_for_current_track();
+            self.auto_fetch_lyrics_for_current_track();
             self.ui_state.should_fetch_lyrics_on_init = false;
         }
 
@@ -302,21 +302,88 @@ impl App {
         }
 
         self.ui_state.youtube_download_in_progress = true;
-        self.ui_state.youtube_download_status = Some(i18n::t("downloading"));
+        self.ui_state.youtube_download_resync_in_progress = false;
+        self.ui_state.youtube_download_progress = None;
+        self.ui_state.youtube_download_last_file_count = None;
+        self.ui_state.youtube_download_status = Some(i18n::t("download_preparing"));
 
         YoutubeDownloadService::download_authorized_audio(
             url,
             self.ui_state.youtube_download_dir.clone(),
+            self.ui_state.youtube_download_include_playlist,
             self.youtube_download_tx().clone(),
         );
     }
 
-    pub fn handle_youtube_download_event(&mut self, event: YoutubeDownloadEvent) {
-        self.ui_state.youtube_download_in_progress = false;
+    pub fn start_youtube_discover_search(&mut self) {
+        if self.ui_state.youtube_discover_in_progress {
+            return;
+        }
 
+        let query = self.ui_state.youtube_discover_query.trim().to_string();
+        if query.is_empty() {
+            self.ui_state.youtube_discover_status = Some(i18n::t("search_query_required"));
+            return;
+        }
+
+        self.ui_state.youtube_discover_in_progress = true;
+        self.ui_state.youtube_discover_results.clear();
+        self.ui_state.youtube_discover_status = Some(i18n::t("youtube_discover_searching"));
+
+        YoutubeDownloadService::search_youtube(query, 20, self.youtube_download_tx().clone());
+    }
+
+    pub fn export_playlist_to_archive(&mut self, playlist_idx: usize) {
+        let Some(playlist) = self.playlists.get(playlist_idx) else {
+            self.ui_state.playlist_export_status = Some(i18n::t("playlist_export_select"));
+            return;
+        };
+
+        if playlist.tracks.is_empty() {
+            self.ui_state.playlist_export_status = Some(i18n::t("playlist_export_empty"));
+            return;
+        }
+
+        let Some(output_path) = rfd::FileDialog::new()
+            .set_file_name(&PlaylistExportService::default_file_name(playlist))
+            .add_filter("Bird Playlist", &["zip"])
+            .save_file()
+        else {
+            return;
+        };
+
+        match PlaylistExportService::export_playlist(playlist, &output_path) {
+            Ok(result) => {
+                self.ui_state.playlist_export_status = Some(i18n::tf(
+                    "playlist_export_done",
+                    &[
+                        &result.track_count.to_string(),
+                        &result.output_path.display().to_string(),
+                    ],
+                ));
+            }
+            Err(err) => {
+                self.ui_state.playlist_export_status = Some(err);
+            }
+        }
+    }
+
+    pub fn handle_youtube_download_event(&mut self, event: YoutubeDownloadEvent) {
         match event {
+            YoutubeDownloadEvent::Progress(progress) => {
+                self.ui_state.youtube_download_in_progress = true;
+                self.ui_state.youtube_download_progress = Some(progress);
+                self.ui_state.youtube_download_status = Some(i18n::tf(
+                    "download_progress",
+                    &[&format!("{:.0}", progress * 100.0)],
+                ));
+            }
             YoutubeDownloadEvent::Finished(Ok(result)) => {
+                self.ui_state.youtube_download_in_progress = false;
+                self.ui_state.youtube_download_progress = None;
                 let file_count = result.downloaded_files.len();
+                self.ui_state.youtube_download_last_file_count = Some(file_count);
+                self.ui_state.youtube_download_resync_in_progress = true;
                 self.ui_state.youtube_download_status = Some(if file_count == 0 {
                     i18n::t("download_finished_resync")
                 } else {
@@ -337,7 +404,25 @@ impl App {
                 }
             }
             YoutubeDownloadEvent::Finished(Err(err)) => {
+                self.ui_state.youtube_download_in_progress = false;
+                self.ui_state.youtube_download_resync_in_progress = false;
+                self.ui_state.youtube_download_progress = None;
+                self.ui_state.youtube_download_last_file_count = None;
                 self.ui_state.youtube_download_status = Some(err);
+            }
+            YoutubeDownloadEvent::SearchFinished(Ok(results)) => {
+                self.ui_state.youtube_discover_in_progress = false;
+                self.ui_state.youtube_discover_status = Some(if results.is_empty() {
+                    i18n::t("no_matches_found")
+                } else {
+                    i18n::tf("youtube_discover_results", &[&results.len().to_string()])
+                });
+                self.ui_state.youtube_discover_results = results;
+            }
+            YoutubeDownloadEvent::SearchFinished(Err(err)) => {
+                self.ui_state.youtube_discover_in_progress = false;
+                self.ui_state.youtube_discover_results.clear();
+                self.ui_state.youtube_discover_status = Some(err);
             }
         }
     }
@@ -494,12 +579,12 @@ impl App {
                     tracing::info!("Track finished, getting next...");
                     let playlist_clone = self
                         .app_settings
-                        .current_playlist_idx
+                        .playing_playlist_idx
                         .and_then(|idx| self.playlists.get(idx).cloned());
                     if let Some(playlist) = playlist_clone {
                         PlayerService::next_track(self.player_mut_ref(), &playlist);
                     }
-                    self.fetch_lyrics_for_current_track();
+                    self.auto_fetch_lyrics_for_current_track();
                 }
                 AudioEvent::PlaybackStateChanged(is_playing) => {
                     tracing::info!(
@@ -528,6 +613,7 @@ impl App {
 
     /// Process a freshly received lyrics response.
     pub fn handle_lyrics_response(&mut self, should_show_panel: bool) {
+        let should_show_panel = should_show_panel && self.ui_state.auto_fetch_missing_lyrics;
         let track_key = self
             .runtime
             .as_ref()
@@ -564,13 +650,37 @@ impl App {
     pub fn process_library_command(&mut self, lib_cmd: LibraryCommand) {
         if matches!(lib_cmd, LibraryCommand::AddPathId(_)) {
             self.ui_state.is_importing = false;
+            if self.ui_state.youtube_download_resync_in_progress {
+                self.ui_state.youtube_download_resync_in_progress = false;
+                self.ui_state.youtube_download_progress = None;
+                if let Some(file_count) = self.ui_state.youtube_download_last_file_count {
+                    self.ui_state.youtube_download_status = Some(i18n::tf(
+                        "downloaded_files_done",
+                        &[&file_count.to_string()],
+                    ));
+                }
+            }
             // Also explicitly save state after completing an import!
             self.save_state();
         }
         LibraryService::process_library_command(&mut self.library, lib_cmd);
     }
 
-    /// Fetch lyrics for the currently selected track
+    /// Fetch lyrics after an automatic track change, honoring the user preference.
+    pub fn auto_fetch_lyrics_for_current_track(&mut self) {
+        if !self.ui_state.auto_fetch_missing_lyrics {
+            let lyrics_manager = self.lyrics_manager_mut();
+            lyrics_manager.set_current_lyrics(None);
+            let _ = lyrics_manager.take_pending_lyrics_rx();
+            self.ui_state.lyrics_fetch_state = LyricsFetchState::Idle;
+            self.ui_state.show_lyrics_panel = false;
+            return;
+        }
+
+        self.fetch_lyrics_for_current_track();
+    }
+
+    /// Fetch lyrics for the currently selected track.
     pub fn fetch_lyrics_for_current_track(&mut self) {
         if self.runtime.is_none() {
             tracing::warn!("⚠️  Player not available for lyrics fetch");

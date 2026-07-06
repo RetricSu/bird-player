@@ -1,10 +1,11 @@
 use super::language_selector::LanguageSelector;
 use super::AppComponent;
 use crate::app::constants::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
+use crate::app::style::tokens;
 use crate::app::t;
 use crate::app::version::version_info;
 use crate::app::App;
-use eframe::egui::{self, Color32, RichText, Window};
+use eframe::egui::{self, Color32, RichText, Stroke, Window};
 use rfd;
 
 pub struct WindowChrome;
@@ -18,6 +19,9 @@ impl AppComponent for WindowChrome {
             // hover-tinted buttons so they share a visual language with the
             // window control buttons on the right edge of the same row.
             crate::app::style::borderless_button_visuals(ui.visuals_mut());
+
+            Self::render_brand_mark(ui);
+            ui.separator();
 
             // Menu list
             ui.menu_button(t("file"), |ui| {
@@ -138,7 +142,7 @@ impl AppComponent for WindowChrome {
             });
 
             if fetch_lyrics {
-                ctx.fetch_lyrics_for_current_track();
+                ctx.auto_fetch_lyrics_for_current_track();
             }
 
             // Add View menu
@@ -149,9 +153,17 @@ impl AppComponent for WindowChrome {
                     t("show_lyrics")
                 };
                 if ui.button(lyrics_text).clicked() {
-                    ctx.ui_state.show_lyrics_panel = !ctx.ui_state.show_lyrics_panel;
+                    let will_show = !ctx.ui_state.show_lyrics_panel;
+                    ctx.ui_state.show_lyrics_panel = will_show;
+                    if will_show {
+                        ctx.fetch_lyrics_for_current_track();
+                    }
                     ui.close_menu();
                 }
+                ui.checkbox(
+                    &mut ctx.ui_state.auto_fetch_missing_lyrics,
+                    t("auto_fetch_missing_lyrics"),
+                );
 
                 ui.separator();
 
@@ -327,5 +339,57 @@ impl AppComponent for WindowChrome {
                     });
                 });
         }
+    }
+}
+
+impl WindowChrome {
+    fn render_brand_mark(ui: &mut egui::Ui) {
+        let size = egui::vec2(20.0, 18.0);
+        let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+        let to_pos = |x: f32, y: f32| {
+            egui::pos2(
+                egui::lerp(rect.left()..=rect.right(), x),
+                egui::lerp(rect.top()..=rect.bottom(), y),
+            )
+        };
+
+        let stroke = Stroke::new(1.55, tokens::color::BRAND);
+        let painter = ui.painter();
+
+        painter.add(egui::Shape::CubicBezier(
+            egui::epaint::CubicBezierShape::from_points_stroke(
+                [
+                    to_pos(0.34, 0.44),
+                    to_pos(0.48, 0.08),
+                    to_pos(0.78, 0.18),
+                    to_pos(0.96, 0.34),
+                ],
+                false,
+                Color32::TRANSPARENT,
+                stroke,
+            ),
+        ));
+
+        painter.line(
+            vec![to_pos(0.34, 0.44), to_pos(0.05, 0.55), to_pos(0.39, 0.68)],
+            stroke,
+        );
+
+        painter.add(egui::Shape::CubicBezier(
+            egui::epaint::CubicBezierShape::from_points_stroke(
+                [
+                    to_pos(0.39, 0.68),
+                    to_pos(0.53, 0.72),
+                    to_pos(0.57, 0.82),
+                    to_pos(0.57, 0.98),
+                ],
+                false,
+                Color32::TRANSPARENT,
+                stroke,
+            ),
+        ));
+
+        painter.line(vec![to_pos(0.05, 0.55), to_pos(0.31, 0.45)], stroke);
+        painter.circle_stroke(to_pos(0.50, 0.34), 1.95, stroke);
     }
 }

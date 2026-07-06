@@ -57,6 +57,10 @@ pub fn init() {
     en.insert("view".to_string(), "View".to_string());
     en.insert("show_lyrics".to_string(), "Show Lyrics".to_string());
     en.insert("hide_lyrics".to_string(), "Hide Lyrics".to_string());
+    en.insert(
+        "auto_fetch_missing_lyrics".to_string(),
+        "Auto-fetch missing lyrics on track change".to_string(),
+    );
 
     // Help menu
     en.insert("help".to_string(), "Help".to_string());
@@ -83,6 +87,16 @@ pub fn init() {
     en.insert("mini".to_string(), "Mini".to_string());
     en.insert("playlist_btn".to_string(), "Playlist".to_string());
     en.insert("lyrics".to_string(), "Lyrics".to_string());
+    en.insert("library_search".to_string(), "Search library".to_string());
+    en.insert(
+        "type_to_search".to_string(),
+        "Type to search...".to_string(),
+    );
+    en.insert("close_search".to_string(), "Close search".to_string());
+    en.insert(
+        "no_matches_found".to_string(),
+        "No matches found".to_string(),
+    );
 
     // Lyrics component
     en.insert("upload_lyrics".to_string(), "Upload Lyrics".to_string());
@@ -106,6 +120,7 @@ pub fn init() {
         "add_all_to_playlist".to_string(),
         "Add all to playlist".to_string(),
     );
+    en.insert("resync_folder".to_string(), "Re-sync folder".to_string());
     en.insert(
         "remove_from_library".to_string(),
         "Remove from library".to_string(),
@@ -119,6 +134,15 @@ pub fn init() {
         "Only download audio you are authorized to save locally.".to_string(),
     );
     en.insert("youtube_url".to_string(), "YouTube URL".to_string());
+    en.insert(
+        "download_entire_playlist".to_string(),
+        "Download entire playlist".to_string(),
+    );
+    en.insert(
+        "download_entire_playlist_hint".to_string(),
+        "When off, playlist parameters are removed and only the current video is downloaded."
+            .to_string(),
+    );
     en.insert("save_to".to_string(), "Save to".to_string());
     en.insert(
         "choose_download_folder".to_string(),
@@ -127,7 +151,15 @@ pub fn init() {
     en.insert("download".to_string(), "Download".to_string());
     en.insert("clear".to_string(), "Clear".to_string());
     en.insert("url_required".to_string(), "URL is required".to_string());
+    en.insert(
+        "download_preparing".to_string(),
+        "Preparing download...".to_string(),
+    );
     en.insert("downloading".to_string(), "Downloading...".to_string());
+    en.insert(
+        "download_progress".to_string(),
+        "Downloading... {}%".to_string(),
+    );
     en.insert(
         "download_finished_resync".to_string(),
         "Download finished. Re-syncing folder...".to_string(),
@@ -135,6 +167,63 @@ pub fn init() {
     en.insert(
         "downloaded_files_resync".to_string(),
         "Downloaded {} file(s). Re-syncing folder...".to_string(),
+    );
+    en.insert(
+        "downloaded_files_done".to_string(),
+        "Downloaded {} file(s). Folder is synced.".to_string(),
+    );
+    en.insert(
+        "youtube_discover".to_string(),
+        "Discover YouTube".to_string(),
+    );
+    en.insert(
+        "youtube_discover_notice".to_string(),
+        "Search YouTube, then use a result as the download URL.".to_string(),
+    );
+    en.insert(
+        "youtube_discover_query".to_string(),
+        "Search YouTube".to_string(),
+    );
+    en.insert(
+        "youtube_discover_placeholder".to_string(),
+        "Song, artist, live session...".to_string(),
+    );
+    en.insert("search".to_string(), "Search".to_string());
+    en.insert("use_result".to_string(), "Use".to_string());
+    en.insert(
+        "search_query_required".to_string(),
+        "Enter a search query".to_string(),
+    );
+    en.insert(
+        "youtube_discover_searching".to_string(),
+        "Searching YouTube...".to_string(),
+    );
+    en.insert(
+        "youtube_discover_results".to_string(),
+        "{} result(s) found".to_string(),
+    );
+    en.insert("export_playlist".to_string(), "Export playlist".to_string());
+    en.insert(
+        "playlist_export_notice".to_string(),
+        "Create a portable archive with this playlist's music files and metadata.".to_string(),
+    );
+    en.insert(
+        "playlist_export_select".to_string(),
+        "Choose a playlist".to_string(),
+    );
+    en.insert(
+        "playlist_export_empty".to_string(),
+        "This playlist has no tracks to export.".to_string(),
+    );
+    en.insert("playlist_export_tracks".to_string(), "tracks".to_string());
+    en.insert(
+        "playlist_export_done".to_string(),
+        "Exported {} track(s) to {}".to_string(),
+    );
+    en.insert("export".to_string(), "Export".to_string());
+    en.insert(
+        "untitled_playlist".to_string(),
+        "Untitled Playlist".to_string(),
     );
 
     // Playlist tabs component
@@ -185,6 +274,10 @@ pub fn init() {
     zh.insert("view".to_string(), "视图".to_string());
     zh.insert("show_lyrics".to_string(), "显示歌词".to_string());
     zh.insert("hide_lyrics".to_string(), "隐藏歌词".to_string());
+    zh.insert(
+        "auto_fetch_missing_lyrics".to_string(),
+        "切歌时自动获取缺失歌词".to_string(),
+    );
 
     // Help menu
     zh.insert("help".to_string(), "帮助".to_string());
@@ -211,6 +304,10 @@ pub fn init() {
     zh.insert("mini".to_string(), "迷你".to_string());
     zh.insert("playlist_btn".to_string(), "列表".to_string());
     zh.insert("lyrics".to_string(), "歌词".to_string());
+    zh.insert("library_search".to_string(), "搜索音乐库".to_string());
+    zh.insert("type_to_search".to_string(), "输入搜索...".to_string());
+    zh.insert("close_search".to_string(), "关闭搜索".to_string());
+    zh.insert("no_matches_found".to_string(), "没有匹配结果".to_string());
 
     // Lyrics component
     zh.insert("upload_lyrics".to_string(), "上传歌词".to_string());
@@ -228,6 +325,7 @@ pub fn init() {
         "add_all_to_playlist".to_string(),
         "全部添加到播放列表".to_string(),
     );
+    zh.insert("resync_folder".to_string(), "重新同步此文件夹".to_string());
     zh.insert("remove_from_library".to_string(), "从库中移除".to_string());
     zh.insert(
         "download_authorized_audio".to_string(),
@@ -238,6 +336,14 @@ pub fn init() {
         "请只下载你有权保存到本地的音频。".to_string(),
     );
     zh.insert("youtube_url".to_string(), "YouTube URL".to_string());
+    zh.insert(
+        "download_entire_playlist".to_string(),
+        "下载整个播放列表".to_string(),
+    );
+    zh.insert(
+        "download_entire_playlist_hint".to_string(),
+        "关闭时会移除播放列表参数，只下载当前视频。".to_string(),
+    );
     zh.insert("save_to".to_string(), "保存到".to_string());
     zh.insert(
         "choose_download_folder".to_string(),
@@ -246,7 +352,15 @@ pub fn init() {
     zh.insert("download".to_string(), "下载".to_string());
     zh.insert("clear".to_string(), "清空".to_string());
     zh.insert("url_required".to_string(), "请输入 URL".to_string());
+    zh.insert(
+        "download_preparing".to_string(),
+        "正在准备下载...".to_string(),
+    );
     zh.insert("downloading".to_string(), "正在下载...".to_string());
+    zh.insert(
+        "download_progress".to_string(),
+        "正在下载... {}%".to_string(),
+    );
     zh.insert(
         "download_finished_resync".to_string(),
         "下载完成，正在重新同步文件夹...".to_string(),
@@ -254,6 +368,60 @@ pub fn init() {
     zh.insert(
         "downloaded_files_resync".to_string(),
         "已下载 {} 个文件，正在重新同步文件夹...".to_string(),
+    );
+    zh.insert(
+        "downloaded_files_done".to_string(),
+        "已下载 {} 个文件，文件夹已同步。".to_string(),
+    );
+    zh.insert("youtube_discover".to_string(), "发现 YouTube".to_string());
+    zh.insert(
+        "youtube_discover_notice".to_string(),
+        "搜索 YouTube，然后把结果作为下载 URL 使用。".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_query".to_string(),
+        "搜索 YouTube".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_placeholder".to_string(),
+        "歌曲、艺人、现场版本...".to_string(),
+    );
+    zh.insert("search".to_string(), "搜索".to_string());
+    zh.insert("use_result".to_string(), "使用".to_string());
+    zh.insert(
+        "search_query_required".to_string(),
+        "请输入搜索关键词".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_searching".to_string(),
+        "正在搜索 YouTube...".to_string(),
+    );
+    zh.insert(
+        "youtube_discover_results".to_string(),
+        "找到 {} 个结果".to_string(),
+    );
+    zh.insert("export_playlist".to_string(), "导出播放列表".to_string());
+    zh.insert(
+        "playlist_export_notice".to_string(),
+        "把播放列表的音乐文件和元信息打包成可导入的压缩包。".to_string(),
+    );
+    zh.insert(
+        "playlist_export_select".to_string(),
+        "选择播放列表".to_string(),
+    );
+    zh.insert(
+        "playlist_export_empty".to_string(),
+        "这个播放列表没有可导出的歌曲。".to_string(),
+    );
+    zh.insert("playlist_export_tracks".to_string(), "首歌曲".to_string());
+    zh.insert(
+        "playlist_export_done".to_string(),
+        "已导出 {} 首歌曲到 {}".to_string(),
+    );
+    zh.insert("export".to_string(), "导出".to_string());
+    zh.insert(
+        "untitled_playlist".to_string(),
+        "未命名播放列表".to_string(),
     );
 
     // Playlist tabs component

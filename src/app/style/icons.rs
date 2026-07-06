@@ -24,9 +24,14 @@ pub const VOLUME: &str = p::SPEAKER_HIGH;
 pub const VOLUME_MUTE: &str = p::SPEAKER_X;
 /// Toggles the desktop-lyrics floating viewport.
 pub const LYRICS_TOGGLE: &str = p::MICROPHONE_STAGE;
+/// Toggles the in-app lyrics side panel.
+pub const LYRICS_PANEL: &str = p::SUBTITLES;
 pub const SEARCH: &str = p::MAGNIFYING_GLASS;
 pub const CLOSE: &str = p::X;
 pub const DOWNLOAD: &str = p::DOWNLOAD_SIMPLE;
+pub const DISCOVER: &str = p::COMPASS;
+pub const EXPORT: &str = p::EXPORT;
+pub const YOUTUBE: &str = p::YOUTUBE_LOGO;
 pub const FOLDER: &str = p::FOLDER_OPEN;
 /// Generic "add / new" affordance — used by library/playlist "+" buttons.
 pub const PLUS: &str = p::PLUS;

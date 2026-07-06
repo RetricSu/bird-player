@@ -2,7 +2,7 @@ use super::AppComponent;
 use crate::app::t;
 use crate::app::{App, LibraryItem, LibraryPathId};
 use eframe::egui::{CollapsingHeader, Label, RichText, Sense, TextWrapMode};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct LibraryComponent;
 
@@ -12,6 +12,7 @@ impl AppComponent for LibraryComponent {
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
         // Keep track of paths to remove (if any)
         let mut path_to_remove: Option<LibraryPathId> = None;
+        let mut path_to_resync: Option<LibraryPathId> = None;
 
         // Header is rendered OUTSIDE the ScrollArea so it stays pinned and
         // its bottom rule lines up with the playlist tabs / lyrics panel
@@ -111,132 +112,159 @@ impl AppComponent for LibraryComponent {
             }
         });
 
-        eframe::egui::ScrollArea::both().show(ui, |ui| {
-            // Group library items by their library_id (which corresponds to folder paths)
-            let mut folder_items: HashMap<LibraryPathId, Vec<&LibraryItem>> = HashMap::new();
+        eframe::egui::ScrollArea::both()
+            .scroll_bar_visibility(eframe::egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+            .show(ui, |ui| {
+                // Group library items by their library_id (which corresponds to folder paths)
+                let mut folder_items: HashMap<LibraryPathId, Vec<&LibraryItem>> = HashMap::new();
 
-            // Collect all library items and group them by path id
-            for item in ctx.library.items() {
-                folder_items
-                    .entry(item.library_id())
-                    .or_default()
-                    .push(item);
-            }
+                // Collect all library items and group them by path id
+                for item in ctx.library.items() {
+                    folder_items
+                        .entry(item.library_id())
+                        .or_default()
+                        .push(item);
+                }
 
-            // Iterate through library paths and display as folders
-            for lib_path in ctx.library.paths() {
-                if lib_path.status() == crate::app::library::LibraryPathStatus::Imported {
-                    let path_id = lib_path.id();
-                    let folder_name = lib_path.display_name();
+                // Iterate through library paths and display as folders
+                for lib_path in ctx.library.paths() {
+                    if lib_path.status() == crate::app::library::LibraryPathStatus::Imported {
+                        let path_id = lib_path.id();
+                        let folder_name = lib_path.display_name();
 
-                    // Create a header with default behavior that allows individual control
-                    // but is also affected by the global expand/collapse actions
-                    let header = CollapsingHeader::new(
-                        RichText::new(folder_name).size(crate::app::style::tokens::text::SM),
-                    )
-                    .default_open(ctx.ui_state.library_folders_expanded); // Use the global setting after memory clear
+                        // Create a header with default behavior that allows individual control
+                        // but is also affected by the global expand/collapse actions
+                        let header = CollapsingHeader::new(
+                            RichText::new(folder_name).size(crate::app::style::tokens::text::SM),
+                        )
+                        .default_open(ctx.ui_state.library_folders_expanded); // Use the global setting after memory clear
 
-                    // Show the header and get its response
-                    let section = header.show(ui, |ui| {
-                        // Only show contents if the header is expanded
-                        if let Some(items) = folder_items.get(&path_id) {
-                            // Create a sorted copy for display
-                            let mut sorted_items = items.clone();
-                            sorted_items.sort_by(|a, b| {
-                                a.title()
-                                    .unwrap_or_default()
-                                    .cmp(&b.title().unwrap_or_default())
-                            });
+                        // Show the header and get its response
+                        let section = header.show(ui, |ui| {
+                            // Only show contents if the header is expanded
+                            if let Some(items) = folder_items.get(&path_id) {
+                                // Create a sorted copy for display
+                                let mut sorted_items = items.clone();
+                                sorted_items.sort_by(|a, b| {
+                                    a.title()
+                                        .unwrap_or_default()
+                                        .cmp(&b.title().unwrap_or_default())
+                                });
 
-                            for item in sorted_items {
-                                // Format display with title and artist if available
-                                let display_text = match (item.title(), item.artist()) {
-                                    (Some(title), Some(artist)) => {
-                                        format!("{} - {}", title, artist)
-                                    }
-                                    (Some(title), None) => title,
-                                    (None, Some(artist)) => {
-                                        format!("{} - {}", t("unknown_title"), artist)
-                                    }
-                                    (None, None) => t("unknown_track"),
-                                };
-
-                                // Create a clickable label for each track
-                                let item_label = ui.add(
-                                    Label::new(
-                                        RichText::new(display_text)
-                                            .size(crate::app::style::tokens::text::SM),
-                                    )
-                                    .sense(Sense::click())
-                                    .wrap_mode(TextWrapMode::Truncate),
-                                );
-                                if item_label.hovered() {
-                                    ui.ctx()
-                                        .set_cursor_icon(eframe::egui::CursorIcon::PointingHand);
-                                }
-
-                                // Handle click to add to current playlist
-                                if item_label.clicked() {
-                                    if let Some(current_playlist_idx) =
-                                        &ctx.app_settings.current_playlist_idx
-                                    {
-                                        let current_playlist =
-                                            &mut ctx.playlists[*current_playlist_idx];
-                                        if !current_playlist.tracks.contains(item) {
-                                            current_playlist.add((*item).clone());
+                                for item in sorted_items {
+                                    // Format display with title and artist if available
+                                    let display_text = match (item.title(), item.artist()) {
+                                        (Some(title), Some(artist)) => {
+                                            format!("{} - {}", title, artist)
                                         }
-                                    }
-                                }
+                                        (Some(title), None) => title,
+                                        (None, Some(artist)) => {
+                                            format!("{} - {}", t("unknown_title"), artist)
+                                        }
+                                        (None, None) => t("unknown_track"),
+                                    };
 
-                                // Add context menu for individual tracks
-                                item_label.context_menu(|ui| {
-                                    if ui.button(t("add_to_playlist")).clicked() {
-                                        if let Some(current_playlist_idx) =
-                                            &ctx.app_settings.current_playlist_idx
+                                    // Create a clickable label for each track
+                                    let item_label = ui.add(
+                                        Label::new(
+                                            RichText::new(display_text)
+                                                .size(crate::app::style::tokens::text::SM),
+                                        )
+                                        .sense(Sense::click())
+                                        .wrap_mode(TextWrapMode::Truncate),
+                                    );
+                                    if item_label.hovered() {
+                                        ui.ctx().set_cursor_icon(
+                                            eframe::egui::CursorIcon::PointingHand,
+                                        );
+                                    }
+
+                                    // Handle click to add to current playlist
+                                    if item_label.clicked() {
+                                        if let Some(current_playlist) = ctx
+                                            .app_settings
+                                            .current_playlist_idx
+                                            .and_then(|idx| ctx.playlists.get_mut(idx))
                                         {
-                                            let current_playlist =
-                                                &mut ctx.playlists[*current_playlist_idx];
                                             if !current_playlist.tracks.contains(item) {
                                                 current_playlist.add((*item).clone());
                                             }
-                                            ui.close_menu();
                                         }
                                     }
-                                });
+
+                                    // Add context menu for individual tracks
+                                    item_label.context_menu(|ui| {
+                                        if ui.button(t("add_to_playlist")).clicked() {
+                                            if let Some(current_playlist) = ctx
+                                                .app_settings
+                                                .current_playlist_idx
+                                                .and_then(|idx| ctx.playlists.get_mut(idx))
+                                            {
+                                                if !current_playlist.tracks.contains(item) {
+                                                    current_playlist.add((*item).clone());
+                                                }
+                                            }
+                                            ui.close_menu();
+                                        }
+                                    });
+                                }
                             }
-                        }
-                    });
+                        });
 
-                    // Add context menu to the header response
-                    section.header_response.context_menu(|ui| {
-                        // Add context menu for the folder header
-                        if ui.button(t("add_all_to_playlist")).clicked() {
-                            if let Some(current_playlist_idx) =
-                                &ctx.app_settings.current_playlist_idx
-                            {
-                                let current_playlist = &mut ctx.playlists[*current_playlist_idx];
-
-                                // Add all tracks from this folder to the playlist
-                                if let Some(items) = folder_items.get(&path_id) {
-                                    for item in items {
-                                        if !current_playlist.tracks.contains(item) {
-                                            current_playlist.add((*item).clone());
+                        // Add context menu to the header response
+                        section.header_response.context_menu(|ui| {
+                            // Add context menu for the folder header
+                            if ui.button(t("add_all_to_playlist")).clicked() {
+                                if let Some(current_playlist) = ctx
+                                    .app_settings
+                                    .current_playlist_idx
+                                    .and_then(|idx| ctx.playlists.get_mut(idx))
+                                {
+                                    // Add all tracks from this folder to the playlist
+                                    if let Some(items) = folder_items.get(&path_id) {
+                                        let mut existing_keys = current_playlist
+                                            .tracks
+                                            .iter()
+                                            .map(|track| track.key())
+                                            .collect::<HashSet<_>>();
+                                        for item in items {
+                                            if existing_keys.insert(item.key()) {
+                                                current_playlist.add((*item).clone());
+                                            }
                                         }
                                     }
                                 }
                                 ui.close_menu();
                             }
-                        }
 
-                        if ui.button(t("remove_from_library")).clicked() {
-                            // Mark this path for removal after the loop
-                            path_to_remove = Some(path_id);
-                            ui.close_menu();
-                        }
-                    });
+                            if ui.button(t("resync_folder")).clicked() {
+                                path_to_resync = Some(path_id);
+                                ui.close_menu();
+                            }
+
+                            if ui.button(t("remove_from_library")).clicked() {
+                                // Mark this path for removal after the loop
+                                path_to_remove = Some(path_id);
+                                ui.close_menu();
+                            }
+                        });
+                    }
                 }
+            });
+
+        if let Some(path_id) = path_to_resync {
+            ctx.library.set_path_to_not_imported(path_id);
+            let path_to_import = ctx
+                .library
+                .paths()
+                .iter()
+                .find(|path| path.id() == path_id)
+                .cloned();
+
+            if let Some(path) = path_to_import {
+                ctx.import_library_paths(&path);
             }
-        });
+        }
 
         // Process any path removal after rendering the UI
         if let Some(path_id) = path_to_remove {

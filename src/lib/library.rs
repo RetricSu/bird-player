@@ -1,5 +1,6 @@
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -110,24 +111,55 @@ impl Library {
     }
 
     pub fn add_item(&mut self, library_item: LibraryItem) {
-        // Check if an item with this file_hash already exists
-        if let Some(idx) = self
+        let existing_idx = self
             .items
             .iter()
-            .position(|item| item.file_hash() == library_item.file_hash())
-        {
-            // Update the existing item but preserve its key
+            .position(|item| item.path_ref() == library_item.path_ref())
+            .or_else(|| {
+                self.items
+                    .iter()
+                    .position(|item| item.file_hash() == library_item.file_hash())
+            });
+
+        if let Some(idx) = existing_idx {
             let existing_key = self.items[idx].key();
+            let existing_lyrics = self.items[idx].lyrics();
             let mut updated_item = library_item;
             updated_item.set_key(existing_key);
+            if updated_item.lyrics().is_none() {
+                updated_item.replace_lyrics(existing_lyrics);
+            }
             self.items[idx] = updated_item;
+
+            let updated_path = self.items[idx].path();
+            let updated_hash = self.items[idx].file_hash().to_string();
+            let updated_key = self.items[idx].key();
+            self.items.retain(|item| {
+                item.key_str() == updated_key
+                    || (item.path_ref() != updated_path.as_path()
+                        && item.file_hash() != updated_hash)
+            });
         } else {
-            // Add as a new item
             self.items.push(library_item);
         }
     }
 
     pub fn add_view(&mut self, library_view: LibraryView) {
+        let incoming_path_ids: HashSet<LibraryPathId> = library_view
+            .containers
+            .iter()
+            .flat_map(|container| container.items.iter().map(LibraryItem::library_id))
+            .collect();
+
+        if !incoming_path_ids.is_empty() {
+            self.library_view.containers.retain(|container| {
+                !container
+                    .items
+                    .iter()
+                    .any(|item| incoming_path_ids.contains(&item.library_id()))
+            });
+        }
+
         let mut new = library_view.containers.clone();
 
         self.library_view.containers.append(&mut new);
@@ -178,6 +210,34 @@ impl Library {
                     path.display_name()
                 ],
             )?;
+        }
+
+        let live_item_keys: HashSet<String> = self.items.iter().map(LibraryItem::key).collect();
+        let existing_item_keys = {
+            let mut stmt = tx.prepare("SELECT key FROM library_items")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            let mut keys = Vec::new();
+            for row in rows {
+                keys.push(row?);
+            }
+            keys
+        };
+
+        for key in existing_item_keys {
+            if !live_item_keys.contains(&key) {
+                tx.execute(
+                    "DELETE FROM playlist_items WHERE library_item_id = ?1",
+                    rusqlite::params![key],
+                )?;
+                tx.execute(
+                    "DELETE FROM pictures WHERE library_item_id = ?1",
+                    rusqlite::params![key],
+                )?;
+                tx.execute(
+                    "DELETE FROM library_items WHERE key = ?1",
+                    rusqlite::params![key],
+                )?;
+            }
         }
 
         // Save all library items
@@ -304,8 +364,12 @@ impl Library {
         })?;
 
         let mut items = Vec::new();
+        let mut seen_paths = HashSet::new();
         for item_result in item_rows {
-            items.push(item_result?);
+            let item = item_result?;
+            if seen_paths.insert(item.path()) {
+                items.push(item);
+            }
         }
 
         // Load all pictures at once to prevent N+1 queries

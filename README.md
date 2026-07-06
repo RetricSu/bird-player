@@ -53,6 +53,18 @@ cargo build --release
 
 The compiled binary will be available in `target/release/bird-player`.
 
+### macOS App Bundle
+
+Build a macOS `.app` bundle with:
+
+```bash
+cargo bundle --release
+```
+
+The bundle is written to `target/release/bundle/osx/Bird Player.app`. To install it locally, copy it to `/Applications`.
+
+When the app is launched from Finder, Dock, or LaunchServices, it does not inherit the interactive shell `PATH`. Any bundled build that calls user-installed command line tools must set a runtime `PATH` explicitly. Bird Player currently does this for `yt-dlp` by adding common user binary directories such as `~/.local/bin`, `~/bin`, `/opt/homebrew/bin`, and `/usr/local/bin` before spawning the command. Keep this in mind when adding future external tools, otherwise a tool that works in Terminal may fail inside the packaged app with "not found".
+
 ## Usage
 
 1. Launch Bird Player:

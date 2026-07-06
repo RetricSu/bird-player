@@ -57,6 +57,22 @@ pub fn apply_compact_spacing(spacing: &mut eframe::egui::style::Spacing) {
     spacing.interact_size.y = 22.0;
 }
 
+/// Keep scrollbars in the quiet overlay style macOS users expect. egui's
+/// default floating bar expands to 10 px on hover, which reads as a heavy
+/// border in compact headers and tables.
+pub fn apply_light_scrollbars(spacing: &mut eframe::egui::style::Spacing) {
+    spacing.scroll = eframe::egui::style::ScrollStyle::floating();
+    spacing.scroll.bar_width = 5.0;
+    spacing.scroll.floating_width = 2.0;
+    spacing.scroll.floating_allocated_width = 0.0;
+    spacing.scroll.bar_inner_margin = 0.0;
+    spacing.scroll.bar_outer_margin = 0.0;
+    spacing.scroll.active_background_opacity = 0.0;
+    spacing.scroll.interact_background_opacity = 0.0;
+    spacing.scroll.active_handle_opacity = 0.45;
+    spacing.scroll.interact_handle_opacity = 0.75;
+}
+
 pub trait SliderExt {
     fn volume_style(self) -> Self;
 }

@@ -22,6 +22,7 @@ enum PlayerAction {
     Previous,
     Next,
     ToggleMode,
+    ToggleLyricsPanel,
     ToggleDesktopLyrics,
 }
 
@@ -83,19 +84,21 @@ impl AppComponent for PlayerComponent {
         };
 
         let has_selected_track = selected_track.is_some();
+        let lyrics_panel_visible = ctx.ui_state.show_lyrics_panel;
         let desktop_lyrics_enabled = ctx.ui_state.desktop_lyrics_enabled;
         let is_muted = ctx.ui_state.volume_before_mute.is_some();
 
         // Get playlist tracks info for the current playlist
         let current_playlist_idx = ctx.app_settings.current_playlist_idx;
-        // Use is_some_and instead of map_or
-        let has_tracks_in_playlist =
-            current_playlist_idx.is_some_and(|idx| !ctx.playlists[idx].tracks.is_empty());
+        let has_tracks_in_playlist = current_playlist_idx
+            .and_then(|idx| ctx.playlists.get(idx))
+            .is_some_and(|playlist| !playlist.tracks.is_empty());
 
         // Now render UI without borrowing ctx in closures that also borrow ctx
         ui.vertical(|ui| {
             // ── Top row: cover + track info + playback info ────────────────
-            ui.horizontal(|ui| {
+            ui.horizontal_top(|ui| {
+                let top_row_height = tokens::size::ALBUM.max(64.0);
                 CassetteComponent::add(ctx, ui);
 
                 // Calculate available width for middle section (60% of remaining space)
@@ -103,7 +106,7 @@ impl AppComponent for PlayerComponent {
                 let middle_width = remaining_width * 0.6;
 
                 ui.allocate_ui_with_layout(
-                    vec2(middle_width, ui.available_height()),
+                    vec2(middle_width, top_row_height),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         if let Some(track) = &selected_track {
@@ -172,7 +175,7 @@ impl AppComponent for PlayerComponent {
 
                 // Add playback info panel on the right
                 ui.allocate_ui_with_layout(
-                    vec2(ui.available_width(), ui.available_height()),
+                    vec2(ui.available_width(), top_row_height),
                     egui::Layout::top_down(egui::Align::RIGHT),
                     |ui| {
                         PlaybackInfoPanel::add(ctx, ui);
@@ -236,6 +239,8 @@ impl AppComponent for PlayerComponent {
                     ui.add_enabled(has_selected_track, player_button(mode_icon, mode_active));
 
                 ui.add_space(tokens::spacing::SM);
+                let lyrics_panel_btn =
+                    ui.add(player_button(icons::LYRICS_PANEL, lyrics_panel_visible));
                 let lyrics_btn =
                     ui.add(player_button(icons::LYRICS_TOGGLE, desktop_lyrics_enabled));
 
@@ -278,6 +283,8 @@ impl AppComponent for PlayerComponent {
                     && ctx.app_settings.playing_playlist_idx.is_some()
                 {
                     Some(PlayerAction::Next)
+                } else if lyrics_panel_btn.clicked() {
+                    Some(PlayerAction::ToggleLyricsPanel)
                 } else if lyrics_btn.clicked() {
                     Some(PlayerAction::ToggleDesktopLyrics)
                 } else {
@@ -305,13 +312,20 @@ impl AppComponent for PlayerComponent {
                             ctx.play_next_track();
                             fetch_lyrics = true;
                         }
+                        PlayerAction::ToggleLyricsPanel => {
+                            let will_show = !ctx.ui_state.show_lyrics_panel;
+                            ctx.ui_state.show_lyrics_panel = will_show;
+                            if will_show {
+                                ctx.fetch_lyrics_for_current_track();
+                            }
+                        }
                         PlayerAction::ToggleDesktopLyrics => {
                             ctx.ui_state.desktop_lyrics_enabled =
                                 !ctx.ui_state.desktop_lyrics_enabled;
                         }
                     }
                     if fetch_lyrics {
-                        ctx.fetch_lyrics_for_current_track();
+                        ctx.auto_fetch_lyrics_for_current_track();
                     }
                 }
 
