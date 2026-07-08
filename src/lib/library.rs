@@ -185,6 +185,28 @@ impl Library {
         lyrics_owned
     }
 
+    pub fn update_item_pictures(&mut self, key: &str, pictures: Vec<Picture>) {
+        for item in self.items.iter_mut() {
+            if item.key_str() == key {
+                item.clear_pictures();
+                for picture in pictures.iter().cloned() {
+                    item.add_picture(picture);
+                }
+            }
+        }
+
+        for container in self.library_view.containers.iter_mut() {
+            for item in container.items.iter_mut() {
+                if item.key_str() == key {
+                    item.clear_pictures();
+                    for picture in pictures.iter().cloned() {
+                        item.add_picture(picture);
+                    }
+                }
+            }
+        }
+    }
+
     // Database methods
 
     pub fn save_to_db(&mut self, conn: &Arc<Mutex<Connection>>) -> SqlResult<()> {

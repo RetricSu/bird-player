@@ -477,12 +477,22 @@ impl App {
         let success = LibraryService::update_track_cover(
             track,
             image_path,
+            &App::get_album_art_dir(),
             &mut self.library,
             &mut self.playlists,
             &db_conn,
         );
 
         if success {
+            if let Some(player) = self.runtime.as_mut().map(|rt| &mut rt.player) {
+                if player
+                    .selected_track
+                    .as_ref()
+                    .is_some_and(|selected_track| selected_track.key() == track.key())
+                {
+                    player.selected_track = Some(track.clone());
+                }
+            }
             self.save_state();
         }
 

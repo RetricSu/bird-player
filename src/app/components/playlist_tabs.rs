@@ -29,13 +29,13 @@ impl AppComponent for PlaylistTabs {
 impl PlaylistTabs {
     fn show_tabs(ctx: &mut App, ui: &mut eframe::egui::Ui) {
         // Add playlist tabs
-        for (idx, playlist) in ctx.playlists.iter_mut().enumerate() {
+        for idx in 0..ctx.playlists.len() {
             let is_selected = ctx.app_settings.current_playlist_idx == Some(idx);
             let is_being_renamed = ctx.ui_state.playlist_being_renamed == Some(idx);
 
             if is_being_renamed {
                 // Show text input for renaming
-                let mut name = playlist.get_name().unwrap_or_default();
+                let mut name = ctx.playlists[idx].get_name().unwrap_or_default();
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut name)
                         .desired_width(120.0)
@@ -43,12 +43,12 @@ impl PlaylistTabs {
                 );
 
                 if response.changed() {
-                    playlist.set_name(name.clone());
+                    ctx.playlists[idx].set_name(name.clone());
                 }
 
                 if response.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     if !name.is_empty() {
-                        playlist.set_name(name);
+                        ctx.playlists[idx].set_name(name);
                     }
                     PlaylistService::finish_renaming_playlist_ui(
                         &mut ctx.ui_state.playlist_being_renamed,
@@ -60,8 +60,9 @@ impl PlaylistTabs {
                 // matches the rest of the highlighted-state language used
                 // by the player; unselected tabs render flat to keep the
                 // tab strip from looking like a row of buttons.
-                let mut tab_text = egui::RichText::new(playlist.get_name().unwrap_or_default())
-                    .size(tokens::text::SM);
+                let mut tab_text =
+                    egui::RichText::new(ctx.playlists[idx].get_name().unwrap_or_default())
+                        .size(tokens::text::SM);
                 if is_selected {
                     tab_text = tab_text.color(egui::Color32::WHITE);
                 }
@@ -75,13 +76,39 @@ impl PlaylistTabs {
                 } else {
                     button = button.fill(egui::Color32::TRANSPARENT);
                 }
-                let tab_response = ui.add(button);
+                let tab_response = ui.add(button.sense(egui::Sense::click_and_drag()));
 
                 if tab_response.clicked() {
                     PlaylistService::select_playlist(
                         &mut ctx.app_settings.current_playlist_idx,
                         idx,
                     );
+                }
+
+                if tab_response.drag_started() {
+                    ctx.ui_state.playlist_tab_dragging = Some(idx);
+                }
+
+                if tab_response.hovered()
+                    && ui.input(|input| input.pointer.any_released())
+                    && ctx
+                        .ui_state
+                        .playlist_tab_dragging
+                        .is_some_and(|from| from != idx)
+                {
+                    if let Some(from_idx) = ctx.ui_state.playlist_tab_dragging.take() {
+                        PlaylistService::reorder_playlist(
+                            &mut ctx.playlists,
+                            &mut ctx.app_settings.current_playlist_idx,
+                            &mut ctx.app_settings.playing_playlist_idx,
+                            &mut ctx.ui_state.playlist_being_renamed,
+                            &mut ctx.ui_state.playlist_idx_to_remove,
+                            from_idx,
+                            idx,
+                        );
+                        ctx.save_state();
+                    }
+                    return;
                 }
 
                 // Show context menu on right-click
@@ -104,6 +131,10 @@ impl PlaylistTabs {
         // Add the "+" button for creating new playlists — borderless to
         // match the library's add-folder affordance.
         let create_btn = ui.add(egui::Button::new(icons::PLUS).frame(false));
+
+        if ui.input(|input| input.pointer.any_released()) {
+            ctx.ui_state.playlist_tab_dragging = None;
+        }
 
         if create_btn.clicked() {
             PlaylistService::create_playlist(

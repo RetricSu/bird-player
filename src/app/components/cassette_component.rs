@@ -1,5 +1,6 @@
 use super::AppComponent;
 use crate::app::style::tokens;
+use crate::app::t;
 use crate::app::App;
 use ::image::io::Reader as ImageReader;
 use eframe::egui::epaint::*;
@@ -31,7 +32,7 @@ impl AppComponent for CassetteComponent {
             // the parent panel, not to the row's content height — which used
             // to push the cover above the visible band entirely.
             let side = ALBUM_ART_SIZE.max(64.0);
-            let (rect, _resp) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
+            let (rect, resp) = ui.allocate_exact_size(vec2(side, side), Sense::click());
 
             let mut show_default = true;
 
@@ -113,6 +114,20 @@ impl AppComponent for CassetteComponent {
 
             if show_default {
                 show_default_album_art(ctx, ui, rect);
+            }
+
+            if ctx.player_ref().selected_track.is_some() {
+                let resp = resp.on_hover_text(t("change_cover"));
+                if resp.clicked() {
+                    if let Some(image_path) = rfd::FileDialog::new()
+                        .add_filter("Image", &["jpg", "jpeg", "png", "gif", "bmp", "tiff"])
+                        .pick_file()
+                    {
+                        if let Some(mut track) = ctx.player_ref().selected_track.clone() {
+                            ctx.update_track_cover(&mut track, &image_path);
+                        }
+                    }
+                }
             }
         });
     }

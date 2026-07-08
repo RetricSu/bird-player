@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::app::lib_services::MetadataEditor;
-use crate::app::library::{Library, LibraryCommand, LibraryItem};
+use crate::app::library::{Library, LibraryCommand, LibraryItem, Picture};
 use crate::app::playlist::Playlist;
 
 /// Application-level library service that coordinates all library management operations
@@ -65,20 +65,83 @@ impl LibraryService {
     pub fn update_track_cover(
         track: &mut LibraryItem,
         image_path: &std::path::PathBuf,
+        album_art_dir: &std::path::Path,
         library: &mut Library,
-        _playlists: &mut [Playlist],
+        playlists: &mut [Playlist],
         db_conn: &Arc<Mutex<rusqlite::Connection>>,
     ) -> bool {
         let success = MetadataEditor::update_track_cover(track, image_path);
 
-        // When the cover changes, we simply reload the library from the database
-        // and playlists just like `update_track_metadata` does because the cover
-        // path needs to be refreshed from the newly extracted data
         if success {
-            if let Ok(updated_library) = Library::load_from_db(db_conn) {
-                *library = updated_library;
+            let picture = Self::picture_from_selected_cover(image_path, album_art_dir);
+
+            track.clear_pictures();
+            if let Some(picture) = picture {
+                track.add_picture(picture.clone());
+            }
+
+            library.update_item_pictures(track.key_str(), track.pictures().clone());
+
+            for playlist in playlists.iter_mut() {
+                for playlist_track in playlist.tracks.iter_mut() {
+                    if playlist_track.key() == track.key() {
+                        playlist_track.clear_pictures();
+                        for picture in track.pictures() {
+                            playlist_track.add_picture(picture.clone());
+                        }
+                    }
+                }
+            }
+
+            if let Err(err) = library.save_to_db(db_conn) {
+                tracing::error!("Failed to save updated cover metadata: {}", err);
             }
         }
         success
+    }
+
+    fn picture_from_selected_cover(
+        image_path: &std::path::Path,
+        album_art_dir: &std::path::Path,
+    ) -> Option<Picture> {
+        if let Err(err) = std::fs::create_dir_all(album_art_dir) {
+            tracing::error!("Failed to create album art directory: {}", err);
+            return None;
+        }
+
+        let extension = image_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("jpg")
+            .to_ascii_lowercase();
+        let mime_type = match extension.as_str() {
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "bmp" => "image/bmp",
+            "tiff" | "tif" => "image/tiff",
+            _ => "image/jpeg",
+        };
+        let file_name = format!(
+            "cover_{}_{}.{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis())
+                .unwrap_or_default(),
+            rand::random::<u64>(),
+            extension
+        );
+        let destination = album_art_dir.join(file_name);
+
+        if let Err(err) = std::fs::copy(image_path, &destination) {
+            tracing::error!("Failed to copy selected cover image: {}", err);
+            return None;
+        }
+
+        Some(Picture::new(
+            mime_type.to_string(),
+            lofty::picture::PictureType::CoverFront.as_u8(),
+            String::new(),
+            destination,
+        ))
     }
 }

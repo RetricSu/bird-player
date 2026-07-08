@@ -22,6 +22,19 @@ impl DBPersistence {
         for playlist in playlists.iter_mut() {
             playlist.save_to_db_and_update_id(db_conn)?;
         }
+
+        let mut conn = db_conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare("UPDATE playlists SET sort_order = ?1 WHERE id = ?2")?;
+            for (sort_order, playlist) in playlists.iter().enumerate() {
+                if let Some(id) = playlist.id {
+                    stmt.execute(rusqlite::params![sort_order as i64, id])?;
+                }
+            }
+        }
+        tx.commit()?;
+
         Ok(())
     }
 
