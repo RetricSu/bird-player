@@ -19,8 +19,15 @@ impl DBPersistence {
         playlists: &mut [crate::app::playlist::Playlist],
         db_conn: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        for playlist in playlists.iter_mut() {
+        for (sort_order, playlist) in playlists.iter_mut().enumerate() {
             playlist.save_to_db_and_update_id(db_conn)?;
+            if let Some(id) = playlist.id {
+                let conn = db_conn.lock().unwrap();
+                conn.execute(
+                    "UPDATE playlists SET sort_order = ?1 WHERE id = ?2",
+                    rusqlite::params![sort_order as i64, id],
+                )?;
+            }
         }
         Ok(())
     }

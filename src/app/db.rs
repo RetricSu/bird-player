@@ -8,7 +8,7 @@ pub struct Database {
 
 impl Database {
     // The current schema version - increment this when making schema changes
-    const SCHEMA_VERSION: i32 = 5;
+    const SCHEMA_VERSION: i32 = 6;
 
     pub fn new() -> Result<Self> {
         // Get the app's configuration directory
@@ -109,10 +109,30 @@ impl Database {
                 [current_time],
             )?;
 
-            // Update schema version
-            connection.execute("UPDATE schema_version SET version = 5", [])?;
-
             tracing::info!("Database migration to version 5 completed");
+        }
+
+        if current_version <= 5 && Self::SCHEMA_VERSION >= 6 {
+            tracing::info!("Running database migration to version 6");
+
+            let mut stmt = connection.prepare("PRAGMA table_info(playlists)")?;
+            let existing_columns: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(1))?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            if !existing_columns.contains(&"sort_order".to_string()) {
+                connection.execute(
+                    "ALTER TABLE playlists ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )?;
+                connection.execute(
+                    "UPDATE playlists SET sort_order = id WHERE sort_order = 0",
+                    [],
+                )?;
+            }
+
+            connection.execute("UPDATE schema_version SET version = 6", [])?;
+            tracing::info!("Database migration to version 6 completed");
 
             return Ok(());
         }
@@ -177,7 +197,8 @@ impl Database {
                 name TEXT,
                 description TEXT,
                 created_at INTEGER NOT NULL DEFAULT 0,
-                updated_at INTEGER NOT NULL DEFAULT 0
+                updated_at INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0
             )",
             [],
         )?;

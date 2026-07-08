@@ -64,6 +64,48 @@ impl PlaylistService {
         *current_playlist_idx = Some(playlist_idx);
     }
 
+    /// Move a playlist tab and keep every UI index pointing at the same logical playlist.
+    #[allow(clippy::too_many_arguments)]
+    pub fn reorder_playlist(
+        playlists: &mut Vec<Playlist>,
+        current_playlist_idx: &mut Option<usize>,
+        playing_playlist_idx: &mut Option<usize>,
+        playlist_being_renamed: &mut Option<usize>,
+        playlist_idx_to_remove: &mut Option<usize>,
+        from_idx: usize,
+        to_idx: usize,
+    ) {
+        if from_idx >= playlists.len() || to_idx >= playlists.len() || from_idx == to_idx {
+            return;
+        }
+
+        let playlist = playlists.remove(from_idx);
+        playlists.insert(to_idx, playlist);
+
+        *current_playlist_idx = Self::remap_index(*current_playlist_idx, from_idx, to_idx);
+        *playing_playlist_idx = Self::remap_index(*playing_playlist_idx, from_idx, to_idx);
+        *playlist_being_renamed = Self::remap_index(*playlist_being_renamed, from_idx, to_idx);
+        *playlist_idx_to_remove = Self::remap_index(*playlist_idx_to_remove, from_idx, to_idx);
+
+        for playlist in playlists.iter_mut() {
+            playlist.is_dirty = true;
+        }
+    }
+
+    fn remap_index(index: Option<usize>, from_idx: usize, to_idx: usize) -> Option<usize> {
+        let idx = index?;
+
+        if idx == from_idx {
+            Some(to_idx)
+        } else if from_idx < to_idx && idx > from_idx && idx <= to_idx {
+            Some(idx - 1)
+        } else if from_idx > to_idx && idx >= to_idx && idx < from_idx {
+            Some(idx + 1)
+        } else {
+            Some(idx)
+        }
+    }
+
     /// Start renaming a playlist
     pub fn start_renaming_playlist(
         playlist_being_renamed: &mut Option<usize>,

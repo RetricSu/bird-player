@@ -205,66 +205,78 @@ impl PlaybackInfoPanel {
             return;
         }
 
-        let mut open = ctx.ui_state.show_youtube_discover_dialog;
-        egui::Window::new(t("youtube_discover"))
-            .id(egui::Id::new("youtube_discover_dialog"))
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .show(&egui_ctx, |ui| {
-                ui.set_min_width(560.0);
-                ui.label(RichText::new(t("youtube_discover_notice")).weak());
-                ui.add_space(tokens::spacing::XS);
+        let viewport = egui::ViewportBuilder::default()
+            .with_title(t("youtube_discover"))
+            .with_inner_size(egui::vec2(620.0, 560.0))
+            .with_min_inner_size(egui::vec2(520.0, 360.0));
 
-                ui.label(t("youtube_discover_query"));
-                let query_response = ui.add_enabled(
-                    !ctx.ui_state.youtube_discover_in_progress,
-                    TextEdit::singleline(&mut ctx.ui_state.youtube_discover_query)
-                        .desired_width(540.0)
-                        .hint_text(t("youtube_discover_placeholder")),
-                );
-                let enter_pressed =
-                    query_response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-
-                ui.add_space(tokens::spacing::XS);
-                if let Some(status) = &ctx.ui_state.youtube_discover_status {
-                    ui.label(RichText::new(status).weak());
-                    ui.add_space(tokens::spacing::XS);
+        egui_ctx.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("youtube_discover_window"),
+            viewport,
+            |viewport_ctx, _class| {
+                if viewport_ctx.input(|input| input.viewport().close_requested()) {
+                    ctx.ui_state.show_youtube_discover_dialog = false;
+                    return;
                 }
 
-                ui.horizontal(|ui| {
-                    let can_search = !ctx.ui_state.youtube_discover_in_progress
-                        && !ctx.ui_state.youtube_discover_query.trim().is_empty();
-                    if ui
-                        .add_enabled(can_search, egui::Button::new(t("search")))
-                        .clicked()
-                        || (can_search && enter_pressed)
-                    {
-                        ctx.start_youtube_discover_search();
-                    }
-
-                    if ui
-                        .add_enabled(
-                            !ctx.ui_state.youtube_discover_in_progress,
-                            egui::Button::new(t("clear")),
-                        )
-                        .clicked()
-                    {
-                        ctx.ui_state.youtube_discover_query.clear();
-                        ctx.ui_state.youtube_discover_results.clear();
-                        ctx.ui_state.youtube_discover_status = None;
-                    }
+                egui::CentralPanel::default().show(viewport_ctx, |ui| {
+                    Self::render_discover_contents(ctx, ui);
                 });
+            },
+        );
+    }
 
-                if ctx.ui_state.youtube_discover_in_progress {
-                    ui.add_space(tokens::spacing::XS);
-                    ui.spinner();
-                }
+    fn render_discover_contents(ctx: &mut App, ui: &mut egui::Ui) {
+        ui.set_min_width(560.0);
+        ui.label(RichText::new(t("youtube_discover_notice")).weak());
+        ui.add_space(tokens::spacing::XS);
 
-                Self::render_discover_results(ctx, ui);
-            });
+        ui.label(t("youtube_discover_query"));
+        let query_response = ui.add_enabled(
+            !ctx.ui_state.youtube_discover_in_progress,
+            TextEdit::singleline(&mut ctx.ui_state.youtube_discover_query)
+                .desired_width(ui.available_width())
+                .hint_text(t("youtube_discover_placeholder")),
+        );
+        let enter_pressed =
+            query_response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-        ctx.ui_state.show_youtube_discover_dialog = open;
+        ui.add_space(tokens::spacing::XS);
+        if let Some(status) = &ctx.ui_state.youtube_discover_status {
+            ui.label(RichText::new(status).weak());
+            ui.add_space(tokens::spacing::XS);
+        }
+
+        ui.horizontal(|ui| {
+            let can_search = !ctx.ui_state.youtube_discover_in_progress
+                && !ctx.ui_state.youtube_discover_query.trim().is_empty();
+            if ui
+                .add_enabled(can_search, egui::Button::new(t("search")))
+                .clicked()
+                || (can_search && enter_pressed)
+            {
+                ctx.start_youtube_discover_search();
+            }
+
+            if ui
+                .add_enabled(
+                    !ctx.ui_state.youtube_discover_in_progress,
+                    egui::Button::new(t("clear")),
+                )
+                .clicked()
+            {
+                ctx.ui_state.youtube_discover_query.clear();
+                ctx.ui_state.youtube_discover_results.clear();
+                ctx.ui_state.youtube_discover_status = None;
+            }
+        });
+
+        if ctx.ui_state.youtube_discover_in_progress {
+            ui.add_space(tokens::spacing::XS);
+            ui.spinner();
+        }
+
+        Self::render_discover_results(ctx, ui);
     }
 
     fn render_discover_results(ctx: &mut App, ui: &mut egui::Ui) {
@@ -354,108 +366,121 @@ impl PlaybackInfoPanel {
             return;
         }
 
-        let mut open = ctx.ui_state.show_youtube_download_dialog;
-        egui::Window::new(t("download_authorized_audio"))
-            .id(egui::Id::new("youtube_download_dialog"))
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .show(&egui_ctx, |ui| {
-                ui.set_min_width(420.0);
-                ui.label(RichText::new(t("authorized_audio_notice")).weak());
-                ui.add_space(tokens::spacing::XS);
+        let viewport = egui::ViewportBuilder::default()
+            .with_title(t("download_authorized_audio"))
+            .with_inner_size(egui::vec2(500.0, 360.0))
+            .with_min_inner_size(egui::vec2(420.0, 300.0));
 
-                ui.label(t("youtube_url"));
-                ui.add_enabled(
+        egui_ctx.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("youtube_download_window"),
+            viewport,
+            |viewport_ctx, _class| {
+                if viewport_ctx.input(|input| input.viewport().close_requested()) {
+                    ctx.ui_state.show_youtube_download_dialog = false;
+                    return;
+                }
+
+                egui::CentralPanel::default().show(viewport_ctx, |ui| {
+                    Self::render_download_contents(ctx, ui);
+                });
+            },
+        );
+    }
+
+    fn render_download_contents(ctx: &mut App, ui: &mut egui::Ui) {
+        ui.set_min_width(420.0);
+        ui.label(RichText::new(t("authorized_audio_notice")).weak());
+        ui.add_space(tokens::spacing::XS);
+
+        ui.label(t("youtube_url"));
+        ui.add_enabled(
+            !ctx.ui_state.youtube_download_in_progress,
+            TextEdit::singleline(&mut ctx.ui_state.youtube_download_url)
+                .desired_width(ui.available_width())
+                .hint_text("https://www.youtube.com/watch?v=..."),
+        );
+
+        ui.add_space(tokens::spacing::XS);
+        ui.add_enabled_ui(!ctx.ui_state.youtube_download_in_progress, |ui| {
+            ui.checkbox(
+                &mut ctx.ui_state.youtube_download_include_playlist,
+                t("download_entire_playlist"),
+            )
+            .on_hover_text(t("download_entire_playlist_hint"));
+        });
+
+        ui.add_space(tokens::spacing::XS);
+        ui.label(t("save_to"));
+        ui.horizontal(|ui| {
+            let mut path_text = ctx.ui_state.youtube_download_dir.display().to_string();
+            ui.add_enabled(
+                false,
+                TextEdit::singleline(&mut path_text).desired_width(ui.available_width() - 44.0),
+            );
+
+            let choose = ui
+                .add_enabled(
                     !ctx.ui_state.youtube_download_in_progress,
-                    TextEdit::singleline(&mut ctx.ui_state.youtube_download_url)
-                        .hint_text("https://www.youtube.com/watch?v=..."),
-                );
-
-                ui.add_space(tokens::spacing::XS);
-                ui.add_enabled_ui(!ctx.ui_state.youtube_download_in_progress, |ui| {
-                    ui.checkbox(
-                        &mut ctx.ui_state.youtube_download_include_playlist,
-                        t("download_entire_playlist"),
-                    )
-                    .on_hover_text(t("download_entire_playlist_hint"));
-                });
-
-                ui.add_space(tokens::spacing::XS);
-                ui.label(t("save_to"));
-                ui.horizontal(|ui| {
-                    let mut path_text = ctx.ui_state.youtube_download_dir.display().to_string();
-                    ui.add_enabled(
-                        false,
-                        TextEdit::singleline(&mut path_text).desired_width(340.0),
-                    );
-
-                    let choose = ui
-                        .add_enabled(
-                            !ctx.ui_state.youtube_download_in_progress,
-                            egui::Button::new(icons::FOLDER).player_style(),
-                        )
-                        .on_hover_text(t("choose_download_folder"));
-                    if choose.clicked() {
-                        if let Some(folder) = rfd::FileDialog::new()
-                            .set_directory(&ctx.ui_state.youtube_download_dir)
-                            .pick_folder()
-                        {
-                            ctx.ui_state.youtube_download_dir = folder;
-                            ctx.save_state();
-                        }
-                    }
-                });
-
-                if let Some(status) = &ctx.ui_state.youtube_download_status {
-                    ui.add_space(tokens::spacing::XS);
-                    ui.label(RichText::new(status).weak());
+                    egui::Button::new(icons::FOLDER).player_style(),
+                )
+                .on_hover_text(t("choose_download_folder"));
+            if choose.clicked() {
+                if let Some(folder) = rfd::FileDialog::new()
+                    .set_directory(&ctx.ui_state.youtube_download_dir)
+                    .pick_folder()
+                {
+                    ctx.ui_state.youtube_download_dir = folder;
+                    ctx.save_state();
                 }
+            }
+        });
 
-                if let Some(progress) = ctx.ui_state.youtube_download_progress {
-                    ui.add_space(tokens::spacing::XS);
-                    ui.add(
-                        egui::ProgressBar::new(progress)
-                            .show_percentage()
-                            .desired_width(ui.available_width()),
-                    );
-                } else if ctx.ui_state.youtube_download_in_progress {
-                    ui.add_space(tokens::spacing::XS);
-                    ui.add(
-                        egui::ProgressBar::new(0.0)
-                            .animate(true)
-                            .desired_width(ui.available_width()),
-                    );
-                }
+        if let Some(status) = &ctx.ui_state.youtube_download_status {
+            ui.add_space(tokens::spacing::XS);
+            ui.label(RichText::new(status).weak());
+        }
 
-                ui.add_space(tokens::spacing::SM);
-                ui.horizontal(|ui| {
-                    let can_download = !ctx.ui_state.youtube_download_in_progress
-                        && !ctx.ui_state.youtube_download_url.trim().is_empty();
-                    if ui
-                        .add_enabled(can_download, egui::Button::new(t("download")))
-                        .clicked()
-                    {
-                        ctx.start_youtube_download();
-                    }
+        if let Some(progress) = ctx.ui_state.youtube_download_progress {
+            ui.add_space(tokens::spacing::XS);
+            ui.add(
+                egui::ProgressBar::new(progress)
+                    .show_percentage()
+                    .desired_width(ui.available_width()),
+            );
+        } else if ctx.ui_state.youtube_download_in_progress {
+            ui.add_space(tokens::spacing::XS);
+            ui.add(
+                egui::ProgressBar::new(0.0)
+                    .animate(true)
+                    .desired_width(ui.available_width()),
+            );
+        }
 
-                    if ui
-                        .add_enabled(
-                            !ctx.ui_state.youtube_download_in_progress,
-                            egui::Button::new(t("clear")),
-                        )
-                        .clicked()
-                    {
-                        ctx.ui_state.youtube_download_url.clear();
-                        ctx.ui_state.youtube_download_progress = None;
-                        ctx.ui_state.youtube_download_last_file_count = None;
-                        ctx.ui_state.youtube_download_resync_in_progress = false;
-                        ctx.ui_state.youtube_download_status = None;
-                    }
-                });
-            });
+        ui.add_space(tokens::spacing::SM);
+        ui.horizontal(|ui| {
+            let can_download = !ctx.ui_state.youtube_download_in_progress
+                && !ctx.ui_state.youtube_download_url.trim().is_empty();
+            if ui
+                .add_enabled(can_download, egui::Button::new(t("download")))
+                .clicked()
+            {
+                ctx.start_youtube_download();
+            }
 
-        ctx.ui_state.show_youtube_download_dialog = open;
+            if ui
+                .add_enabled(
+                    !ctx.ui_state.youtube_download_in_progress,
+                    egui::Button::new(t("clear")),
+                )
+                .clicked()
+            {
+                ctx.ui_state.youtube_download_url.clear();
+                ctx.ui_state.youtube_download_progress = None;
+                ctx.ui_state.youtube_download_last_file_count = None;
+                ctx.ui_state.youtube_download_resync_in_progress = false;
+                ctx.ui_state.youtube_download_status = None;
+            }
+        });
     }
 
     fn render_library_search_controls(ctx: &mut App, ui: &mut egui::Ui) -> Option<egui::Rect> {

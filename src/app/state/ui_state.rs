@@ -19,6 +19,9 @@ pub struct UiState {
     /// Index of playlist being renamed (if any)
     pub playlist_being_renamed: Option<usize>,
 
+    /// Index of playlist tab currently being dragged for reordering.
+    pub playlist_tab_dragging: Option<usize>,
+
     /// Default window height
     pub default_window_height: f64,
 
@@ -123,6 +126,7 @@ impl Default for UiState {
             show_about_dialog: false,
             playlist_idx_to_remove: None,
             playlist_being_renamed: None,
+            playlist_tab_dragging: None,
             default_window_height: crate::app::constants::DEFAULT_WINDOW_HEIGHT as f64,
             is_maximized: false,
             show_lyrics_panel: false,

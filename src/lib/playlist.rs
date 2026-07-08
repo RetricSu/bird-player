@@ -393,7 +393,8 @@ impl Playlist {
         // First, get all playlist IDs
         let playlist_ids = {
             let conn_guard = conn.lock().unwrap();
-            let mut stmt = conn_guard.prepare("SELECT id FROM playlists")?;
+            let mut stmt =
+                conn_guard.prepare("SELECT id FROM playlists ORDER BY sort_order, id")?;
             let id_iter = stmt.query_map([], |row| row.get::<_, i64>(0))?;
 
             // Collect IDs into a Vec to release the connection lock

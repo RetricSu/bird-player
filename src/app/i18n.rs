@@ -148,6 +148,7 @@ pub fn init() {
         "choose_download_folder".to_string(),
         "Choose download folder".to_string(),
     );
+    en.insert("change_cover".to_string(), "Change cover".to_string());
     en.insert("download".to_string(), "Download".to_string());
     en.insert("clear".to_string(), "Clear".to_string());
     en.insert("url_required".to_string(), "URL is required".to_string());
@@ -349,6 +350,7 @@ pub fn init() {
         "choose_download_folder".to_string(),
         "选择下载文件夹".to_string(),
     );
+    zh.insert("change_cover".to_string(), "更换封面".to_string());
     zh.insert("download".to_string(), "下载".to_string());
     zh.insert("clear".to_string(), "清空".to_string());
     zh.insert("url_required".to_string(), "请输入 URL".to_string());
