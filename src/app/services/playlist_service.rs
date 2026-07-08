@@ -86,10 +86,6 @@ impl PlaylistService {
         *playing_playlist_idx = Self::remap_index(*playing_playlist_idx, from_idx, to_idx);
         *playlist_being_renamed = Self::remap_index(*playlist_being_renamed, from_idx, to_idx);
         *playlist_idx_to_remove = Self::remap_index(*playlist_idx_to_remove, from_idx, to_idx);
-
-        for playlist in playlists.iter_mut() {
-            playlist.is_dirty = true;
-        }
     }
 
     fn remap_index(index: Option<usize>, from_idx: usize, to_idx: usize) -> Option<usize> {

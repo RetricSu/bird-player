@@ -111,10 +111,6 @@ impl PlaylistTabs {
                     return;
                 }
 
-                if tab_response.drag_stopped() {
-                    ctx.ui_state.playlist_tab_dragging = None;
-                }
-
                 // Show context menu on right-click
                 tab_response.context_menu(|ui| {
                     if ui.button(t("rename")).clicked() {
