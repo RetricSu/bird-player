@@ -40,11 +40,25 @@ impl Library {
     }
 
     pub fn add_path(&mut self, path: PathBuf) -> bool {
+        let path = std::fs::canonicalize(&path).unwrap_or(path);
         if self.paths.iter().any(|p| *p.path() == path) {
             false
         } else {
             let new_path = LibraryPath::new(path);
             self.paths.push(new_path);
+            true
+        }
+    }
+
+    pub fn add_library_path(&mut self, library_path: LibraryPath) -> bool {
+        if self
+            .paths
+            .iter()
+            .any(|existing| existing.path() == library_path.path())
+        {
+            false
+        } else {
+            self.paths.push(library_path);
             true
         }
     }
@@ -313,6 +327,24 @@ impl Library {
             item.reset_dirty();
         }
 
+        // A path removed from the in-memory library must also be removed from
+        // SQLite, otherwise it reappears the next time the app starts.
+        let live_path_ids: HashSet<i64> =
+            self.paths.iter().map(|path| path.id().0 as i64).collect();
+        let existing_path_ids = {
+            let mut stmt = tx.prepare("SELECT id FROM library_paths")?;
+            let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
+            rows.collect::<SqlResult<Vec<_>>>()?
+        };
+        for path_id in existing_path_ids {
+            if !live_path_ids.contains(&path_id) {
+                tx.execute(
+                    "DELETE FROM library_paths WHERE id = ?1",
+                    rusqlite::params![path_id],
+                )?;
+            }
+        }
+
         // Commit the transaction
         tx.commit()?;
 
@@ -483,7 +515,8 @@ pub struct LibraryPath {
 impl LibraryPath {
     pub fn new(path: PathBuf) -> Self {
         use rand::Rng; // TODO - use ULID?
-                       // Extract the folder name from the path for display
+        let path = std::fs::canonicalize(&path).unwrap_or(path);
+        // Extract the folder name from the path for display
         let display_name = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -822,5 +855,50 @@ impl Picture {
             description,
             file_path,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Library;
+    use rusqlite::Connection;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn removed_library_path_is_deleted_from_database() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        {
+            let connection = connection.lock().unwrap();
+            connection
+                .execute(
+                    "CREATE TABLE library_paths (
+                        id INTEGER PRIMARY KEY,
+                        path TEXT NOT NULL,
+                        status INTEGER NOT NULL,
+                        display_name TEXT NOT NULL
+                    )",
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute("CREATE TABLE library_items (key TEXT PRIMARY KEY)", [])
+                .unwrap();
+        }
+
+        let mut library = Library::new();
+        library.add_path(PathBuf::from("/tmp/bird-player-removal-test"));
+        let path_id = library.paths()[0].id();
+        library.save_to_db(&connection).unwrap();
+
+        library.remove_path(path_id);
+        library.save_to_db(&connection).unwrap();
+
+        let remaining: i64 = connection
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM library_paths", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(remaining, 0);
     }
 }

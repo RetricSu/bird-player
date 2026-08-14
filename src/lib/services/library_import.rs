@@ -23,6 +23,14 @@ use crate::{
 pub struct LibraryImportService;
 
 impl LibraryImportService {
+    pub fn parse_audio_file_for_import(
+        file_path: &Path,
+        path_id: LibraryPathId,
+        album_art_dir: &Path,
+    ) -> LibraryItem {
+        Self::parse_audio_file(file_path, path_id, album_art_dir)
+    }
+
     /// Import files from a library path
     ///
     /// This spawns a background thread that:

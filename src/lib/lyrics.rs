@@ -6,12 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LyricsLine {
-    pub text: String,
-    pub start_time_ms: Option<u64>,
-    pub end_time_ms: Option<u64>,
-}
+pub use crate::timed_text::TimedTextCue as LyricsLine;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lyrics {
@@ -35,42 +30,7 @@ pub struct Lyrics {
 
 impl Lyrics {
     pub fn parse_synced_lyrics(synced_lyrics: &str) -> Vec<LyricsLine> {
-        let mut lines = Vec::new();
-
-        for line in synced_lyrics.lines() {
-            if let Some((timestamp_str, text)) = line.split_once(']') {
-                if let Some(timestamp_str) = timestamp_str.strip_prefix('[') {
-                    if let Ok(timestamp_ms) = Self::parse_timestamp(timestamp_str) {
-                        lines.push(LyricsLine {
-                            text: text.trim().to_string(),
-                            start_time_ms: Some(timestamp_ms),
-                            end_time_ms: None,
-                        });
-                    }
-                }
-            }
-        }
-
-        // Set end times based on next line's start time
-        for i in 0..lines.len().saturating_sub(1) {
-            if let Some(next_start) = lines[i + 1].start_time_ms {
-                lines[i].end_time_ms = Some(next_start);
-            }
-        }
-
-        lines
-    }
-
-    fn parse_timestamp(timestamp: &str) -> Result<u64, ()> {
-        let parts: Vec<&str> = timestamp.split(':').collect();
-        if parts.len() != 2 {
-            return Err(());
-        }
-
-        let minutes: u64 = parts[0].parse().map_err(|_| ())?;
-        let seconds: f64 = parts[1].parse().map_err(|_| ())?;
-
-        Ok((minutes * 60 * 1000) + (seconds * 1000.0) as u64)
+        crate::timed_text::parse_lrc(synced_lyrics)
     }
 }
 

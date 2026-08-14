@@ -6,9 +6,12 @@ pub mod lyrics_component;
 pub mod main_shell;
 pub mod playback_info_panel;
 pub mod player_component;
+pub mod playlist_booklet_component;
 pub mod playlist_content;
 pub mod playlist_table;
 pub mod playlist_tabs;
+pub mod subtitle_component;
+pub mod timed_text_component;
 pub mod window_chrome;
 
 pub trait AppComponent {

@@ -103,6 +103,7 @@ impl PlaylistTabs {
                             &mut ctx.app_settings.playing_playlist_idx,
                             &mut ctx.ui_state.playlist_being_renamed,
                             &mut ctx.ui_state.playlist_idx_to_remove,
+                            &mut ctx.ui_state.playlist_booklet_idx,
                             from_idx,
                             idx,
                         );
@@ -113,11 +114,40 @@ impl PlaylistTabs {
 
                 // Show context menu on right-click
                 tab_response.context_menu(|ui| {
+                    let has_tracks = !ctx.playlists[idx].tracks.is_empty();
+                    if ui
+                        .add_enabled(has_tracks, egui::Button::new(t("play_all")))
+                        .clicked()
+                    {
+                        ctx.play_playlist_from_start(idx);
+                        ui.close_menu();
+                    }
+                    if ui.button(t("view_playlist")).clicked() {
+                        ctx.app_settings.current_playlist_idx = Some(idx);
+                        ctx.ui_state.playlist_booklet_mode =
+                            Some(crate::app::state::ui_state::PlaylistBookletMode::View);
+                        ctx.ui_state.playlist_booklet_idx = Some(idx);
+                        ctx.ui_state.playlist_booklet_draft = None;
+                        ui.close_menu();
+                    }
+                    if ui.button(t("edit_playlist")).clicked() {
+                        ctx.app_settings.current_playlist_idx = Some(idx);
+                        ctx.ui_state.playlist_booklet_mode =
+                            Some(crate::app::state::ui_state::PlaylistBookletMode::Edit);
+                        ctx.ui_state.playlist_booklet_idx = Some(idx);
+                        ctx.ui_state.playlist_booklet_draft = None;
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button(t("rename")).clicked() {
                         PlaylistService::start_renaming_playlist(
                             &mut ctx.ui_state.playlist_being_renamed,
                             idx,
                         );
+                        ui.close_menu();
+                    }
+                    if ui.button(t("export_playlist")).clicked() {
+                        ctx.export_playlist_to_archive(idx);
                         ui.close_menu();
                     }
                     if ui.button(t("delete")).clicked() {
@@ -148,6 +178,20 @@ impl PlaylistTabs {
         // Handle playlist removal
         if let Some(idx) = ctx.ui_state.playlist_idx_to_remove {
             ctx.ui_state.playlist_idx_to_remove = None;
+
+            if let Some(booklet_idx) = ctx.ui_state.playlist_booklet_idx {
+                match booklet_idx.cmp(&idx) {
+                    std::cmp::Ordering::Equal => {
+                        ctx.ui_state.playlist_booklet_mode = None;
+                        ctx.ui_state.playlist_booklet_idx = None;
+                        ctx.ui_state.playlist_booklet_draft = None;
+                    }
+                    std::cmp::Ordering::Greater => {
+                        ctx.ui_state.playlist_booklet_idx = Some(booklet_idx - 1);
+                    }
+                    std::cmp::Ordering::Less => {}
+                }
+            }
 
             let db_conn = ctx.db().connection();
             PlaylistService::delete_playlist(

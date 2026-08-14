@@ -33,6 +33,10 @@ pub const DISCOVER: &str = p::COMPASS;
 pub const EXPORT: &str = p::EXPORT;
 pub const YOUTUBE: &str = p::YOUTUBE_LOGO;
 pub const FOLDER: &str = p::FOLDER_OPEN;
+pub const EDIT: &str = p::PENCIL_SIMPLE;
+pub const SAVE: &str = p::FLOPPY_DISK;
+pub const BOOKLET: &str = p::BOOK_OPEN_TEXT;
+pub const IMAGE: &str = p::IMAGE;
 /// Generic "add / new" affordance — used by library/playlist "+" buttons.
 pub const PLUS: &str = p::PLUS;
 /// Indicator shown in the playlist's lyrics column when a track has lyrics.

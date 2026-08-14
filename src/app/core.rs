@@ -9,7 +9,8 @@ use super::error::AppLoadError;
 use super::i18n;
 use super::lib_services::{
     LibraryImportService, LyricsManager, PlayerRestoreService, PlaylistExportService,
-    YoutubeDownloadEvent, YoutubeDownloadService,
+    PlaylistImportService, SubtitleManager, YoutubeDownloadEvent, YoutubeDownloadOptions,
+    YoutubeDownloadService,
 };
 use super::library::{Library, LibraryCommand, LibraryPath};
 pub use super::library::{LibraryItem, LibraryPathId};
@@ -48,6 +49,9 @@ pub struct App {
     #[serde(skip_serializing, skip_deserializing)]
     pub lyrics_service: LyricsService,
 
+    #[serde(skip_serializing, skip_deserializing)]
+    pub subtitle_manager: SubtitleManager,
+
     pub is_heavy_data_loaded: bool,
 
     pub quit: bool,
@@ -63,6 +67,7 @@ impl Default for App {
             runtime: None,
             ui_state: UiState::default(),
             lyrics_service: LyricsService::new(),
+            subtitle_manager: SubtitleManager::default(),
             is_heavy_data_loaded: false,
             quit: false,
         }
@@ -147,6 +152,10 @@ impl App {
         self.lyrics_service.manager_mut()
     }
 
+    pub fn subtitle_manager(&self) -> &SubtitleManager {
+        &self.subtitle_manager
+    }
+
     pub fn initialize_app() -> Result<Self, AppLoadError> {
         // Load settings from PersistenceService
         let config = PersistenceService::load_basic_config()?;
@@ -212,12 +221,26 @@ impl App {
             self.ui_state.should_fetch_lyrics_on_init = false;
         }
 
+        let pending_library_paths = self
+            .library
+            .paths()
+            .iter()
+            .filter(|path| {
+                path.status() == crate::app::library::LibraryPathStatus::NotImported
+                    && path.path().is_dir()
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
         self.is_heavy_data_loaded = true;
+        for path in pending_library_paths {
+            self.import_library_paths(&path);
+        }
         tracing::info!("Heavy data loading completed");
     }
 
     pub fn get_album_art_dir() -> PathBuf {
-        confy::get_configuration_file_path("bird-player", None)
+        confy::get_configuration_file_path(crate::app::constants::CONFIG_APP_NAME, None)
             .map(|p| {
                 p.parent()
                     .map_or_else(|| PathBuf::from("album_art"), |path| path.join("album_art"))
@@ -305,12 +328,33 @@ impl App {
         self.ui_state.youtube_download_resync_in_progress = false;
         self.ui_state.youtube_download_progress = None;
         self.ui_state.youtube_download_last_file_count = None;
+        self.ui_state.youtube_download_last_subtitle_count = None;
         self.ui_state.youtube_download_status = Some(i18n::t("download_preparing"));
 
+        let subtitle_languages = match self.app_settings.current_language {
+            i18n::Language::Chinese => vec![
+                "zh-Hans".to_string(),
+                "zh-Hant".to_string(),
+                "zh".to_string(),
+                "en".to_string(),
+                "en-orig".to_string(),
+            ],
+            i18n::Language::English => vec![
+                "en".to_string(),
+                "en-orig".to_string(),
+                "zh-Hans".to_string(),
+                "zh-Hant".to_string(),
+                "zh".to_string(),
+            ],
+        };
         YoutubeDownloadService::download_authorized_audio(
             url,
             self.ui_state.youtube_download_dir.clone(),
-            self.ui_state.youtube_download_include_playlist,
+            YoutubeDownloadOptions {
+                include_playlist: self.ui_state.youtube_download_include_playlist,
+                download_subtitles: self.ui_state.youtube_download_subtitles,
+                subtitle_languages,
+            },
             self.youtube_download_tx().clone(),
         );
     }
@@ -368,6 +412,91 @@ impl App {
         }
     }
 
+    pub fn import_playlist_archive(&mut self) {
+        let Some(archive_path) = rfd::FileDialog::new()
+            .add_filter("Bird Playlist", &["zip"])
+            .pick_file()
+        else {
+            return;
+        };
+        let Some(destination_root) = rfd::FileDialog::new()
+            .set_title(&i18n::t("playlist_import_destination"))
+            .pick_folder()
+        else {
+            return;
+        };
+
+        let existing_library_path = self
+            .library
+            .paths()
+            .iter()
+            .find(|path| *path.path() == destination_root)
+            .cloned();
+        let import_library_path = existing_library_path
+            .clone()
+            .unwrap_or_else(|| LibraryPath::new(destination_root.clone()));
+
+        match PlaylistImportService::import_playlist(
+            &archive_path,
+            &destination_root,
+            self.library.items(),
+            import_library_path.id(),
+            &Self::get_album_art_dir(),
+        ) {
+            Ok(result) => {
+                let should_scan_import_dir = result.import_dir.is_some();
+                if should_scan_import_dir && existing_library_path.is_none() {
+                    self.library.add_library_path(import_library_path.clone());
+                }
+                for item in result.imported_items {
+                    self.library.add_item(item);
+                }
+
+                self.playlists.push(result.playlist);
+                let imported_idx = self.playlists.len() - 1;
+                self.app_settings.current_playlist_idx = Some(imported_idx);
+                self.ui_state.playlist_booklet_mode =
+                    Some(super::state::ui_state::PlaylistBookletMode::View);
+                self.ui_state.playlist_booklet_idx = Some(imported_idx);
+                self.ui_state.playlist_booklet_draft = None;
+                self.ui_state.playlist_booklet_status = Some(i18n::t("playlist_import_complete"));
+                self.save_state();
+
+                if should_scan_import_dir {
+                    self.library
+                        .set_path_to_not_imported(import_library_path.id());
+                    self.import_library_paths(&import_library_path);
+                }
+            }
+            Err(err) => {
+                self.ui_state.playlist_booklet_status = Some(err.clone());
+                rfd::MessageDialog::new()
+                    .set_title(&i18n::t("playlist_import"))
+                    .set_description(&err)
+                    .set_level(rfd::MessageLevel::Error)
+                    .show();
+            }
+        }
+    }
+
+    pub fn play_playlist_from_start(&mut self, playlist_idx: usize) {
+        let Some(track) = self
+            .playlists
+            .get(playlist_idx)
+            .and_then(|playlist| playlist.tracks.first())
+            .cloned()
+        else {
+            return;
+        };
+
+        self.app_settings.current_playlist_idx = Some(playlist_idx);
+        self.app_settings.playing_playlist_idx = Some(playlist_idx);
+        let player = self.player_mut_ref();
+        player.select_track(Some(track));
+        player.play();
+        self.auto_fetch_lyrics_for_current_track();
+    }
+
     pub fn handle_youtube_download_event(&mut self, event: YoutubeDownloadEvent) {
         match event {
             YoutubeDownloadEvent::Progress(progress) => {
@@ -383,6 +512,11 @@ impl App {
                 self.ui_state.youtube_download_progress = None;
                 let file_count = result.downloaded_files.len();
                 self.ui_state.youtube_download_last_file_count = Some(file_count);
+                self.ui_state.youtube_download_last_subtitle_count =
+                    Some(result.embedded_subtitle_count);
+                for warning in result.subtitle_warnings {
+                    tracing::warn!("YouTube subtitle post-processing warning: {}", warning);
+                }
                 self.ui_state.youtube_download_resync_in_progress = true;
                 self.ui_state.youtube_download_status = Some(if file_count == 0 {
                     i18n::t("download_finished_resync")
@@ -408,6 +542,7 @@ impl App {
                 self.ui_state.youtube_download_resync_in_progress = false;
                 self.ui_state.youtube_download_progress = None;
                 self.ui_state.youtube_download_last_file_count = None;
+                self.ui_state.youtube_download_last_subtitle_count = None;
                 self.ui_state.youtube_download_status = Some(err);
             }
             YoutubeDownloadEvent::SearchFinished(Ok(results)) => {
@@ -658,36 +793,66 @@ impl App {
     }
 
     pub fn process_library_command(&mut self, lib_cmd: LibraryCommand) {
-        if matches!(lib_cmd, LibraryCommand::AddPathId(_)) {
+        let import_finished = matches!(lib_cmd, LibraryCommand::AddPathId(_));
+        LibraryService::process_library_command(&mut self.library, lib_cmd);
+
+        if import_finished {
             self.ui_state.is_importing = false;
             if self.ui_state.youtube_download_resync_in_progress {
                 self.ui_state.youtube_download_resync_in_progress = false;
                 self.ui_state.youtube_download_progress = None;
                 if let Some(file_count) = self.ui_state.youtube_download_last_file_count {
-                    self.ui_state.youtube_download_status = Some(i18n::tf(
-                        "downloaded_files_done",
-                        &[&file_count.to_string()],
-                    ));
+                    let subtitle_count = self
+                        .ui_state
+                        .youtube_download_last_subtitle_count
+                        .unwrap_or(0);
+                    self.ui_state.youtube_download_status =
+                        Some(if self.ui_state.youtube_download_subtitles {
+                            i18n::tf(
+                                "downloaded_files_done_with_subtitles",
+                                &[&file_count.to_string(), &subtitle_count.to_string()],
+                            )
+                        } else {
+                            i18n::tf("downloaded_files_done", &[&file_count.to_string()])
+                        });
                 }
             }
             // Also explicitly save state after completing an import!
             self.save_state();
         }
-        LibraryService::process_library_command(&mut self.library, lib_cmd);
     }
 
     /// Fetch lyrics after an automatic track change, honoring the user preference.
     pub fn auto_fetch_lyrics_for_current_track(&mut self) {
+        self.load_subtitles_for_current_track();
+
         if !self.ui_state.auto_fetch_missing_lyrics {
-            let lyrics_manager = self.lyrics_manager_mut();
-            lyrics_manager.set_current_lyrics(None);
-            let _ = lyrics_manager.take_pending_lyrics_rx();
-            self.ui_state.lyrics_fetch_state = LyricsFetchState::Idle;
+            let selected_track = self
+                .runtime
+                .as_ref()
+                .and_then(|runtime| runtime.player.selected_track.clone());
+            let mut fetch_state = LyricsFetchState::Idle;
+            {
+                let lyrics_manager = self.lyrics_manager_mut();
+                let _ = lyrics_manager.take_pending_lyrics_rx();
+                lyrics_manager
+                    .load_cached_lyrics_for_track_data(selected_track.as_ref(), &mut fetch_state);
+            }
+            self.ui_state.lyrics_fetch_state = fetch_state;
             self.ui_state.show_lyrics_panel = false;
             return;
         }
 
         self.fetch_lyrics_for_current_track();
+    }
+
+    fn load_subtitles_for_current_track(&mut self) {
+        let selected_track = self
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.player.selected_track.clone());
+        self.subtitle_manager
+            .load_for_track(selected_track.as_ref());
     }
 
     /// Fetch lyrics for the currently selected track.

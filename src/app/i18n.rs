@@ -42,6 +42,18 @@ pub fn init() {
     // File menu
     en.insert("file".to_string(), "File".to_string());
     en.insert("open".to_string(), "Open".to_string());
+    en.insert(
+        "playlist_import".to_string(),
+        "Import playlist package...".to_string(),
+    );
+    en.insert(
+        "playlist_import_destination".to_string(),
+        "Choose where imported music files should be saved".to_string(),
+    );
+    en.insert(
+        "playlist_import_complete".to_string(),
+        "Playlist imported successfully.".to_string(),
+    );
     en.insert("settings".to_string(), "Settings".to_string());
     en.insert("exit".to_string(), "Exit".to_string());
 
@@ -57,6 +69,8 @@ pub fn init() {
     en.insert("view".to_string(), "View".to_string());
     en.insert("show_lyrics".to_string(), "Show Lyrics".to_string());
     en.insert("hide_lyrics".to_string(), "Hide Lyrics".to_string());
+    en.insert("show_subtitles".to_string(), "Show Subtitles".to_string());
+    en.insert("hide_subtitles".to_string(), "Hide Subtitles".to_string());
     en.insert(
         "auto_fetch_missing_lyrics".to_string(),
         "Auto-fetch missing lyrics on track change".to_string(),
@@ -87,6 +101,7 @@ pub fn init() {
     en.insert("mini".to_string(), "Mini".to_string());
     en.insert("playlist_btn".to_string(), "Playlist".to_string());
     en.insert("lyrics".to_string(), "Lyrics".to_string());
+    en.insert("subtitles".to_string(), "Subtitles".to_string());
     en.insert("library_search".to_string(), "Search library".to_string());
     en.insert(
         "type_to_search".to_string(),
@@ -143,6 +158,14 @@ pub fn init() {
         "When off, playlist parameters are removed and only the current video is downloaded."
             .to_string(),
     );
+    en.insert(
+        "download_available_subtitles".to_string(),
+        "Download available subtitles".to_string(),
+    );
+    en.insert(
+        "download_available_subtitles_hint".to_string(),
+        "Prefers authored captions, falls back to automatic captions, and embeds the best language match in the MP3.".to_string(),
+    );
     en.insert("save_to".to_string(), "Save to".to_string());
     en.insert(
         "choose_download_folder".to_string(),
@@ -172,6 +195,10 @@ pub fn init() {
     en.insert(
         "downloaded_files_done".to_string(),
         "Downloaded {} file(s). Folder is synced.".to_string(),
+    );
+    en.insert(
+        "downloaded_files_done_with_subtitles".to_string(),
+        "Downloaded {} file(s), {} with subtitles. Folder is synced.".to_string(),
     );
     en.insert(
         "youtube_discover".to_string(),
@@ -233,6 +260,47 @@ pub fn init() {
     en.insert("new_playlist".to_string(), "New Playlist".to_string());
     en.insert("enter_name".to_string(), "Enter name...".to_string());
     en.insert("playlist_label".to_string(), "Playlist".to_string());
+    en.insert("play_all".to_string(), "Play All".to_string());
+    en.insert("view_playlist".to_string(), "View Playlist".to_string());
+    en.insert("edit_playlist".to_string(), "Edit Playlist".to_string());
+    en.insert(
+        "playlist_booklet".to_string(),
+        "Playlist Booklet".to_string(),
+    );
+    en.insert("back_to_tracks".to_string(), "Back to tracks".to_string());
+    en.insert("save".to_string(), "Save".to_string());
+    en.insert("cancel".to_string(), "Cancel".to_string());
+    en.insert("curator".to_string(), "Curator".to_string());
+    en.insert(
+        "playlist_description".to_string(),
+        "Short description".to_string(),
+    );
+    en.insert("liner_notes".to_string(), "Liner notes".to_string());
+    en.insert("playlist_cover".to_string(), "Playlist cover".to_string());
+    en.insert("remove_cover".to_string(), "Remove cover".to_string());
+    en.insert("track_notes".to_string(), "Track notes".to_string());
+    en.insert(
+        "track_note_hint".to_string(),
+        "Why this track belongs here...".to_string(),
+    );
+    en.insert("curated_by".to_string(), "Curated by {}".to_string());
+    en.insert("playlist_tracks".to_string(), "{} tracks".to_string());
+    en.insert(
+        "booklet_empty".to_string(),
+        "Add liner notes to give this playlist a story.".to_string(),
+    );
+    en.insert(
+        "playlist_booklet_saved".to_string(),
+        "Playlist booklet saved.".to_string(),
+    );
+    en.insert(
+        "cover_too_large".to_string(),
+        "Cover image must be smaller than 12 MB.".to_string(),
+    );
+    en.insert(
+        "cover_invalid".to_string(),
+        "That file is not a supported image.".to_string(),
+    );
 
     // Playlist table component
     en.insert("column_number".to_string(), "#".to_string());
@@ -260,6 +328,15 @@ pub fn init() {
     // File menu
     zh.insert("file".to_string(), "文件".to_string());
     zh.insert("open".to_string(), "打开".to_string());
+    zh.insert("playlist_import".to_string(), "导入歌单包…".to_string());
+    zh.insert(
+        "playlist_import_destination".to_string(),
+        "选择导入音乐文件的保存位置".to_string(),
+    );
+    zh.insert(
+        "playlist_import_complete".to_string(),
+        "歌单导入成功。".to_string(),
+    );
     zh.insert("settings".to_string(), "设置".to_string());
     zh.insert("exit".to_string(), "退出".to_string());
 
@@ -275,6 +352,8 @@ pub fn init() {
     zh.insert("view".to_string(), "视图".to_string());
     zh.insert("show_lyrics".to_string(), "显示歌词".to_string());
     zh.insert("hide_lyrics".to_string(), "隐藏歌词".to_string());
+    zh.insert("show_subtitles".to_string(), "显示字幕".to_string());
+    zh.insert("hide_subtitles".to_string(), "隐藏字幕".to_string());
     zh.insert(
         "auto_fetch_missing_lyrics".to_string(),
         "切歌时自动获取缺失歌词".to_string(),
@@ -305,6 +384,7 @@ pub fn init() {
     zh.insert("mini".to_string(), "迷你".to_string());
     zh.insert("playlist_btn".to_string(), "列表".to_string());
     zh.insert("lyrics".to_string(), "歌词".to_string());
+    zh.insert("subtitles".to_string(), "字幕".to_string());
     zh.insert("library_search".to_string(), "搜索音乐库".to_string());
     zh.insert("type_to_search".to_string(), "输入搜索...".to_string());
     zh.insert("close_search".to_string(), "关闭搜索".to_string());
@@ -345,6 +425,14 @@ pub fn init() {
         "download_entire_playlist_hint".to_string(),
         "关闭时会移除播放列表参数，只下载当前视频。".to_string(),
     );
+    zh.insert(
+        "download_available_subtitles".to_string(),
+        "下载已有字幕".to_string(),
+    );
+    zh.insert(
+        "download_available_subtitles_hint".to_string(),
+        "优先人工字幕，没有时使用自动字幕，并把最匹配界面语言的一轨嵌入 MP3。".to_string(),
+    );
     zh.insert("save_to".to_string(), "保存到".to_string());
     zh.insert(
         "choose_download_folder".to_string(),
@@ -374,6 +462,10 @@ pub fn init() {
     zh.insert(
         "downloaded_files_done".to_string(),
         "已下载 {} 个文件，文件夹已同步。".to_string(),
+    );
+    zh.insert(
+        "downloaded_files_done_with_subtitles".to_string(),
+        "已下载 {} 个文件，其中 {} 个含字幕，文件夹已同步。".to_string(),
     );
     zh.insert("youtube_discover".to_string(), "发现 YouTube".to_string());
     zh.insert(
@@ -432,6 +524,41 @@ pub fn init() {
     zh.insert("new_playlist".to_string(), "新播放列表".to_string());
     zh.insert("enter_name".to_string(), "输入名称...".to_string());
     zh.insert("playlist_label".to_string(), "播放列表".to_string());
+    zh.insert("play_all".to_string(), "播放全部".to_string());
+    zh.insert("view_playlist".to_string(), "查看歌单".to_string());
+    zh.insert("edit_playlist".to_string(), "编辑歌单".to_string());
+    zh.insert("playlist_booklet".to_string(), "歌单小册".to_string());
+    zh.insert("back_to_tracks".to_string(), "返回曲目列表".to_string());
+    zh.insert("save".to_string(), "保存".to_string());
+    zh.insert("cancel".to_string(), "取消".to_string());
+    zh.insert("curator".to_string(), "策展人".to_string());
+    zh.insert("playlist_description".to_string(), "简短介绍".to_string());
+    zh.insert("liner_notes".to_string(), "歌单手记".to_string());
+    zh.insert("playlist_cover".to_string(), "歌单封面".to_string());
+    zh.insert("remove_cover".to_string(), "移除封面".to_string());
+    zh.insert("track_notes".to_string(), "逐曲备注".to_string());
+    zh.insert(
+        "track_note_hint".to_string(),
+        "为什么把这首歌放在这里…".to_string(),
+    );
+    zh.insert("curated_by".to_string(), "策展人：{}".to_string());
+    zh.insert("playlist_tracks".to_string(), "{} 首歌曲".to_string());
+    zh.insert(
+        "booklet_empty".to_string(),
+        "写一点歌单手记，给这组音乐留下一段故事。".to_string(),
+    );
+    zh.insert(
+        "playlist_booklet_saved".to_string(),
+        "歌单小册已保存。".to_string(),
+    );
+    zh.insert(
+        "cover_too_large".to_string(),
+        "封面图片需要小于 12 MB。".to_string(),
+    );
+    zh.insert(
+        "cover_invalid".to_string(),
+        "这个文件不是支持的图片格式。".to_string(),
+    );
 
     // Playlist table component
     zh.insert("column_number".to_string(), "#".to_string());

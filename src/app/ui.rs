@@ -4,6 +4,7 @@ use eframe::egui;
 
 use super::App;
 use crate::app::components::main_shell::MainShell;
+use crate::app::components::playlist_booklet_component::PlaylistBookletComponent;
 use crate::app::constants::DEFAULT_WINDOW_TITLE;
 
 impl App {
@@ -201,6 +202,7 @@ impl eframe::App for App {
         self.show_desktop_lyrics(ctx);
 
         MainShell::show(self, ctx);
+        PlaylistBookletComponent::show_window(self, ctx);
 
         // Request repaint during playback for smooth synced lyrics updates
         if self.runtime.is_some() {

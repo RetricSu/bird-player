@@ -26,6 +26,9 @@ pub mod playlist {
 pub mod lyrics {
     pub use bird_player::lyrics::*;
 }
+pub mod timed_text {
+    pub use bird_player::timed_text::*;
+}
 pub mod player {
     pub use bird_player::player::*;
 }

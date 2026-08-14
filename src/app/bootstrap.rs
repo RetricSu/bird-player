@@ -29,7 +29,22 @@ pub fn start_app() -> Result<()> {
     tracing::info!("App booting...");
 
     // 初始化启动配置
-    let database = Arc::new(db::Database::new()?);
+    let database = match db::Database::new() {
+        Ok(database) => Arc::new(database),
+        Err(err) => {
+            let description = format!(
+                "为防止音乐库或播放列表被覆盖，Bird Player 已停止启动，数据库没有被迁移。\n\n\
+                 请使用更新版本或从自动备份恢复。\n\nDatabase safety check: {err}"
+            );
+            eprintln!("{description}");
+            rfd::MessageDialog::new()
+                .set_title("Bird Player 数据保护")
+                .set_description(&description)
+                .set_level(rfd::MessageLevel::Error)
+                .show();
+            return Err(err.into());
+        }
+    };
     tracing::info!("Database initialized successfully");
 
     let (lib_cmd_tx, lib_cmd_rx) = channel();

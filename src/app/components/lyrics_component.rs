@@ -1,5 +1,6 @@
 use eframe::egui;
 
+use super::timed_text_component::{TimedTextComponent, TimedTextPresentation};
 use super::AppComponent;
 use crate::app::libstate::lyrics_state::LyricsFetchState;
 use crate::app::lyrics::{Lyrics, LyricsService};
@@ -145,44 +146,19 @@ impl LyricsComponent {
             0
         };
 
-        for line in &lyrics.lines {
-            let is_current_line =
-                if let (Some(start), Some(end)) = (line.start_time_ms, line.end_time_ms) {
-                    current_time_ms >= start && current_time_ms < end
-                } else if let Some(start) = line.start_time_ms {
-                    current_time_ms >= start
-                } else {
-                    false
-                };
-
-            let label = if line.text.trim().is_empty() {
-                "♪".to_string()
-            } else {
-                line.text.clone()
-            };
-
-            let response = if is_current_line {
-                // Highlight current line and scroll to it
-                ui.add(egui::Label::new(
-                    egui::RichText::new(label)
-                        .color(tokens::color::LYRICS_CURRENT_LINE)
-                        .size(tokens::text::SM)
-                        .strong(),
-                ))
-            } else {
-                ui.add(egui::Label::new(
-                    egui::RichText::new(label).size(tokens::text::SM),
-                ))
-            };
-
-            // Scroll to current line to keep it visible
-            if is_current_line {
-                response.scroll_to_me(Some(egui::Align::Center));
-            }
-
-            // Add some spacing between lines
-            ui.add_space(tokens::spacing::SM);
-        }
+        TimedTextComponent::show(
+            ui,
+            &lyrics.lines,
+            current_time_ms,
+            TimedTextPresentation {
+                align: egui::Align::LEFT,
+                font_size: tokens::text::SM,
+                line_spacing: tokens::spacing::SM,
+                current_color: tokens::color::LYRICS_CURRENT_LINE,
+                weaken_inactive: false,
+                empty_cue_text: "♪",
+            },
+        );
     }
 
     fn show_plain_lyrics(ui: &mut eframe::egui::Ui, plain_lyrics: &str) {

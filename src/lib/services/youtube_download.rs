@@ -15,6 +15,15 @@ pub enum YoutubeDownloadEvent {
 pub struct YoutubeDownloadResult {
     pub output_dir: PathBuf,
     pub downloaded_files: Vec<PathBuf>,
+    pub embedded_subtitle_count: usize,
+    pub subtitle_warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct YoutubeDownloadOptions {
+    pub include_playlist: bool,
+    pub download_subtitles: bool,
+    pub subtitle_languages: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,11 +52,11 @@ impl YoutubeDownloadService {
     pub fn download_authorized_audio(
         url: String,
         output_dir: PathBuf,
-        include_playlist: bool,
+        options: YoutubeDownloadOptions,
         event_tx: Sender<YoutubeDownloadEvent>,
     ) {
         std::thread::spawn(move || {
-            let result = Self::run_download(&url, &output_dir, include_playlist, &event_tx);
+            let result = Self::run_download(&url, &output_dir, &options, &event_tx);
             let _ = event_tx.send(YoutubeDownloadEvent::Finished(result));
         });
     }
@@ -73,7 +82,7 @@ impl YoutubeDownloadService {
         }
 
         let search_target = format!("ytsearch{}:{}", limit.max(1), query);
-        let output = Self::yt_dlp_command()
+        let output = Self::youtube_command()
             .arg("--dump-json")
             .arg("--flat-playlist")
             .arg("--no-warnings")
@@ -98,14 +107,14 @@ impl YoutubeDownloadService {
     fn run_download(
         url: &str,
         output_dir: &Path,
-        include_playlist: bool,
+        options: &YoutubeDownloadOptions,
         event_tx: &Sender<YoutubeDownloadEvent>,
     ) -> Result<YoutubeDownloadResult, String> {
         let url = url.trim();
         if url.is_empty() {
             return Err("URL is required".to_string());
         }
-        let url = Self::playlist_safe_url(url, include_playlist);
+        let url = Self::playlist_safe_url(url, options.include_playlist);
 
         if let Err(err) = std::fs::create_dir_all(output_dir) {
             return Err(format!("Failed to create output folder: {}", err));
@@ -121,7 +130,7 @@ impl YoutubeDownloadService {
         let output_template = output_dir
             .join("%(artist,creator,uploader|Unknown Artist)s - %(title)s [%(id)s].%(ext)s");
 
-        let mut command = Self::yt_dlp_command();
+        let mut command = Self::youtube_command();
         command
             .arg("--color")
             .arg("never")
@@ -143,7 +152,9 @@ impl YoutubeDownloadService {
             .arg("--embed-thumbnail")
             .arg("--restrict-filenames");
 
-        if include_playlist {
+        Self::add_subtitle_download_args(&mut command, options);
+
+        if options.include_playlist {
             command.arg("--yes-playlist");
         } else {
             command.arg("--no-playlist");
@@ -228,16 +239,191 @@ impl YoutubeDownloadService {
             }
         }
 
+        downloaded_files.sort();
+        downloaded_files.dedup();
+
+        let (embedded_subtitle_count, subtitle_warnings) =
+            Self::embed_downloaded_subtitles(&downloaded_files, options);
+
         Ok(YoutubeDownloadResult {
             output_dir: output_dir.to_path_buf(),
             downloaded_files,
+            embedded_subtitle_count,
+            subtitle_warnings,
         })
+    }
+
+    fn add_subtitle_download_args(command: &mut Command, options: &YoutubeDownloadOptions) {
+        if !options.download_subtitles {
+            return;
+        }
+
+        let languages = if options.subtitle_languages.is_empty() {
+            "en,en-orig".to_string()
+        } else {
+            options.subtitle_languages.join(",")
+        };
+        command
+            .arg("--write-subs")
+            .arg("--write-auto-subs")
+            .arg("--sub-langs")
+            .arg(languages)
+            .arg("--sub-format")
+            .arg("vtt/best")
+            .arg("--convert-subs")
+            .arg("lrc");
+    }
+
+    fn embed_downloaded_subtitles(
+        downloaded_files: &[PathBuf],
+        options: &YoutubeDownloadOptions,
+    ) -> (usize, Vec<String>) {
+        if !options.download_subtitles {
+            return (0, Vec::new());
+        }
+
+        let mut embedded_count = 0;
+        let mut warnings = Vec::new();
+        for audio_path in downloaded_files {
+            match crate::subtitles::SubtitleService::embed_best_sidecar(
+                audio_path,
+                &options.subtitle_languages,
+            ) {
+                Ok(true) => embedded_count += 1,
+                Ok(false) => {}
+                Err(err) => {
+                    tracing::warn!(
+                        "Failed to embed downloaded subtitles into '{}': {}",
+                        audio_path.display(),
+                        err
+                    );
+                    warnings.push(format!("{}: {}", audio_path.display(), err));
+                }
+            }
+        }
+
+        (embedded_count, warnings)
     }
 
     fn yt_dlp_command() -> Command {
         let mut command = Command::new("yt-dlp");
         command.env("PATH", Self::app_runtime_path());
         command
+    }
+
+    fn youtube_command() -> Command {
+        let runtime_path = Self::app_runtime_path();
+        let mut command = Command::new("yt-dlp");
+        command.env("PATH", &runtime_path);
+
+        let js_runtime = Self::supported_js_runtime(&runtime_path);
+        let browser = Self::browser_cookie_source();
+        Self::add_youtube_access_args(&mut command, js_runtime.as_deref(), browser.as_deref());
+        command
+    }
+
+    fn add_youtube_access_args(
+        command: &mut Command,
+        js_runtime: Option<&str>,
+        browser: Option<&str>,
+    ) {
+        if let Some(js_runtime) = js_runtime {
+            command
+                .arg("--js-runtimes")
+                .arg(js_runtime)
+                .arg("--remote-components")
+                .arg("ejs:github");
+        }
+
+        if let Some(browser) = browser {
+            command.arg("--cookies-from-browser").arg(browser);
+        }
+    }
+
+    fn supported_js_runtime(runtime_path: &OsString) -> Option<String> {
+        let paths = std::env::split_paths(runtime_path).collect::<Vec<_>>();
+        [
+            ("deno", 2_u64, 3_u64),
+            ("node", 22_u64, 0_u64),
+            ("qjs", 2023_u64, 12_u64),
+        ]
+        .into_iter()
+        .find_map(|(name, minimum_major, minimum_minor)| {
+            let executable = Self::find_executable(name, &paths)?;
+            let output = Command::new(&executable).arg("--version").output().ok()?;
+            if !output.status.success() {
+                return None;
+            }
+
+            let version_text = String::from_utf8_lossy(&output.stdout);
+            Self::version_at_least(&version_text, minimum_major, minimum_minor)
+                .then(|| format!("{}:{}", name, executable.display()))
+        })
+    }
+
+    fn find_executable(name: &str, paths: &[PathBuf]) -> Option<PathBuf> {
+        paths
+            .iter()
+            .map(|path| path.join(name))
+            .find(|path| path.is_file())
+    }
+
+    fn version_at_least(version_text: &str, minimum_major: u64, minimum_minor: u64) -> bool {
+        let version = version_text
+            .split_whitespace()
+            .find(|part| part.chars().next().is_some_and(|ch| ch.is_ascii_digit()))
+            .unwrap_or(version_text);
+        let mut numbers = version
+            .trim_start_matches('v')
+            .split(|ch: char| !ch.is_ascii_digit())
+            .filter(|part| !part.is_empty())
+            .filter_map(|part| part.parse::<u64>().ok());
+        let major = numbers.next().unwrap_or_default();
+        let minor = numbers.next().unwrap_or_default();
+
+        (major, minor) >= (minimum_major, minimum_minor)
+    }
+
+    fn browser_cookie_source() -> Option<String> {
+        if let Ok(browser) = std::env::var("BIRD_PLAYER_YTDLP_BROWSER") {
+            let browser = browser.trim();
+            if matches!(
+                browser,
+                "brave"
+                    | "chrome"
+                    | "chromium"
+                    | "edge"
+                    | "firefox"
+                    | "opera"
+                    | "safari"
+                    | "vivaldi"
+                    | "whale"
+            ) {
+                return Some(browser.to_string());
+            }
+        }
+
+        let home = PathBuf::from(std::env::var_os("HOME")?);
+        [
+            (
+                "chrome",
+                home.join("Library/Application Support/Google/Chrome"),
+            ),
+            (
+                "brave",
+                home.join("Library/Application Support/BraveSoftware/Brave-Browser"),
+            ),
+            (
+                "firefox",
+                home.join("Library/Application Support/Firefox/Profiles"),
+            ),
+            ("safari", home.join("Library/Cookies")),
+            ("chrome", home.join(".config/google-chrome")),
+            ("brave", home.join(".config/BraveSoftware/Brave-Browser")),
+            ("firefox", home.join(".mozilla/firefox")),
+        ]
+        .into_iter()
+        .find_map(|(browser, path)| path.exists().then(|| browser.to_string()))
     }
 
     fn app_runtime_path() -> OsString {
@@ -249,6 +435,21 @@ impl YoutubeDownloadService {
             let home = PathBuf::from(home);
             Self::push_path_once(&mut paths, home.join(".local/bin"));
             Self::push_path_once(&mut paths, home.join("bin"));
+            Self::push_path_once(&mut paths, home.join(".deno/bin"));
+            Self::push_path_once(&mut paths, home.join(".volta/bin"));
+
+            let nvm_versions = home.join(".nvm/versions/node");
+            if let Ok(entries) = std::fs::read_dir(nvm_versions) {
+                let mut node_bins = entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path().join("bin"))
+                    .filter(|path| path.is_dir())
+                    .collect::<Vec<_>>();
+                node_bins.sort_by(|left, right| right.cmp(left));
+                for node_bin in node_bins {
+                    Self::push_path_once(&mut paths, node_bin);
+                }
+            }
         }
 
         for path in [
@@ -453,7 +654,7 @@ impl YoutubeDownloadService {
 
 #[cfg(test)]
 mod tests {
-    use super::YoutubeDownloadService;
+    use super::{YoutubeDownloadOptions, YoutubeDownloadService};
 
     #[test]
     fn playlist_safe_url_removes_playlist_params_by_default() {
@@ -497,10 +698,48 @@ mod tests {
         let paths = std::env::split_paths(&path).collect::<Vec<_>>();
 
         if let Some(home) = std::env::var_os("HOME") {
-            assert!(paths.contains(&std::path::PathBuf::from(home).join(".local/bin")));
+            let home = std::path::PathBuf::from(home);
+            assert!(paths.contains(&home.join(".local/bin")));
+            assert!(paths.contains(&home.join(".deno/bin")));
+            assert!(paths.contains(&home.join(".volta/bin")));
         }
         assert!(paths.contains(&std::path::PathBuf::from("/opt/homebrew/bin")));
         assert!(paths.contains(&std::path::PathBuf::from("/usr/local/bin")));
+    }
+
+    #[test]
+    fn supported_runtime_versions_are_parsed() {
+        assert!(!YoutubeDownloadService::version_at_least(
+            "deno 1.37.2",
+            2,
+            3
+        ));
+        assert!(YoutubeDownloadService::version_at_least("deno 2.3.0", 2, 3));
+        assert!(YoutubeDownloadService::version_at_least("v24.8.0", 22, 0));
+    }
+
+    #[test]
+    fn youtube_access_args_include_runtime_components_and_browser_cookies() {
+        let mut command = std::process::Command::new("yt-dlp");
+        YoutubeDownloadService::add_youtube_access_args(
+            &mut command,
+            Some("node:/example/node"),
+            Some("chrome"),
+        );
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert!(args
+            .windows(2)
+            .any(|args| args == ["--js-runtimes", "node:/example/node"]));
+        assert!(args
+            .windows(2)
+            .any(|args| args == ["--remote-components", "ejs:github"]));
+        assert!(args
+            .windows(2)
+            .any(|args| args == ["--cookies-from-browser", "chrome"]));
     }
 
     #[test]
@@ -521,5 +760,31 @@ mod tests {
             Some("https://img.example/large.jpg")
         );
         assert_eq!(results[1].url, "https://www.youtube.com/watch?v=def456");
+    }
+
+    #[test]
+    fn subtitle_download_args_include_manual_auto_and_language_preferences() {
+        let mut command = std::process::Command::new("yt-dlp");
+        YoutubeDownloadService::add_subtitle_download_args(
+            &mut command,
+            &YoutubeDownloadOptions {
+                include_playlist: false,
+                download_subtitles: true,
+                subtitle_languages: vec!["zh-Hans".to_string(), "en".to_string()],
+            },
+        );
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert!(args
+            .windows(2)
+            .any(|args| args == ["--sub-langs", "zh-Hans,en"]));
+        assert!(args.contains(&"--write-subs".to_string()));
+        assert!(args.contains(&"--write-auto-subs".to_string()));
+        assert!(args
+            .windows(2)
+            .any(|args| args == ["--convert-subs", "lrc"]));
     }
 }

@@ -8,7 +8,7 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 echo "Building release binary..."
-cargo build --release
+cargo build --release --features production-data
 
 echo "Creating app bundle structure..."
 mkdir -p "$MACOS_DIR"

@@ -40,6 +40,8 @@ pub mod size {
     /// Shared header band height for the library / playlist tabs / lyrics
     /// panels so the three side-by-side panels line up across the seam.
     pub const HEADER_HEIGHT: f32 = 22.0;
+    /// Compact three-line subtitle viewport in the playback information area.
+    pub const SUBTITLE_VIEWPORT_HEIGHT: f32 = 56.0;
 }
 
 /// Typography sizes (in egui logical pixels).
@@ -74,6 +76,8 @@ pub mod color {
     pub const LYRICS_FAILED: Color32 = Color32::from_rgb(230, 80, 80);
     /// Highlight colour for the synced-lyrics current line.
     pub const LYRICS_CURRENT_LINE: Color32 = Color32::BLUE;
+    /// Highlight colour for the active compact subtitle cue.
+    pub const SUBTITLE_CURRENT_LINE: Color32 = BRAND;
 
     // ─── Playlist (drag/highlight) ────────────────────────────────────────
     /// Border colour of the row-being-dragged ghost.
