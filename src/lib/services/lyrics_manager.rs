@@ -54,6 +54,44 @@ impl LyricsManager {
         self.pending_lyrics_rx.take()
     }
 
+    /// Load lyrics already stored with the selected audio file without making
+    /// a network request.
+    pub fn load_cached_lyrics_for_track_data(
+        &mut self,
+        track: Option<&LibraryItem>,
+        fetch_state: &mut LyricsFetchState,
+    ) -> (bool, bool) {
+        self.current_lyrics = None;
+        *fetch_state = LyricsFetchState::Idle;
+
+        let Some(track) = track else {
+            return (false, false);
+        };
+
+        let artist = track
+            .artist()
+            .unwrap_or_else(|| "Unknown Artist".to_string());
+        let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
+        let Some(cached_lyrics) =
+            LyricsService::read_lyrics_from_file(track.path(), &artist, &title)
+        else {
+            return (false, false);
+        };
+
+        tracing::info!(
+            "✅ Found cached lyrics in audio metadata for '{}'",
+            track.path().display()
+        );
+        self.current_lyrics = Some(cached_lyrics);
+        *fetch_state = LyricsFetchState::Loaded;
+
+        let should_show = self
+            .current_lyrics
+            .as_ref()
+            .is_some_and(|lyrics| !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some());
+        (true, should_show)
+    }
+
     /// Fetch lyrics for a given track (using track data directly)
     ///
     /// First tries to read from ID3 tag cache, then fetches from API if needed.
@@ -69,41 +107,16 @@ impl LyricsManager {
             return (false, false);
         }
 
-        // Clear current lyrics when starting a new fetch
-        self.current_lyrics = None;
-        *fetch_state = LyricsFetchState::Idle;
-
-        let track = match track {
-            Some(track) => track,
-            None => {
-                tracing::debug!("No track currently selected for lyrics fetch");
-                return (false, false);
-            }
-        };
-
-        let artist = track
-            .artist()
-            .unwrap_or_else(|| "Unknown Artist".to_string());
-        let title = track.title().unwrap_or_else(|| "Unknown Title".to_string());
-
-        // Try to read cached lyrics from ID3 tag
-        if let Some(cached_lyrics) =
-            LyricsService::read_lyrics_from_file(track.path(), &artist, &title)
-        {
-            tracing::info!(
-                "✅ Found cached lyrics in ID3 tag for '{}'",
-                track.path().display()
-            );
-            self.current_lyrics = Some(cached_lyrics);
-            *fetch_state = LyricsFetchState::Loaded;
-
-            let should_show = self
-                .current_lyrics
-                .as_ref()
-                .is_some_and(|lyrics| !lyrics.lines.is_empty() || lyrics.plain_lyrics.is_some());
-
+        let (lyrics_found, should_show) =
+            self.load_cached_lyrics_for_track_data(track, fetch_state);
+        if lyrics_found {
             return (true, should_show);
         }
+
+        let Some(track) = track else {
+            tracing::debug!("No track currently selected for lyrics fetch");
+            return (false, false);
+        };
 
         // If no cached lyrics, fetch from API (using 0 duration since we don't have it)
         self.fetch_from_api(track, 0, fetch_state);

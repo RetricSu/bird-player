@@ -269,6 +269,7 @@ impl AppComponent for LibraryComponent {
         // Process any path removal after rendering the UI
         if let Some(path_id) = path_to_remove {
             ctx.library.remove_path(path_id);
+            ctx.save_state();
         }
     }
 }

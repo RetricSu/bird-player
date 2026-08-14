@@ -14,6 +14,14 @@ pub use messaging::*;
 pub mod lyrics;
 pub use lyrics::*;
 
+#[path = "lib/subtitles.rs"]
+pub mod subtitles;
+pub use subtitles::*;
+
+#[path = "lib/timed_text.rs"]
+pub mod timed_text;
+pub use timed_text::*;
+
 #[path = "lib/player.rs"]
 pub mod player;
 pub use player::*;

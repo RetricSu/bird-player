@@ -31,7 +31,7 @@ itertools = "0.12"
 lazy_static = "1.4.0"
 rayon = "1.10"
 rfd = "0.6"
-rusqlite = { version = "0.31.0", features = ["bundled"] }
+rusqlite = { version = "0.31.0", features = ["backup", "bundled"] }
 serde = { version = "1", features=["derive"] }
 serde_json = "1"
 tracing = "0.1.29"
@@ -57,6 +57,7 @@ egui-phosphor = "0.9"
 [features]
 default = []
 pulseaudio = ["dep:libpulse-binding", "dep:libpulse-simple-binding"]
+production-data = []
 
 # Linux-specific dependencies without feature conditions
 [target.'cfg(target_os = "linux")'.dependencies]

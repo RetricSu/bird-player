@@ -1,3 +1,4 @@
+use super::subtitle_component::SubtitleComponent;
 use super::AppComponent;
 use crate::app::lib_services::YoutubeSearchResult;
 use crate::app::library::{Library, LibraryItem};
@@ -8,6 +9,7 @@ use eframe::egui::{self, Button, Frame, Id, Margin, Order, RichText, Sense, Stro
 
 const SEARCH_PANEL_WIDTH: f32 = 280.0;
 const SEARCH_PANEL_HEIGHT: f32 = 220.0;
+const TOOL_BUTTON_COUNT: f32 = 4.0;
 
 #[derive(Clone)]
 struct LibrarySearchResult {
@@ -37,6 +39,35 @@ impl AppComponent for PlaybackInfoPanel {
 
             if let Some(anchor) = search_anchor {
                 Self::render_library_search_results(ctx, ui, anchor);
+            }
+
+            if ctx.ui_state.show_subtitle_panel {
+                let button_spacing = ui.spacing().item_spacing.x;
+                let tool_strip_width = TOOL_BUTTON_COUNT * tokens::size::ICON_BTN
+                    + (TOOL_BUTTON_COUNT - 1.0) * button_spacing;
+                let subtitle_panel_width =
+                    (TOOL_BUTTON_COUNT - 1.0) * (tokens::size::ICON_BTN + button_spacing);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(
+                        tool_strip_width.min(ui.available_width()),
+                        ui.available_height(),
+                    ),
+                    egui::Layout::right_to_left(egui::Align::Min),
+                    |ui| {
+                        ui.add_space(tokens::size::ICON_BTN / 2.0);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(
+                                subtitle_panel_width.min(ui.available_width()),
+                                ui.available_height(),
+                            ),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_width(subtitle_panel_width.min(ui.available_width()));
+                                SubtitleComponent::add(ctx, ui);
+                            },
+                        );
+                    },
+                );
             }
         });
     }
@@ -407,6 +438,11 @@ impl PlaybackInfoPanel {
                 t("download_entire_playlist"),
             )
             .on_hover_text(t("download_entire_playlist_hint"));
+            ui.checkbox(
+                &mut ctx.ui_state.youtube_download_subtitles,
+                t("download_available_subtitles"),
+            )
+            .on_hover_text(t("download_available_subtitles_hint"));
         });
 
         ui.add_space(tokens::spacing::XS);
@@ -477,6 +513,7 @@ impl PlaybackInfoPanel {
                 ctx.ui_state.youtube_download_url.clear();
                 ctx.ui_state.youtube_download_progress = None;
                 ctx.ui_state.youtube_download_last_file_count = None;
+                ctx.ui_state.youtube_download_last_subtitle_count = None;
                 ctx.ui_state.youtube_download_resync_in_progress = false;
                 ctx.ui_state.youtube_download_status = None;
             }

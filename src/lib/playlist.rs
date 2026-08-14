@@ -11,9 +11,19 @@ pub struct Playlist {
     pub id: Option<i64>,
     name: Option<String>,
     description: Option<String>,
+    #[serde(default)]
+    curator: Option<String>,
+    #[serde(default)]
+    booklet: Option<String>,
+    #[serde(default, skip_serializing, skip_deserializing)]
+    cover_mime_type: Option<String>,
+    #[serde(default, skip_serializing, skip_deserializing)]
+    cover_data: Option<Vec<u8>>,
     created_at: i64,
     updated_at: i64,
     pub tracks: Vec<LibraryItem>,
+    #[serde(default)]
+    track_notes: Vec<Option<String>>,
     pub selected: Option<LibraryItem>,
     #[serde(skip_serializing, skip_deserializing)]
     pub selected_indices: HashSet<usize>,
@@ -47,9 +57,14 @@ impl Playlist {
             id: None,
             name: None,
             description: None,
+            curator: None,
+            booklet: None,
+            cover_mime_type: None,
+            cover_data: None,
             created_at: now,
             updated_at: now,
             tracks: vec![],
+            track_notes: vec![],
             selected: None,
             selected_indices: HashSet::new(),
             is_dirty: true,
@@ -74,6 +89,63 @@ impl Playlist {
         self.touch();
     }
 
+    pub fn curator(&self) -> Option<String> {
+        self.curator.clone()
+    }
+
+    pub fn set_curator(&mut self, curator: Option<String>) {
+        self.curator = curator;
+        self.touch();
+    }
+
+    pub fn booklet(&self) -> Option<String> {
+        self.booklet.clone()
+    }
+
+    pub fn set_booklet(&mut self, booklet: Option<String>) {
+        self.booklet = booklet;
+        self.touch();
+    }
+
+    pub fn cover(&self) -> Option<(&str, &[u8])> {
+        Some((
+            self.cover_mime_type.as_deref()?,
+            self.cover_data.as_deref()?,
+        ))
+    }
+
+    pub fn set_cover(&mut self, mime_type: Option<String>, data: Option<Vec<u8>>) {
+        self.cover_mime_type = mime_type;
+        self.cover_data = data;
+        self.touch();
+    }
+
+    pub fn track_note(&self, idx: usize) -> Option<&str> {
+        self.track_notes.get(idx).and_then(|note| note.as_deref())
+    }
+
+    pub fn track_notes(&self) -> &[Option<String>] {
+        &self.track_notes
+    }
+
+    pub fn set_track_note(&mut self, idx: usize, note: Option<String>) {
+        self.normalize_track_notes();
+        if let Some(slot) = self.track_notes.get_mut(idx) {
+            *slot = note;
+            self.touch();
+        }
+    }
+
+    pub fn set_imported_timestamps(&mut self, created_at: i64, updated_at: i64) {
+        self.created_at = created_at;
+        self.updated_at = updated_at;
+        self.is_dirty = true;
+    }
+
+    fn normalize_track_notes(&mut self) {
+        self.track_notes.resize(self.tracks.len(), None);
+    }
+
     pub fn created_at(&self) -> i64 {
         self.created_at
     }
@@ -84,12 +156,15 @@ impl Playlist {
 
     pub fn add(&mut self, track: LibraryItem) {
         self.tracks.push(track);
+        self.track_notes.push(None);
         self.touch();
     }
 
     // TODO - should probably return a Result
     pub fn remove(&mut self, idx: usize) {
+        self.normalize_track_notes();
         self.tracks.remove(idx);
+        self.track_notes.remove(idx);
         self.selected_indices.remove(&idx);
         self.touch();
 
@@ -115,8 +190,11 @@ impl Playlist {
 
     // TODO - should probably return a Result
     pub fn reorder(&mut self, current_pos: usize, destination_pos: usize) {
+        self.normalize_track_notes();
         let track = self.tracks.remove(current_pos);
         self.tracks.insert(destination_pos, track);
+        let note = self.track_notes.remove(current_pos);
+        self.track_notes.insert(destination_pos, note);
         self.touch();
 
         // Update selected indices after reordering
@@ -189,6 +267,7 @@ impl Playlist {
             return Ok(());
         }
 
+        self.normalize_track_notes();
         let mut conn = conn.lock().unwrap();
 
         // Start a transaction
@@ -199,16 +278,37 @@ impl Playlist {
             Some(id) => {
                 // Update existing playlist
                 tx.execute(
-                    "UPDATE playlists SET name = ?1, description = ?2, updated_at = ?3 WHERE id = ?4",
-                    rusqlite::params![self.name, self.description, self.updated_at, id],
+                    "UPDATE playlists SET name = ?1, description = ?2, curator = ?3, booklet = ?4,
+                     cover_mime_type = ?5, cover_data = ?6, updated_at = ?7 WHERE id = ?8",
+                    rusqlite::params![
+                        self.name,
+                        self.description,
+                        self.curator,
+                        self.booklet,
+                        self.cover_mime_type,
+                        self.cover_data,
+                        self.updated_at,
+                        id
+                    ],
                 )?;
                 id
             }
             None => {
                 // Insert new playlist
                 tx.execute(
-                    "INSERT INTO playlists (name, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![self.name, self.description, self.created_at, self.updated_at],
+                    "INSERT INTO playlists
+                     (name, description, curator, booklet, cover_mime_type, cover_data, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    rusqlite::params![
+                        self.name,
+                        self.description,
+                        self.curator,
+                        self.booklet,
+                        self.cover_mime_type,
+                        self.cover_data,
+                        self.created_at,
+                        self.updated_at
+                    ],
                 )?;
                 tx.last_insert_rowid()
             }
@@ -223,9 +323,14 @@ impl Playlist {
         // Insert the tracks with their positions
         for (position, track) in self.tracks.iter().enumerate() {
             tx.execute(
-                "INSERT INTO playlist_items (playlist_id, library_item_id, position) 
-                 VALUES (?1, ?2, ?3)",
-                rusqlite::params![playlist_id, track.key().to_string(), position as i32],
+                "INSERT INTO playlist_items (playlist_id, library_item_id, position, curator_note)
+                 VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    playlist_id,
+                    track.key().to_string(),
+                    position as i32,
+                    self.track_notes[position]
+                ],
             )?;
         }
 
@@ -241,6 +346,7 @@ impl Playlist {
             return Ok(());
         }
 
+        self.normalize_track_notes();
         let mut conn = conn.lock().unwrap();
 
         // Start a transaction
@@ -251,16 +357,37 @@ impl Playlist {
             Some(id) => {
                 // Update existing playlist
                 tx.execute(
-                    "UPDATE playlists SET name = ?1, description = ?2, updated_at = ?3 WHERE id = ?4",
-                    rusqlite::params![self.name, self.description, self.updated_at, id],
+                    "UPDATE playlists SET name = ?1, description = ?2, curator = ?3, booklet = ?4,
+                     cover_mime_type = ?5, cover_data = ?6, updated_at = ?7 WHERE id = ?8",
+                    rusqlite::params![
+                        self.name,
+                        self.description,
+                        self.curator,
+                        self.booklet,
+                        self.cover_mime_type,
+                        self.cover_data,
+                        self.updated_at,
+                        id
+                    ],
                 )?;
                 id
             }
             None => {
                 // Insert new playlist
                 tx.execute(
-                    "INSERT INTO playlists (name, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![self.name, self.description, self.created_at, self.updated_at],
+                    "INSERT INTO playlists
+                     (name, description, curator, booklet, cover_mime_type, cover_data, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    rusqlite::params![
+                        self.name,
+                        self.description,
+                        self.curator,
+                        self.booklet,
+                        self.cover_mime_type,
+                        self.cover_data,
+                        self.created_at,
+                        self.updated_at
+                    ],
                 )?;
                 tx.last_insert_rowid()
             }
@@ -280,9 +407,14 @@ impl Playlist {
         // Insert the tracks with their positions
         for (position, track) in self.tracks.iter().enumerate() {
             tx.execute(
-                "INSERT INTO playlist_items (playlist_id, library_item_id, position) 
-                 VALUES (?1, ?2, ?3)",
-                rusqlite::params![playlist_id, track.key().to_string(), position as i32],
+                "INSERT INTO playlist_items (playlist_id, library_item_id, position, curator_note)
+                 VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    playlist_id,
+                    track.key().to_string(),
+                    position as i32,
+                    self.track_notes[position]
+                ],
             )?;
         }
 
@@ -298,7 +430,9 @@ impl Playlist {
 
         // Get the playlist info
         let mut stmt = conn_guard.prepare(
-            "SELECT id, name, description, created_at, updated_at FROM playlists WHERE id = ?1",
+            "SELECT id, name, description, curator, booklet, cover_mime_type, cover_data,
+                    created_at, updated_at
+             FROM playlists WHERE id = ?1",
         )?;
 
         let mut playlist_rows = stmt.query(rusqlite::params![playlist_id])?;
@@ -307,16 +441,25 @@ impl Playlist {
             let id: i64 = row.get(0)?;
             let name: Option<String> = row.get(1)?;
             let description: Option<String> = row.get(2)?;
-            let created_at: i64 = row.get(3)?;
-            let updated_at: i64 = row.get(4)?;
+            let curator: Option<String> = row.get(3)?;
+            let booklet: Option<String> = row.get(4)?;
+            let cover_mime_type: Option<String> = row.get(5)?;
+            let cover_data: Option<Vec<u8>> = row.get(6)?;
+            let created_at: i64 = row.get(7)?;
+            let updated_at: i64 = row.get(8)?;
 
             let mut playlist = Playlist {
                 id: Some(id),
                 name,
                 description,
+                curator,
+                booklet,
+                cover_mime_type,
+                cover_data,
                 created_at,
                 updated_at,
                 tracks: vec![],
+                track_notes: vec![],
                 selected: None,
                 selected_indices: HashSet::new(),
                 is_dirty: false,
@@ -324,7 +467,8 @@ impl Playlist {
 
             // Get the tracks
             let mut items_stmt = conn_guard.prepare(
-                "SELECT li.key, li.library_path_id, li.path, li.title, li.artist, li.album, li.year, li.genre, li.track_number, li.lyrics 
+                "SELECT li.key, li.library_path_id, li.path, li.title, li.artist, li.album, li.year,
+                        li.genre, li.track_number, li.lyrics, li.file_hash, pi.curator_note
                  FROM library_items li
                  JOIN playlist_items pi ON li.key = pi.library_item_id
                  WHERE pi.playlist_id = ?1
@@ -350,6 +494,7 @@ impl Playlist {
                 item.set_genre(row.get::<_, Option<String>>(7)?.as_deref());
                 item.set_track_number(row.get::<_, Option<u32>>(8)?);
                 item.set_lyrics(row.get::<_, Option<String>>(9)?.as_deref());
+                item.set_file_hash(row.get::<_, String>(10)?);
 
                 // Set the key from the database
                 item.set_key(key_str.clone());
@@ -379,6 +524,7 @@ impl Playlist {
                 }
 
                 playlist.tracks.push(item);
+                playlist.track_notes.push(row.get(11)?);
             }
 
             Ok(playlist)
@@ -492,6 +638,10 @@ mod tests {
             id: None,
             name: Some("test".to_string()),
             description: None,
+            curator: None,
+            booklet: None,
+            cover_mime_type: None,
+            cover_data: None,
             created_at: now,
             updated_at: now,
             tracks: vec![
@@ -499,6 +649,7 @@ mod tests {
                 LibraryItem::new(path2.clone(), LibraryPathId::new(1)),
                 LibraryItem::new(path3.clone(), LibraryPathId::new(2)),
             ],
+            track_notes: vec![None, Some("middle".to_string()), None],
             selected: None,
             selected_indices: HashSet::new(),
             is_dirty: false,
@@ -509,6 +660,7 @@ mod tests {
         playlist.remove(1);
 
         assert_eq!(playlist.tracks.len(), 2);
+        assert_eq!(playlist.track_notes.len(), 2);
         assert_eq!(playlist.tracks.first().unwrap().path(), path1);
         assert_eq!(playlist.tracks.last().unwrap().path(), path3);
     }
@@ -528,12 +680,21 @@ mod tests {
             id: None,
             name: Some("test".to_string()),
             description: None,
+            curator: None,
+            booklet: None,
+            cover_mime_type: None,
+            cover_data: None,
             created_at: now,
             updated_at: now,
             tracks: vec![
                 LibraryItem::new(path1.clone(), LibraryPathId::new(0)),
                 LibraryItem::new(path2.clone(), LibraryPathId::new(1)),
                 LibraryItem::new(path3.clone(), LibraryPathId::new(2)),
+            ],
+            track_notes: vec![
+                Some("first".to_string()),
+                Some("second".to_string()),
+                Some("third".to_string()),
             ],
             selected: None,
             selected_indices: HashSet::new(),
@@ -548,6 +709,9 @@ mod tests {
         assert_eq!(playlist.tracks[0].path(), path2);
         assert_eq!(playlist.tracks[1].path(), path3);
         assert_eq!(playlist.tracks[2].path(), path1);
+        assert_eq!(playlist.track_note(0), Some("second"));
+        assert_eq!(playlist.track_note(1), Some("third"));
+        assert_eq!(playlist.track_note(2), Some("first"));
     }
 
     // #[test]
