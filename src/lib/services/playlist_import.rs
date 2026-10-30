@@ -374,7 +374,7 @@ mod tests {
         let archive_file = std::fs::File::create(&archive_path).unwrap();
         let mut archive = zip::ZipWriter::new(archive_file);
         archive
-            .start_file("playlist.json", zip::write::FileOptions::default())
+            .start_file("playlist.json", zip::write::SimpleFileOptions::default())
             .unwrap();
         archive
             .write_all(

@@ -23,17 +23,17 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.85.0
+          toolchain: 1.93.0
           override: true
           components: rustfmt, clippy
       - name: Cargo fmt
         run: cargo fmt --all -- --check
       - name: Cargo clippy with PulseAudio
-        run: cargo clippy --features pulseaudio -- -D warnings
+        run: cargo clippy --locked --features pulseaudio -- -D warnings
       - name: Cargo build with PulseAudio
-        run: cargo build --verbose --features pulseaudio
+        run: cargo build --locked --verbose --features pulseaudio
       - name: Cargo test with PulseAudio
-        run: cargo test --verbose --features pulseaudio
+        run: cargo test --locked --verbose --features pulseaudio
 
   build-without-pulseaudio:
     name: Build without PulseAudio
@@ -48,12 +48,12 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.85.0
+          toolchain: 1.93.0
           override: true
           components: rustfmt, clippy
       - name: Cargo clippy without PulseAudio
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --locked -- -D warnings
       - name: Cargo build without PulseAudio
-        run: cargo build --verbose
+        run: cargo build --locked --verbose
       - name: Cargo test without PulseAudio
-        run: cargo test --verbose
+        run: cargo test --locked --verbose

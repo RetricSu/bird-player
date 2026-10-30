@@ -936,7 +936,7 @@ exit 1
             assert_eq!(std::fs::read_to_string(&attempts).unwrap().lines().count(), expected_attempts);
             if expected_attempts == 2 && !fail_retry {
                 let result = result.unwrap();
-                assert_eq!(result.downloaded_files, [audio.clone()]);
+                assert_eq!(result.downloaded_files.as_slice(), std::slice::from_ref(&audio));
                 assert_eq!(result.embedded_subtitle_count, 0);
                 assert!(result.subtitle_warnings[0].contains("429"));
             } else {
