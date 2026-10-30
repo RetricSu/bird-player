@@ -110,6 +110,16 @@ impl YoutubeDownloadService {
         options: &YoutubeDownloadOptions,
         event_tx: &Sender<YoutubeDownloadEvent>,
     ) -> Result<YoutubeDownloadResult, String> {
+        Self::run_download_with_command(url, output_dir, options, event_tx, &Self::youtube_command)
+    }
+
+    fn run_download_with_command(
+        url: &str,
+        output_dir: &Path,
+        options: &YoutubeDownloadOptions,
+        event_tx: &Sender<YoutubeDownloadEvent>,
+        make_command: &impl Fn() -> Command,
+    ) -> Result<YoutubeDownloadResult, String> {
         let url = url.trim();
         if url.is_empty() {
             return Err("URL is required".to_string());
@@ -120,7 +130,7 @@ impl YoutubeDownloadService {
             return Err(format!("Failed to create output folder: {}", err));
         }
 
-        if Self::yt_dlp_command().arg("--version").output().is_err() {
+        if make_command().arg("--version").output().is_err() {
             return Err(
                 "yt-dlp was not found. Install yt-dlp and make sure it is available in PATH."
                     .to_string(),
@@ -130,7 +140,7 @@ impl YoutubeDownloadService {
         let output_template = output_dir
             .join("%(artist,creator,uploader|Unknown Artist)s - %(title)s [%(id)s].%(ext)s");
 
-        let mut command = Self::youtube_command();
+        let mut command = make_command();
         command
             .arg("--color")
             .arg("never")
@@ -166,7 +176,7 @@ impl YoutubeDownloadService {
             .arg("--output")
             .arg(output_template)
             .arg("--")
-            .arg(url)
+            .arg(&url)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -219,6 +229,41 @@ impl YoutubeDownloadService {
                 }
 
                 if !status.success() {
+                    // Captions are optional. Retry once without them, but never
+                    // mask an unrelated media, authentication, or ffmpeg error.
+                    if options.download_subtitles && Self::only_subtitle_errors(&output_lines) {
+                        let warning = output_lines
+                            .iter()
+                            .filter(|line| line.starts_with("ERROR:"))
+                            .cloned()
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        tracing::warn!("{}; retrying audio without subtitles", warning);
+                        let audio_only = YoutubeDownloadOptions {
+                            download_subtitles: false,
+                            ..options.clone()
+                        };
+                        let mut result = Self::run_download_with_command(
+                            &url,
+                            output_dir,
+                            &audio_only,
+                            event_tx,
+                            make_command,
+                        )
+                        .map_err(|err| format!("{}\nAudio-only retry failed: {}", warning, err))?;
+                        result.downloaded_files.extend(downloaded_files);
+                        result.downloaded_files.sort();
+                        result.downloaded_files.dedup();
+                        let (count, warnings) =
+                            Self::embed_downloaded_subtitles(&result.downloaded_files, options);
+                        result.embedded_subtitle_count = count;
+                        result.subtitle_warnings.push(format!(
+                            "Subtitles could not be downloaded; audio was saved. {}",
+                            warning
+                        ));
+                        result.subtitle_warnings.extend(warnings);
+                        return Ok(result);
+                    }
                     let details = output_lines
                         .iter()
                         .rev()
@@ -255,6 +300,8 @@ impl YoutubeDownloadService {
 
     fn add_subtitle_download_args(command: &mut Command, options: &YoutubeDownloadOptions) {
         if !options.download_subtitles {
+            // Explicitly override any subtitle settings in the user's yt-dlp config.
+            command.arg("--no-write-subs").arg("--no-write-auto-subs");
             return;
         }
 
@@ -266,12 +313,26 @@ impl YoutubeDownloadService {
         command
             .arg("--write-subs")
             .arg("--write-auto-subs")
+            .arg("--sleep-subtitles")
+            .arg("5")
             .arg("--sub-langs")
             .arg(languages)
             .arg("--sub-format")
             .arg("vtt/best")
             .arg("--convert-subs")
             .arg("lrc");
+    }
+
+    fn only_subtitle_errors(lines: &[String]) -> bool {
+        let errors = lines.iter().filter(|line| line.starts_with("ERROR:"));
+        let mut found = false;
+        for error in errors {
+            found = true;
+            if !error.contains("Unable to download video subtitles for ") {
+                return false;
+            }
+        }
+        found
     }
 
     fn embed_downloaded_subtitles(
@@ -785,6 +846,107 @@ mod tests {
         assert!(args.contains(&"--write-auto-subs".to_string()));
         assert!(args
             .windows(2)
+            .any(|args| args == ["--sleep-subtitles", "5"]));
+        assert!(args
+            .windows(2)
             .any(|args| args == ["--convert-subs", "lrc"]));
+    }
+
+    #[test]
+    fn subtitle_failure_allows_fallback_but_media_errors_do_not() {
+        let subtitle_error = "ERROR: Unable to download video subtitles for 'zh-Hans': HTTP Error 429: Too Many Requests".to_string();
+        assert!(YoutubeDownloadService::only_subtitle_errors(&[
+            "WARNING: Your yt-dlp version is older than 90 days!".to_string(),
+            subtitle_error.clone(),
+        ]));
+        assert!(!YoutubeDownloadService::only_subtitle_errors(&[
+            subtitle_error,
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden".to_string(),
+        ]));
+        assert!(!YoutubeDownloadService::only_subtitle_errors(&[]));
+    }
+
+    #[test]
+    fn audio_only_disables_subtitles_even_if_enabled_in_user_config() {
+        let mut command = std::process::Command::new("yt-dlp");
+        YoutubeDownloadService::add_subtitle_download_args(
+            &mut command,
+            &YoutubeDownloadOptions {
+                include_playlist: false,
+                download_subtitles: false,
+                subtitle_languages: vec![],
+            },
+        );
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            ["--no-write-subs", "--no-write-auto-subs"]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn subtitle_failure_retries_audio_once_and_preserves_real_failures() {
+        // A local fake process exercises argument passing, both output streams,
+        // exit status handling, and the bounded retry without contacting YouTube.
+        let folder = std::env::temp_dir().join(format!("bird-download-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let audio = folder.join("song.mp3");
+        let attempts = folder.join("attempts");
+        let script = r#"
+if [ "$1" = --version ]; then exit 0; fi
+echo attempt >> "$ATTEMPTS"
+for arg in "$@"; do
+    if [ "$arg" = --no-write-subs ]; then
+        if [ "$FAIL_RETRY" = yes ]; then
+            echo 'ERROR: unable to download video data: HTTP Error 403' >&2
+            exit 1
+        fi
+        touch "$AUDIO"
+        echo "$AUDIO"
+        exit 0
+    fi
+done
+echo "$INITIAL_ERROR" >&2
+exit 1
+"#;
+        let options = YoutubeDownloadOptions {
+            include_playlist: false,
+            download_subtitles: true,
+            subtitle_languages: vec!["zh-Hans".to_string()],
+        };
+        let (tx, _rx) = std::sync::mpsc::channel();
+        for (initial_error, fail_retry, expected_attempts) in [
+            ("ERROR: Unable to download video subtitles for 'zh-Hans': HTTP Error 429: Too Many Requests", false, 2),
+            ("ERROR: Unable to download video subtitles for 'zh-Hans': HTTP Error 429: Too Many Requests", true, 2),
+            ("ERROR: Sign in to confirm you're not a bot", false, 1),
+        ] {
+            let _ = std::fs::remove_file(&attempts);
+            let result = YoutubeDownloadService::run_download_with_command(
+                "https://www.youtube.com/watch?v=test", &folder, &options, &tx,
+                &|| {
+                    let mut command = std::process::Command::new("/bin/sh");
+                    command.args(["-c", script, "fake-yt-dlp"])
+                        .env("ATTEMPTS", &attempts)
+                        .env("AUDIO", &audio)
+                        .env("INITIAL_ERROR", initial_error)
+                        .env("FAIL_RETRY", if fail_retry { "yes" } else { "no" });
+                    command
+                },
+            );
+            assert_eq!(std::fs::read_to_string(&attempts).unwrap().lines().count(), expected_attempts);
+            if expected_attempts == 2 && !fail_retry {
+                let result = result.unwrap();
+                assert_eq!(result.downloaded_files, [audio.clone()]);
+                assert_eq!(result.embedded_subtitle_count, 0);
+                assert!(result.subtitle_warnings[0].contains("429"));
+            } else {
+                let error = result.unwrap_err();
+                assert!(error.contains(initial_error));
+                if fail_retry {
+                    assert!(error.contains("403"));
+                }
+            }
+        }
+        std::fs::remove_dir_all(folder).unwrap();
     }
 }

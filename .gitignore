@@ -4,3 +4,4 @@
 *.swo
 *.json
 .DS_Store
+/.ctx/

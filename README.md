@@ -82,6 +82,35 @@ Plain `cargo run` and `cargo run --release` intentionally use the isolated
 development database. This prevents local UI testing from modifying the
 installed app's music library and playlists.
 
+### YouTube download dependencies and subtitle errors
+
+Downloads require `yt-dlp`, `ffmpeg`/`ffprobe`, and a supported JavaScript runtime
+(for example Deno). Keep yt-dlp current and install its browser impersonation
+extra in the **same Python environment** as the executable used by Bird Player.
+For a pipx installation (such as `~/.local/bin/yt-dlp` pointing into a pipx venv):
+
+```bash
+pipx install --force 'yt-dlp[default,curl-cffi]'
+yt-dlp --version
+yt-dlp --list-impersonate-targets
+```
+
+For a pip installation, use that environment's Python instead:
+
+```bash
+python -m pip install -U 'yt-dlp[default,curl-cffi]'
+```
+
+See the [yt-dlp dependency documentation](https://github.com/yt-dlp/yt-dlp#dependencies).
+Hiding the old-version warning with `--no-update` does not update the downloader.
+
+Subtitle requests are spaced five seconds apart. If only subtitle downloads
+fail (including HTTP 429 rate limits), Bird Player retries once with subtitles
+disabled, saves the audio, and logs the subtitle warning. Other download errors
+still fail normally. YouTube can continue to rate-limit captions even after an
+update; wait before trying captions again, or turn off **Download available
+subtitles** to download audio immediately.
+
 At startup, Bird Player creates and integrity-checks a SQLite snapshot in the
 profile's `backups` directory, retaining the 10 newest snapshots. A build that
 encounters an unknown or newer database schema stops with a visible warning;
