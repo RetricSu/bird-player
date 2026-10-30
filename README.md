@@ -29,6 +29,26 @@ A MP3 music player built with [egui](https://github.com/emilk/egui) and Rust, fe
 
 ## Installation
 
+### Release builds
+
+Pushing a version tag (for example `git tag v0.2.0-rc4` followed by
+`git push origin v0.2.0-rc4`) triggers the Release workflow. Update the package
+version in `Cargo.toml` and `Cargo.lock` before tagging.
+
+The workflow builds macOS DMGs for Apple Silicon and Intel, a Windows x64 ZIP,
+and a Linux x64 tarball (Ubuntu 22.04 / glibc 2.35 or newer). Every package uses
+`production-data`; Linux also enables PulseAudio. All builds must succeed before
+the packages and `SHA256SUMS.txt` are uploaded to the GitHub Release. Tags with a
+hyphen, such as `v0.2.0-rc4`, create a prerelease. Re-running the workflow replaces
+the assets for that tag. A manual run on a branch builds downloadable workflow
+artifacts without publishing a Release.
+
+macOS apps use ad-hoc signing and are not notarized; Gatekeeper may require
+approval in System Settings → Privacy & Security. Windows packages are unsigned.
+Linux requires the GTK 3, ALSA, and PulseAudio runtime libraries (on Ubuntu 22.04:
+`sudo apt install libgtk-3-0 libasound2 libpulse0`). YouTube download dependencies
+listed below are installed separately.
+
 ### Prerequisites
 
 - Rust 1.85 or higher

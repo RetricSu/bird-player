@@ -1,21 +1,28 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 APP_NAME="Bird Player"
-APP_DIR="target/release/$APP_NAME.app"
+RELEASE_DIR="target/${CARGO_BUILD_TARGET:+$CARGO_BUILD_TARGET/}release"
+APP_DIR="$RELEASE_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 echo "Building release binary..."
-cargo build --release --features production-data
+cargo build --locked --release --features production-data
+APP_VERSION=$(cargo metadata --locked --no-deps --format-version 1 | python3 -c '
+import json, sys
+metadata = json.load(sys.stdin)
+package = next(p for p in metadata["packages"] if p["name"] == "bird-player")
+print(package["version"].split("-")[0].split("+")[0])
+')
 
 echo "Creating app bundle structure..."
 mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
 echo "Copying binary..."
-cp target/release/bird-player "$MACOS_DIR/"
+cp "$RELEASE_DIR/bird-player" "$MACOS_DIR/"
 
 echo "Copying icon..."
 if [ -f "assets/icons/icon.icns" ]; then
@@ -43,9 +50,9 @@ cat << PLIST > "$CONTENTS_DIR/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.2.0</string>
+    <string>$APP_VERSION</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$APP_VERSION</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>
