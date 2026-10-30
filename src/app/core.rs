@@ -389,7 +389,7 @@ impl App {
         }
 
         let Some(output_path) = rfd::FileDialog::new()
-            .set_file_name(&PlaylistExportService::default_file_name(playlist))
+            .set_file_name(PlaylistExportService::default_file_name(playlist))
             .add_filter("Bird Playlist", &["zip"])
             .save_file()
         else {
@@ -420,7 +420,7 @@ impl App {
             return;
         };
         let Some(destination_root) = rfd::FileDialog::new()
-            .set_title(&i18n::t("playlist_import_destination"))
+            .set_title(i18n::t("playlist_import_destination"))
             .pick_folder()
         else {
             return;
@@ -471,7 +471,7 @@ impl App {
             Err(err) => {
                 self.ui_state.playlist_booklet_status = Some(err.clone());
                 rfd::MessageDialog::new()
-                    .set_title(&i18n::t("playlist_import"))
+                    .set_title(i18n::t("playlist_import"))
                     .set_description(&err)
                     .set_level(rfd::MessageLevel::Error)
                     .show();

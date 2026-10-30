@@ -1,13 +1,8 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum LyricsFetchState {
+    #[default]
     Idle,
     Loading,
     Loaded,
     Failed(String),
-}
-
-impl Default for LyricsFetchState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
