@@ -45,16 +45,15 @@ impl AppComponent for PlaybackInfoPanel {
                 let button_spacing = ui.spacing().item_spacing.x;
                 let tool_strip_width = TOOL_BUTTON_COUNT * tokens::size::ICON_BTN
                     + (TOOL_BUTTON_COUNT - 1.0) * button_spacing;
-                let subtitle_panel_width =
-                    (TOOL_BUTTON_COUNT - 1.0) * (tokens::size::ICON_BTN + button_spacing);
+                let subtitle_panel_width = tokens::size::SUBTITLE_PANEL_WIDTH;
+                let playback_info_width = tool_strip_width.max(subtitle_panel_width);
                 ui.allocate_ui_with_layout(
                     egui::vec2(
-                        tool_strip_width.min(ui.available_width()),
+                        playback_info_width.min(ui.available_width()),
                         ui.available_height(),
                     ),
                     egui::Layout::right_to_left(egui::Align::Min),
                     |ui| {
-                        ui.add_space(tokens::size::ICON_BTN / 2.0);
                         ui.allocate_ui_with_layout(
                             egui::vec2(
                                 subtitle_panel_width.min(ui.available_width()),

@@ -40,8 +40,12 @@ pub mod size {
     /// Shared header band height for the library / playlist tabs / lyrics
     /// panels so the three side-by-side panels line up across the seam.
     pub const HEADER_HEIGHT: f32 = 22.0;
+    /// Width of the compact subtitle panel beneath the playback tools.
+    pub const SUBTITLE_PANEL_WIDTH: f32 = 320.0;
     /// Compact three-line subtitle viewport in the playback information area.
-    pub const SUBTITLE_VIEWPORT_HEIGHT: f32 = 56.0;
+    pub const SUBTITLE_VIEWPORT_HEIGHT: f32 = 48.0;
+    /// Height reserved for playback tools and the compact subtitle panel.
+    pub const PLAYBACK_INFO_HEIGHT: f32 = 96.0;
 }
 
 /// Typography sizes (in egui logical pixels).
@@ -68,6 +72,8 @@ pub mod color {
     pub const BRAND_HOVER: Color32 = Color32::from_rgb(0x4A, 0x93, 0xF0);
     /// Pressed/active variant of the brand colour.
     pub const BRAND_ACTIVE: Color32 = Color32::from_rgb(0x1E, 0x68, 0xCF);
+    /// Legible icon and label colour on the primary brand fill.
+    pub const ON_BRAND: Color32 = Color32::from_rgb(0xF5, 0xF8, 0xFC);
 
     // ─── Lyrics ───────────────────────────────────────────────────────────
     /// Soft blue used for the lyrics-type indicator (🎤/📝/🎸).

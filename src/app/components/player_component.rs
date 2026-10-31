@@ -2,7 +2,7 @@ use super::cassette_component::CassetteComponent;
 use super::playback_info_panel::PlaybackInfoPanel;
 use super::AppComponent;
 use crate::app::services::PlayerService;
-use crate::app::style::{icons, player_button, tokens, ButtonExt, SliderExt};
+use crate::app::style::{icons, player_button, tokens, SliderExt};
 use crate::app::t;
 use crate::app::App;
 use eframe::egui::{self, vec2, RichText};
@@ -98,7 +98,7 @@ impl AppComponent for PlayerComponent {
         ui.vertical(|ui| {
             // ── Top row: cover + track info + playback info ────────────────
             ui.horizontal_top(|ui| {
-                let top_row_height = tokens::size::ALBUM.max(64.0);
+                let top_row_height = tokens::size::ALBUM.max(tokens::size::PLAYBACK_INFO_HEIGHT);
                 CassetteComponent::add(ctx, ui);
 
                 // Calculate available width for middle section (60% of remaining space)
@@ -209,10 +209,8 @@ impl AppComponent for PlayerComponent {
 
             // ── Bottom row: transport (left) + volume (right) ───────────────
             ui.horizontal(|ui| {
-                let prev_btn = ui.add_enabled(
-                    has_selected_track,
-                    egui::Button::new(icons::PREV).player_style(),
-                );
+                let prev_btn =
+                    ui.add_enabled(has_selected_track, player_button(icons::PREV, false));
                 let play_pause_icon = if is_playing {
                     icons::PAUSE
                 } else {
@@ -222,10 +220,8 @@ impl AppComponent for PlayerComponent {
                     has_selected_track,
                     player_button(play_pause_icon, is_playing && has_selected_track),
                 );
-                let next_btn = ui.add_enabled(
-                    has_selected_track,
-                    egui::Button::new(icons::NEXT).player_style(),
-                );
+                let next_btn =
+                    ui.add_enabled(has_selected_track, player_button(icons::NEXT, false));
 
                 let mode_icon = match playback_mode {
                     crate::app::player::PlaybackMode::Normal => icons::MODE_NORMAL,

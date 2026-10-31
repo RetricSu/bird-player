@@ -1,4 +1,4 @@
-use eframe::egui::{style::HandleShape, vec2, Button, Color32, Slider, Stroke};
+use eframe::egui::{style::HandleShape, vec2, Button, Color32, RichText, Slider, Stroke};
 
 pub mod icons;
 pub mod tokens;
@@ -23,7 +23,13 @@ impl ButtonExt for Button<'_> {
 /// `active` is true the button is filled with the brand colour and gets a
 /// matching stroke; when false it falls back to the regular `player_style`.
 pub fn player_button(label: &str, active: bool) -> Button<'_> {
-    let btn = Button::new(label).player_style();
+    let text = RichText::new(label);
+    let btn = Button::new(if active {
+        text.color(tokens::color::ON_BRAND)
+    } else {
+        text
+    })
+    .player_style();
     if active {
         btn.fill(tokens::color::BRAND).stroke(Stroke::new(
             tokens::size::STROKE_WIDTH,

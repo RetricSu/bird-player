@@ -22,18 +22,28 @@ impl SubtitleComponent {
             .map_or(0, |_| ctx.player_ref().seek_to_timestamp);
         let content = Self::content(ctx);
 
-        ui.add_space(tokens::spacing::XS);
+        ui.add_space(tokens::spacing::SM);
         if let Some(content) = content {
-            egui::ScrollArea::vertical()
-                .id_salt("playback_subtitle_scroll")
-                .auto_shrink([false, false])
-                .min_scrolled_height(tokens::size::SUBTITLE_VIEWPORT_HEIGHT)
-                .max_height(tokens::size::SUBTITLE_VIEWPORT_HEIGHT)
-                .scroll_bar_visibility(ScrollBarVisibility::AlwaysHidden)
+            egui::Frame::new()
+                .fill(ui.visuals().faint_bg_color)
+                .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                .corner_radius(tokens::radius::SM)
+                .inner_margin(egui::Margin::symmetric(
+                    tokens::spacing::MD as i8,
+                    tokens::spacing::XS as i8,
+                ))
                 .show(ui, |ui| {
-                    ui.with_layout(egui::Layout::top_down(Align::Min), |ui| {
-                        Self::show_content(ui, content, current_time_ms);
-                    });
+                    egui::ScrollArea::vertical()
+                        .id_salt("playback_subtitle_scroll")
+                        .auto_shrink([false, false])
+                        .min_scrolled_height(tokens::size::SUBTITLE_VIEWPORT_HEIGHT)
+                        .max_height(tokens::size::SUBTITLE_VIEWPORT_HEIGHT)
+                        .scroll_bar_visibility(ScrollBarVisibility::AlwaysHidden)
+                        .show(ui, |ui| {
+                            ui.with_layout(egui::Layout::top_down(Align::Min), |ui| {
+                                Self::show_content(ui, content, current_time_ms);
+                            });
+                        });
                 });
         }
     }
