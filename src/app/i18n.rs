@@ -80,6 +80,12 @@ pub fn init() {
     en.insert("help".to_string(), "Help".to_string());
     en.insert("about".to_string(), "About".to_string());
 
+    // Window chrome
+    en.insert("language".to_string(), "Language".to_string());
+    en.insert("minimize_window".to_string(), "Minimize".to_string());
+    en.insert("maximize_window".to_string(), "Maximize".to_string());
+    en.insert("close_window".to_string(), "Close".to_string());
+
     // Player component
     en.insert("song".to_string(), "Song: ".to_string());
     en.insert("artist".to_string(), "Artist: ".to_string());
@@ -362,6 +368,12 @@ pub fn init() {
     // Help menu
     zh.insert("help".to_string(), "帮助".to_string());
     zh.insert("about".to_string(), "关于".to_string());
+
+    // Window chrome
+    zh.insert("language".to_string(), "语言".to_string());
+    zh.insert("minimize_window".to_string(), "最小化".to_string());
+    zh.insert("maximize_window".to_string(), "最大化".to_string());
+    zh.insert("close_window".to_string(), "关闭".to_string());
 
     // Player component
     zh.insert("song".to_string(), "歌曲：".to_string());

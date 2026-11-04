@@ -160,7 +160,7 @@ impl PlaylistTabs {
 
         // Add the "+" button for creating new playlists — borderless to
         // match the library's add-folder affordance.
-        let create_btn = ui.add(egui::Button::new(icons::PLUS).frame(false));
+        let create_btn = ui.add(egui::Button::new(icons::glyph(icons::PLUS)).frame(false));
 
         if ui.input(|input| input.pointer.any_released()) {
             ctx.ui_state.playlist_tab_dragging = None;

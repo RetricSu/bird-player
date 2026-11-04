@@ -456,7 +456,7 @@ impl PlaybackInfoPanel {
             let choose = ui
                 .add_enabled(
                     !ctx.ui_state.youtube_download_in_progress,
-                    egui::Button::new(icons::FOLDER).player_style(),
+                    egui::Button::new(icons::glyph(icons::FOLDER)).player_style(),
                 )
                 .on_hover_text(t("choose_download_folder"));
             if choose.clicked() {
@@ -582,7 +582,7 @@ impl PlaybackInfoPanel {
 
                         close_clicked = ui
                             .add(
-                                Button::new(icons::CLOSE)
+                                Button::new(icons::glyph(icons::CLOSE))
                                     .frame(false)
                                     .min_size(close_button_size),
                             )

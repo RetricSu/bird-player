@@ -7,6 +7,26 @@
 
 use egui_phosphor::regular as p;
 
+use super::tokens;
+use eframe::egui::RichText;
+
+/// Consistent size for standalone icons in buttons and menus.
+pub fn glyph(icon: &str) -> RichText {
+    RichText::new(icon).size(tokens::text::LG)
+}
+
+/// Pair an icon with a visible label without mixing icon fonts or emoji.
+pub fn label(icon: &str, text: impl AsRef<str>) -> RichText {
+    RichText::new(format!("{icon}  {}", text.as_ref())).size(tokens::text::MD)
+}
+
+// ─── Menus ───────────────────────────────────────────────────────────────
+pub const FILE_MENU: &str = p::FOLDER_OPEN;
+pub const PLAYBACK_MENU: &str = p::PLAY;
+pub const VIEW_MENU: &str = p::LIST_DASHES;
+pub const HELP_MENU: &str = p::QUESTION;
+pub const LANGUAGE: &str = p::TRANSLATE;
+
 // ─── Playback transport ──────────────────────────────────────────────────
 pub const PREV: &str = p::SKIP_BACK;
 pub const NEXT: &str = p::SKIP_FORWARD;
@@ -50,6 +70,6 @@ pub const LYRICS_NONE: &str = p::MINUS;
 
 // ─── Window chrome ───────────────────────────────────────────────────────
 pub const WINDOW_MINIMIZE: &str = p::MINUS;
-pub const WINDOW_MAXIMIZE: &str = p::CORNERS_OUT;
-pub const WINDOW_RESTORE: &str = p::CORNERS_IN;
+pub const WINDOW_MAXIMIZE: &str = p::SQUARE;
+pub const WINDOW_RESTORE: &str = p::COPY;
 pub const WINDOW_CLOSE: &str = p::X;

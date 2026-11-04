@@ -1,5 +1,5 @@
 use super::AppComponent;
-use crate::app::{App, Language};
+use crate::app::{style::icons, t, App, Language};
 use eframe::egui;
 
 pub struct LanguageSelector;
@@ -8,7 +8,7 @@ impl AppComponent for LanguageSelector {
     type Context = App;
 
     fn add(ctx: &mut Self::Context, ui: &mut eframe::egui::Ui) {
-        ui.menu_button("🌐", |ui| {
+        ui.menu_button(icons::glyph(icons::LANGUAGE), |ui| {
             for lang in Language::all() {
                 let is_selected = ctx.get_language() == lang;
                 let lang_text = if is_selected {
@@ -22,6 +22,8 @@ impl AppComponent for LanguageSelector {
                     ui.close_menu();
                 }
             }
-        });
+        })
+        .response
+        .on_hover_text(t("language"));
     }
 }

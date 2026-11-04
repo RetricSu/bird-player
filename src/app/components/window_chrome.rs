@@ -1,6 +1,7 @@
 use super::language_selector::LanguageSelector;
 use super::AppComponent;
 use crate::app::constants::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
+use crate::app::style::icons;
 use crate::app::t;
 use crate::app::version::version_info;
 use crate::app::App;
@@ -22,7 +23,7 @@ impl AppComponent for WindowChrome {
             Self::render_brand_mark(ui);
 
             // Menu list
-            ui.menu_button(t("file"), |ui| {
+            ui.menu_button(icons::label(icons::FILE_MENU, t("file")), |ui| {
                 if ui.button(t("open")).clicked() {
                     if let Some(new_path) = rfd::FileDialog::new().pick_folder() {
                         // Add the path to the library
@@ -63,7 +64,7 @@ impl AppComponent for WindowChrome {
 
             // Add Playback menu
             let mut fetch_lyrics = false;
-            ui.menu_button(t("playback"), |ui| {
+            ui.menu_button(icons::label(icons::PLAYBACK_MENU, t("playback")), |ui| {
                 if ctx.runtime.is_some() {
                     // Cache playlist before borrowing player mutably
                     let playlist_clone = ctx
@@ -148,7 +149,7 @@ impl AppComponent for WindowChrome {
             }
 
             // Add View menu
-            ui.menu_button(t("view"), |ui| {
+            ui.menu_button(icons::label(icons::VIEW_MENU, t("view")), |ui| {
                 let lyrics_text = if ctx.ui_state.show_lyrics_panel {
                     t("hide_lyrics")
                 } else {
@@ -178,7 +179,7 @@ impl AppComponent for WindowChrome {
 
                 ui.separator();
 
-                ui.menu_button("Desktop Lyrics", |ui| {
+                ui.menu_button(icons::label(icons::LYRICS_TOGGLE, "Desktop Lyrics"), |ui| {
                     ui.checkbox(&mut ctx.ui_state.desktop_lyrics_enabled, "Enabled");
                     ui.checkbox(&mut ctx.ui_state.desktop_lyrics_locked, "Locked");
                     ui.horizontal(|ui| {
@@ -207,7 +208,7 @@ impl AppComponent for WindowChrome {
                 });
             });
 
-            ui.menu_button(t("help"), |ui| {
+            ui.menu_button(icons::label(icons::HELP_MENU, t("help")), |ui| {
                 if ui.button(t("about")).clicked() {
                     ctx.ui_state.show_about_dialog = true;
                     ui.close_menu();
@@ -219,8 +220,6 @@ impl AppComponent for WindowChrome {
 
             // Take up remaining space
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                use crate::app::style::icons;
-
                 // Helper: a borderless chrome button with a subtle hover fill.
                 // `danger_hover` makes the hover state read red (used on close).
                 //
@@ -232,46 +231,47 @@ impl AppComponent for WindowChrome {
                 // turned the X into white-on-white. Driving the colours through
                 // `WidgetVisuals` instead lets the inactive state stay clean
                 // and the hovered state pick up the danger / theme fill.
-                let chrome_button = |ui: &mut egui::Ui,
-                                     glyph: &str,
-                                     danger_hover: bool|
-                 -> egui::Response {
-                    let size = egui::vec2(32.0, 22.0);
-                    let base_text = ui.visuals().widgets.inactive.fg_stroke.color;
-                    let hover_fill = if danger_hover {
-                        Color32::from_rgb(232, 17, 35)
-                    } else {
-                        ui.visuals().widgets.hovered.weak_bg_fill
+                let chrome_button =
+                    |ui: &mut egui::Ui, glyph: &str, danger_hover: bool| -> egui::Response {
+                        let size = egui::vec2(32.0, 22.0);
+                        let base_text = ui.visuals().widgets.inactive.fg_stroke.color;
+                        let hover_fill = if danger_hover {
+                            Color32::from_rgb(232, 17, 35)
+                        } else {
+                            ui.visuals().widgets.hovered.weak_bg_fill
+                        };
+                        let hover_text = if danger_hover {
+                            Color32::WHITE
+                        } else {
+                            ui.visuals().widgets.hovered.fg_stroke.color
+                        };
+                        ui.scope(|ui| {
+                            let widgets = &mut ui.visuals_mut().widgets;
+                            // Inactive: fully transparent so the title bar shines through.
+                            widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+                            widgets.inactive.bg_fill = Color32::TRANSPARENT;
+                            widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                            widgets.inactive.fg_stroke.color = base_text;
+                            // Hovered: tinted background, white glyph for danger.
+                            widgets.hovered.weak_bg_fill = hover_fill;
+                            widgets.hovered.bg_fill = hover_fill;
+                            widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                            widgets.hovered.fg_stroke.color = hover_text;
+                            // Active (mouse-down): keep same colour as hovered for stability.
+                            widgets.active.weak_bg_fill = hover_fill;
+                            widgets.active.bg_fill = hover_fill;
+                            widgets.active.bg_stroke = egui::Stroke::NONE;
+                            widgets.active.fg_stroke.color = hover_text;
+                            ui.add(egui::Button::new(icons::glyph(glyph)).min_size(size))
+                        })
+                        .inner
                     };
-                    let hover_text = if danger_hover {
-                        Color32::WHITE
-                    } else {
-                        ui.visuals().widgets.hovered.fg_stroke.color
-                    };
-                    ui.scope(|ui| {
-                        let widgets = &mut ui.visuals_mut().widgets;
-                        // Inactive: fully transparent so the title bar shines through.
-                        widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
-                        widgets.inactive.bg_fill = Color32::TRANSPARENT;
-                        widgets.inactive.bg_stroke = egui::Stroke::NONE;
-                        widgets.inactive.fg_stroke.color = base_text;
-                        // Hovered: tinted background, white glyph for danger.
-                        widgets.hovered.weak_bg_fill = hover_fill;
-                        widgets.hovered.bg_fill = hover_fill;
-                        widgets.hovered.bg_stroke = egui::Stroke::NONE;
-                        widgets.hovered.fg_stroke.color = hover_text;
-                        // Active (mouse-down): keep same colour as hovered for stability.
-                        widgets.active.weak_bg_fill = hover_fill;
-                        widgets.active.bg_fill = hover_fill;
-                        widgets.active.bg_stroke = egui::Stroke::NONE;
-                        widgets.active.fg_stroke.color = hover_text;
-                        ui.add(egui::Button::new(RichText::new(glyph).size(14.0)).min_size(size))
-                    })
-                    .inner
-                };
 
                 // Close — red on hover.
-                if chrome_button(ui, icons::WINDOW_CLOSE, true).clicked() {
+                if chrome_button(ui, icons::WINDOW_CLOSE, true)
+                    .on_hover_text(t("close_window"))
+                    .clicked()
+                {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
 
@@ -281,7 +281,15 @@ impl AppComponent for WindowChrome {
                 } else {
                     icons::WINDOW_MAXIMIZE
                 };
-                if chrome_button(ui, maximize_icon, false).clicked() {
+                let maximize_tooltip = if ctx.ui_state.is_maximized {
+                    t("restore_window")
+                } else {
+                    t("maximize_window")
+                };
+                if chrome_button(ui, maximize_icon, false)
+                    .on_hover_text(maximize_tooltip)
+                    .clicked()
+                {
                     ctx.ui_state.is_maximized = !ctx.ui_state.is_maximized;
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(
                         ctx.ui_state.is_maximized,
@@ -289,7 +297,10 @@ impl AppComponent for WindowChrome {
                 }
 
                 // Minimize.
-                if chrome_button(ui, icons::WINDOW_MINIMIZE, false).clicked() {
+                if chrome_button(ui, icons::WINDOW_MINIMIZE, false)
+                    .on_hover_text(t("minimize_window"))
+                    .clicked()
+                {
                     ui.ctx()
                         .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                 }

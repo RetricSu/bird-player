@@ -86,7 +86,12 @@ impl AppComponent for LibraryComponent {
 
             // Add a button to select and import a folder
             if ui
-                .add(eframe::egui::Button::new(crate::app::style::icons::PLUS).frame(false))
+                .add(
+                    eframe::egui::Button::new(crate::app::style::icons::glyph(
+                        crate::app::style::icons::PLUS,
+                    ))
+                    .frame(false),
+                )
                 .on_hover_text(t("add_music_folder"))
                 .clicked()
             {
