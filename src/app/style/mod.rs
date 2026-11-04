@@ -79,6 +79,7 @@ pub fn apply_light_scrollbars(spacing: &mut eframe::egui::style::Spacing) {
     spacing.scroll.interact_handle_opacity = 0.75;
 }
 
+#[allow(dead_code)]
 pub trait SliderExt {
     fn volume_style(self) -> Self;
 }

@@ -1,8 +1,9 @@
 use super::cassette_component::CassetteComponent;
 use super::playback_info_panel::PlaybackInfoPanel;
+use super::stepped_volume::SteppedVolumeSlider;
 use super::AppComponent;
 use crate::app::services::PlayerService;
-use crate::app::style::{icons, player_button, tokens, SliderExt};
+use crate::app::style::{icons, player_button, tokens};
 use crate::app::t;
 use crate::app::App;
 use eframe::egui::{self, vec2, RichText};
@@ -86,7 +87,7 @@ impl AppComponent for PlayerComponent {
         let has_selected_track = selected_track.is_some();
         let lyrics_panel_visible = ctx.ui_state.show_lyrics_panel;
         let desktop_lyrics_enabled = ctx.ui_state.desktop_lyrics_enabled;
-        let is_muted = ctx.ui_state.volume_before_mute.is_some();
+        let is_muted = ctx.ui_state.volume_before_mute.is_some() || volume <= 0.001;
 
         // Get playlist tracks info for the current playlist
         let current_playlist_idx = ctx.app_settings.current_playlist_idx;
@@ -248,18 +249,15 @@ impl AppComponent for PlayerComponent {
                 {
                     let resp =
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.style_mut().spacing.slider_width = tokens::size::SLIDER_VOLUME;
-                            let slider = ui.add(
-                                eframe::egui::Slider::new(&mut current_volume, 0.0_f32..=1.0_f32)
-                                    .volume_style(),
-                            );
+                            let slider =
+                                ui.add(SteppedVolumeSlider::new(&mut current_volume, is_muted));
                             let mute_icon = if is_muted {
                                 icons::VOLUME_MUTE
                             } else {
                                 icons::VOLUME
                             };
                             let mute = ui.add(player_button(mute_icon, is_muted));
-                            (mute.clicked(), slider.dragged() || slider.changed())
+                            (mute.clicked(), slider.changed())
                         });
                     (mute_clicked, volume_changed) = resp.inner;
                 }
@@ -337,16 +335,23 @@ impl AppComponent for PlayerComponent {
                 if mute_clicked {
                     let is_processing_ui_change = ctx.is_processing_ui_change();
                     if let Some(prev) = ctx.ui_state.volume_before_mute.take() {
+                        let target = if prev <= 0.001 { 0.5 } else { prev };
                         PlayerService::set_volume(
                             ctx.player_mut_ref(),
-                            prev,
+                            target,
                             &is_processing_ui_change,
                         );
-                    } else {
+                    } else if volume > 0.001 {
                         ctx.ui_state.volume_before_mute = Some(volume);
                         PlayerService::set_volume(
                             ctx.player_mut_ref(),
                             0.0,
+                            &is_processing_ui_change,
+                        );
+                    } else {
+                        PlayerService::set_volume(
+                            ctx.player_mut_ref(),
+                            0.5,
                             &is_processing_ui_change,
                         );
                     }

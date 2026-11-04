@@ -108,6 +108,7 @@ pub fn init() {
     en.insert("playlist_btn".to_string(), "Playlist".to_string());
     en.insert("lyrics".to_string(), "Lyrics".to_string());
     en.insert("subtitles".to_string(), "Subtitles".to_string());
+    en.insert("volume".to_string(), "Volume".to_string());
     en.insert("library_search".to_string(), "Search library".to_string());
     en.insert(
         "type_to_search".to_string(),
@@ -397,6 +398,7 @@ pub fn init() {
     zh.insert("playlist_btn".to_string(), "列表".to_string());
     zh.insert("lyrics".to_string(), "歌词".to_string());
     zh.insert("subtitles".to_string(), "字幕".to_string());
+    zh.insert("volume".to_string(), "音量".to_string());
     zh.insert("library_search".to_string(), "搜索音乐库".to_string());
     zh.insert("type_to_search".to_string(), "输入搜索...".to_string());
     zh.insert("close_search".to_string(), "关闭搜索".to_string());

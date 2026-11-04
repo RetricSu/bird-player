@@ -34,7 +34,19 @@ pub mod size {
     /// Album-art / cassette square side length.
     pub const ALBUM: f32 = 88.0;
     /// Volume slider width.
-    pub const SLIDER_VOLUME: f32 = 140.0;
+    pub const SLIDER_VOLUME: f32 = 124.0;
+    /// Volume slider height.
+    pub const SLIDER_VOLUME_HEIGHT: f32 = 24.0;
+    /// Total number of stepped bars in the volume control.
+    pub const VOLUME_STEPS: usize = 16;
+    /// Width of an individual stepped volume bar.
+    pub const VOLUME_BAR_WIDTH: f32 = 5.0;
+    /// Spacing between adjacent stepped volume bars.
+    pub const VOLUME_BAR_GAP: f32 = 2.5;
+    /// Height of the lowest volume bar (leftmost).
+    pub const VOLUME_MIN_HEIGHT: f32 = 4.0;
+    /// Height of the highest volume bar (rightmost).
+    pub const VOLUME_MAX_HEIGHT: f32 = 19.0;
     /// Stroke width used by the player buttons and album-art card.
     pub const STROKE_WIDTH: f32 = 1.0;
     /// Shared header band height for the library / playlist tabs / lyrics
