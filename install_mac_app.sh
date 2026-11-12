@@ -3,7 +3,8 @@ set -euo pipefail
 
 APP_NAME="Bird Player"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILT_APP="$REPO_DIR/target/release/bundle/osx/$APP_NAME.app"
+RELEASE_DIR="target/${CARGO_BUILD_TARGET:+$CARGO_BUILD_TARGET/}release"
+BUILT_APP="$REPO_DIR/$RELEASE_DIR/$APP_NAME.app"
 INSTALLED_APP="/Applications/$APP_NAME.app"
 DATA_DIR="$HOME/Library/Application Support/rs.bird-player"
 DATABASE="$DATA_DIR/bird-player.db"
@@ -41,7 +42,7 @@ restore_previous_install() {
 cd "$REPO_DIR"
 
 echo "Building production bundle..."
-cargo bundle --release --features production-data
+"$REPO_DIR/build_mac_app.sh"
 codesign --force --deep --sign - "$BUILT_APP" >/dev/null
 codesign --verify --deep --strict "$BUILT_APP"
 
